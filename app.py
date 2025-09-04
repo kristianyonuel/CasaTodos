@@ -107,8 +107,8 @@ def games():
         return redirect(url_for('login'))
     
     # Placeholder until game service is ready
-    return render_template('games.html', 
-                          games=[], 
+    return render_template('games.html',
+                          games=[],
                           user_picks={},
                           current_week=1,
                           current_year=2025,
