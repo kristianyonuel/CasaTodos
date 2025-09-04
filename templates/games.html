@@ -28,7 +28,7 @@
                     <div class="week-navigation">
                         <h3>Select Week:</h3>
                         <div class="week-buttons">
-                            {% for week_num in available_weeks %}
+                            {% for week_num in range(1, 19) %}
                             <a href="{{ url_for('games', week=week_num, year=current_year) }}" 
                                class="week-btn {% if week_num == current_week %}current{% endif %} {% if week_num == current_nfl_week %}active-week{% endif %}">
                                 Week {{ week_num }}
@@ -39,6 +39,14 @@
                         <div class="week-info">
                             <p><strong>Current NFL Week:</strong> {{ current_nfl_week }}</p>
                             <p><strong>Viewing:</strong> Week {{ current_week }}</p>
+                            {% if session.get('is_admin') %}
+                            <p>
+                                <a href="{{ url_for('force_create_games', week=current_week, year=current_year) }}" 
+                                   class="btn btn-sm btn-secondary" onclick="return confirm('Force create games for this week?')">
+                                    🔧 Force Create Games
+                                </a>
+                            </p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -146,8 +154,16 @@
                 {% else %}
                 <div class="no-games">
                     <h3>No games available for Week {{ current_week }}</h3>
-                    <p>Games may not have been scheduled yet or there was an error loading them.</p>
-                    <a href="{{ url_for('games', week=current_nfl_week) }}" class="btn btn-primary">Go to Current Week</a>
+                    <p>Games may not have been created yet.</p>
+                    <div class="no-games-actions">
+                        <a href="{{ url_for('games', week=current_nfl_week) }}" class="btn btn-primary">Go to Current Week</a>
+                        {% if session.get('is_admin') %}
+                        <a href="{{ url_for('force_create_games', week=current_week, year=current_year) }}" 
+                           class="btn btn-secondary" onclick="return confirm('Create games for Week {{ current_week }}?')">
+                            Create Games for This Week
+                        </a>
+                        {% endif %}
+                    </div>
                 </div>
                 {% endif %}
             </div>
