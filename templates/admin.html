@@ -1402,6 +1402,59 @@
                     '<div class="error">Error importing CSV file</div>';
             }
         }
+
+        // Add missing functions for pick management
+        async function updatePick(pickId) {
+            try {
+                const pickRow = document.querySelector(`tr[data-pick-id="${pickId}"]`);
+                const selectedTeam = pickRow.querySelector('.pick-select').value;
+                const awayScore = pickRow.querySelector('.score-input[data-type="away"]')?.value || null;
+                const homeScore = pickRow.querySelector('.score-input[data-type="home"]')?.value || null;
+                
+                const response = await fetch('/admin/update_pick', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pick_id: pickId,
+                        selected_team: selectedTeam,
+                        predicted_away_score: awayScore,
+                        predicted_home_score: homeScore
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Pick updated successfully');
+                    loadAllPicks(); // Refresh the picks
+                } else {
+                    alert('❌ Error updating pick');
+                }
+            } catch (error) {
+                console.error('Error updating pick:', error);
+                alert('❌ Error updating pick');
+            }
+        }
+
+        async function deletePick(pickId) {
+            if (!confirm('Are you sure you want to delete this pick?')) return;
+            
+            try {
+                const response = await fetch('/admin/delete_pick', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pick_id: pickId })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Pick deleted successfully');
+                    loadAllPicks(); // Refresh the picks
+                } else {
+                    alert('❌ Error deleting pick');
+                }
+            } catch (error) {
+                console.error('Error deleting pick:', error);
+                alert('❌ Error deleting pick');
+            }
+        }
     </script>
 </body>
 </html>

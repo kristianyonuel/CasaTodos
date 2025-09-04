@@ -514,9 +514,14 @@ def admin_all_picks():
     week = request.args.get('week', 1, type=int)
     year = request.args.get('year', datetime.now().year, type=int)
     
+    logger.info(f"Admin {session.get('username', 'Unknown')} requesting all picks for Week {week}, Year {year}")
+    
     try:
         with get_db() as conn:
             cursor = conn.cursor()
+            
+            # First test if the query works with simpler version
+            logger.info(f"Executing query for week={week}, year={year}")
             cursor.execute('''
                 SELECT 
                     p.id as pick_id,
@@ -524,7 +529,7 @@ def admin_all_picks():
                     g.away_team,
                     g.home_team,
                     g.game_time,
-                    g.is_monday_night,
+                    COALESCE(g.is_monday_night, 0) as is_monday_night,
                     p.selected_team,
                     p.predicted_home_score,
                     p.predicted_away_score,
@@ -536,27 +541,89 @@ def admin_all_picks():
                 ORDER BY u.username, g.game_time
             ''', (week, year))
             
-            picks = []
-            for row in cursor.fetchall():
-                picks.append({
-                    'pick_id': row['pick_id'],
-                    'username': row['username'],
-                    'away_team': row['away_team'],
-                    'home_team': row['home_team'],
-                    'game_time': row['game_time'],
-                    'is_monday_night': bool(row['is_monday_night']),
-                    'selected_team': row['selected_team'],
-                    'predicted_home_score': row['predicted_home_score'],
-                    'predicted_away_score': row['predicted_away_score'],
-                    'pick_time': row['pick_time']
-                })
+            rows = cursor.fetchall()
+            logger.info(f"Query returned {len(rows)} rows")
             
-            logger.info(f"Admin {session['username']} viewed all picks for Week {week}, {year}")
+            picks = []
+            for row in rows:
+                try:
+                    pick_data = {
+                        'pick_id': row['pick_id'],
+                        'username': row['username'],
+                        'away_team': row['away_team'],
+                        'home_team': row['home_team'],
+                        'game_time': row['game_time'],
+                        'is_monday_night': bool(row['is_monday_night']),
+                        'selected_team': row['selected_team'],
+                        'predicted_home_score': row['predicted_home_score'],
+                        'predicted_away_score': row['predicted_away_score'],
+                        'pick_time': row['pick_time']
+                    }
+                    picks.append(pick_data)
+                except Exception as row_error:
+                    logger.error(f"Error processing row {row}: {row_error}")
+                    continue
+            
+            logger.info(f"Successfully processed {len(picks)} picks for Week {week}, Year {year}")
             return jsonify(picks)
             
     except Exception as e:
-        logger.error(f"Error loading all picks: {e}")
-        return jsonify({'error': 'Failed to load picks'}), 500
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Error loading all picks for Week {week}, Year {year}: {e}")
+        logger.error(f"Full traceback: {error_details}")
+        return jsonify({'error': f'Failed to load picks: {str(e)}'}), 500
+
+@app.route('/admin/update_pick', methods=['POST'])
+def admin_update_pick():
+    """Update a user's pick"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        pick_id = data.get('pick_id')
+        selected_team = data.get('selected_team')
+        predicted_away_score = data.get('predicted_away_score')
+        predicted_home_score = data.get('predicted_home_score')
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE user_picks 
+                SET selected_team = ?, predicted_away_score = ?, predicted_home_score = ?
+                WHERE id = ?
+            ''', (selected_team, predicted_away_score, predicted_home_score, pick_id))
+            conn.commit()
+            
+        logger.info(f"Admin {session['username']} updated pick {pick_id}")
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        logger.error(f"Error updating pick: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/delete_pick', methods=['POST'])
+def admin_delete_pick():
+    """Delete a user's pick"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        pick_id = data.get('pick_id')
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM user_picks WHERE id = ?', (pick_id,))
+            conn.commit()
+            
+        logger.info(f"Admin {session['username']} deleted pick {pick_id}")
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        logger.error(f"Error deleting pick: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/admin/schedule')
 def admin_schedule():
