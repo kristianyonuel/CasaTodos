@@ -132,48 +132,139 @@
                                     {% endif %}
                                 </div>
                                 
-                                <div class="teams">
-                                    <div class="team away-team">
-                                        <input type="radio" 
-                                               name="game_{{ game.id }}" 
-                                               value="{{ game.away_team }}"
-                                               id="away_{{ game.id }}"
-                                               {% if user_picks.get(game.id, {}).get('selected_team') == game.away_team %}checked{% endif %}
-                                               {% if game_deadline_passed %}disabled{% endif %}>
-                                        <label for="away_{{ game.id }}">{{ game.away_team }}</label>
+                                {% if game_deadline_passed %}
+                                    <!-- Show everyone's picks after deadline -->
+                                    <div class="all-picks-display">
+                                        <h4>🔒 All Player Picks:</h4>
+                                        <div class="matchup-header">{{ game.away_team }} @ {{ game.home_team }}</div>
+                                        
+                                        {% if all_picks.get(game.id) %}
+                                            <div class="picks-breakdown">
+                                                {% set away_picks = [] %}
+                                                {% set home_picks = [] %}
+                                                {% set no_picks = [] %}
+                                                
+                                                {% for pick in all_picks.get(game.id, []) %}
+                                                    {% if pick.selected_team == game.away_team %}
+                                                        {% set _ = away_picks.append(pick) %}
+                                                    {% elif pick.selected_team == game.home_team %}
+                                                        {% set _ = home_picks.append(pick) %}
+                                                    {% else %}
+                                                        {% set _ = no_picks.append(pick) %}
+                                                    {% endif %}
+                                                {% endfor %}
+                                                
+                                                <div class="team-picks-section">
+                                                    <div class="team-pick away-picks">
+                                                        <div class="team-name">{{ game.away_team }} ({{ away_picks|length }})</div>
+                                                        {% if away_picks %}
+                                                            <div class="player-list">
+                                                                {% for pick in away_picks %}
+                                                                    <span class="player-pick {% if pick.username == session.username %}your-pick{% endif %}">
+                                                                        {{ pick.username }}
+                                                                        {% if pick.username == session.username %}(You){% endif %}
+                                                                    </span>
+                                                                {% endfor %}
+                                                            </div>
+                                                        {% else %}
+                                                            <div class="no-picks">No picks</div>
+                                                        {% endif %}
+                                                    </div>
+                                                    
+                                                    <div class="vs-separator">VS</div>
+                                                    
+                                                    <div class="team-pick home-picks">
+                                                        <div class="team-name">{{ game.home_team }} ({{ home_picks|length }})</div>
+                                                        {% if home_picks %}
+                                                            <div class="player-list">
+                                                                {% for pick in home_picks %}
+                                                                    <span class="player-pick {% if pick.username == session.username %}your-pick{% endif %}">
+                                                                        {{ pick.username }}
+                                                                        {% if pick.username == session.username %}(You){% endif %}
+                                                                    </span>
+                                                                {% endfor %}
+                                                            </div>
+                                                        {% else %}
+                                                            <div class="no-picks">No picks</div>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                                
+                                                {% if no_picks %}
+                                                    <div class="no-submission">
+                                                        <strong>No picks submitted:</strong>
+                                                        {% for pick in no_picks %}
+                                                            <span class="player-pick no-pick">{{ pick.username }}</span>
+                                                        {% endfor %}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        {% else %}
+                                            <div class="no-picks-message">No picks submitted by any player</div>
+                                        {% endif %}
                                     </div>
-                                    
-                                    <div class="vs">@</div>
-                                    
-                                    <div class="team home-team">
-                                        <input type="radio" 
-                                               name="game_{{ game.id }}" 
-                                               value="{{ game.home_team }}"
-                                               id="home_{{ game.id }}"
-                                               {% if user_picks.get(game.id, {}).get('selected_team') == game.home_team %}checked{% endif %}
-                                               {% if game_deadline_passed %}disabled{% endif %}>
-                                        <label for="home_{{ game.id }}">{{ game.home_team }}</label>
+                                {% else %}
+                                    <!-- Show regular pick interface -->
+                                    <div class="teams">
+                                        <div class="team away-team">
+                                            <input type="radio" 
+                                                   name="game_{{ game.id }}" 
+                                                   value="{{ game.away_team }}"
+                                                   id="away_{{ game.id }}"
+                                                   {% if user_picks.get(game.id, {}).get('selected_team') == game.away_team %}checked{% endif %}
+                                                   {% if game_deadline_passed %}disabled{% endif %}>
+                                            <label for="away_{{ game.id }}">{{ game.away_team }}</label>
+                                        </div>
+                                        
+                                        <div class="vs">@</div>
+                                        
+                                        <div class="team home-team">
+                                            <input type="radio" 
+                                                   name="game_{{ game.id }}" 
+                                                   value="{{ game.home_team }}"
+                                                   id="home_{{ game.id }}"
+                                                   {% if user_picks.get(game.id, {}).get('selected_team') == game.home_team %}checked{% endif %}
+                                                   {% if game_deadline_passed %}disabled{% endif %}>
+                                            <label for="home_{{ game.id }}">{{ game.home_team }}</label>
+                                        </div>
                                     </div>
-                                </div>
+                                {% endif %}
 
                                 {% if game.is_monday_night %}
                                 <div class="score-prediction">
                                     <h4>Score Prediction (Tiebreaker)</h4>
-                                    <div class="score-inputs">
-                                        <input type="number" 
-                                               name="away_score_{{ game.id }}" 
-                                               placeholder="Away"
-                                               min="0" max="99"
-                                               value="{{ user_picks.get(game.id, {}).get('predicted_away_score') or '' }}"
-                                               {% if game_deadline_passed %}disabled{% endif %}>
-                                        <span>-</span>
-                                        <input type="number" 
-                                               name="home_score_{{ game.id }}" 
-                                               placeholder="Home"
-                                               min="0" max="99"
-                                               value="{{ user_picks.get(game.id, {}).get('predicted_home_score') or '' }}"
-                                               {% if game_deadline_passed %}disabled{% endif %}>
-                                    </div>
+                                    {% if game_deadline_passed %}
+                                        <!-- Show all score predictions after deadline -->
+                                        <div class="all-score-predictions">
+                                            {% if all_picks.get(game.id) %}
+                                                {% for pick in all_picks.get(game.id, []) %}
+                                                    {% if pick.predicted_away_score is not none or pick.predicted_home_score is not none %}
+                                                        <div class="score-pick {% if pick.username == session.username %}your-score-pick{% endif %}">
+                                                            <strong>{{ pick.username }}{% if pick.username == session.username %} (You){% endif %}:</strong>
+                                                            {{ pick.predicted_away_score or '?' }} - {{ pick.predicted_home_score or '?' }}
+                                                        </div>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        <!-- Show regular score input -->
+                                        <div class="score-inputs">
+                                            <input type="number" 
+                                                   name="away_score_{{ game.id }}" 
+                                                   placeholder="Away"
+                                                   min="0" max="99"
+                                                   value="{{ user_picks.get(game.id, {}).get('predicted_away_score') or '' }}"
+                                                   {% if game_deadline_passed %}disabled{% endif %}>
+                                            <span>-</span>
+                                            <input type="number" 
+                                                   name="home_score_{{ game.id }}" 
+                                                   placeholder="Home"
+                                                   min="0" max="99"
+                                                   value="{{ user_picks.get(game.id, {}).get('predicted_home_score') or '' }}"
+                                                   {% if game_deadline_passed %}disabled{% endif %}>
+                                        </div>
+                                    {% endif %}
                                 </div>
                                 {% endif %}
                             </div>

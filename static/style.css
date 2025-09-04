@@ -1718,3 +1718,180 @@ body {
     margin: 0 0 10px 0;
     font-size: 1.2rem;
 }
+
+/* All picks display styles for deadline-passed games */
+.all-picks-display {
+    background: #f8f9ff;
+    border: 2px solid #e0e7ff;
+    border-radius: 10px;
+    padding: 20px;
+    margin-top: 15px;
+}
+
+.all-picks-display h4 {
+    color: #4f46e5;
+    margin-bottom: 15px;
+    text-align: center;
+    font-size: 1.1rem;
+}
+
+.matchup-header {
+    text-align: center;
+    font-weight: bold;
+    color: #6b7280;
+    margin-bottom: 20px;
+    font-size: 1.1rem;
+}
+
+.picks-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.team-picks-section {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.team-pick {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.team-pick.away-picks {
+    border-left: 4px solid #3b82f6;
+}
+
+.team-pick.home-picks {
+    border-left: 4px solid #10b981;
+}
+
+.team-name {
+    font-weight: bold;
+    color: #374151;
+    margin-bottom: 10px;
+    text-align: center;
+    font-size: 1rem;
+}
+
+.vs-separator {
+    align-self: center;
+    font-weight: bold;
+    color: #6b7280;
+    text-align: center;
+    padding: 10px;
+    background: #f3f4f6;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.player-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.player-pick {
+    background: #e5e7eb;
+    color: #374151;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.player-pick.your-pick {
+    background: #fbbf24;
+    color: #92400e;
+    font-weight: bold;
+}
+
+.player-pick.no-pick {
+    background: #fca5a5;
+    color: #991b1b;
+}
+
+.no-picks {
+    color: #9ca3af;
+    font-style: italic;
+    text-align: center;
+    padding: 8px;
+}
+
+.no-submission {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    padding: 12px;
+    text-align: center;
+    margin-top: 15px;
+}
+
+.no-submission strong {
+    color: #dc2626;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.no-picks-message {
+    text-align: center;
+    color: #6b7280;
+    font-style: italic;
+    padding: 20px;
+}
+
+/* All score predictions display */
+.all-score-predictions {
+    background: #f0fdf4;
+    border: 2px solid #bbf7d0;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 10px;
+}
+
+.score-pick {
+    padding: 8px 12px;
+    margin: 5px 0;
+    background: white;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.score-pick.your-score-pick {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    font-weight: bold;
+}
+
+/* Mobile responsiveness for all-picks */
+@media (max-width: 768px) {
+    .team-picks-section {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .vs-separator {
+        order: 2;
+        margin: 0 auto;
+    }
+    
+    .player-list {
+        justify-content: center;
+    }
+    
+    .all-picks-display {
+        padding: 15px;
+    }
+}

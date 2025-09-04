@@ -32,6 +32,7 @@ La Casa de Todos is a comprehensive NFL fantasy league platform featuring modern
 - **📱 Responsive Design**: Optimized for all devices with modern UI/UX
 - **🧭 Navigation Fixes**: All template navigation updated and verified (no broken 'dashboard' references)
 - **📊 Leaderboard System**: Weekly and season leaderboards fully implemented and tested
+- **👥 Post-Deadline Pick Visibility**: Users can see everyone's picks after deadlines pass for transparency
 
 ## 🏈 Game Rules & Scoring
 
@@ -52,6 +53,7 @@ When users have the same number of games won:
 - **Friday/Saturday Games**: Individual deadlines, NOT included in Sunday deadline
 - **Sunday/Monday Games**: Shared deadline 30 minutes before first Sunday game
 - **Admin Overrides**: Flexible extensions for emergencies or special circumstances
+- **Post-Deadline Transparency**: After deadlines pass, all users can see everyone's picks for that game
 
 ## 🚀 Quick Start
 
@@ -92,6 +94,7 @@ python run-port-443.py  # Requires SSL certificates
    - Predict Monday Night Football scores for tiebreakers
 4. **Monitor Deadlines**: Real-time countdown with urgency indicators
 5. **Track Performance**: View weekly and season leaderboards
+6. **Post-Deadline Viewing**: See all players' picks after deadlines pass for transparency and strategy analysis
 
 ### 👑 For Administrators
 1. **User Management**: Create, edit, delete user accounts
@@ -306,6 +309,7 @@ python run-network.py
 - **Tiebreaker Drama**: Monday Night Football suspense
 - **Season Competition**: Long-term family engagement
 - **Fair Play**: Transparent scoring and deadline system
+- **Post-Game Strategy**: See everyone's picks after deadlines for friendly analysis and discussion
 
 ### 💰 Financial Management
 - **Flexible Entry**: Customizable weekly/season fees

@@ -295,6 +295,29 @@ def games():
                 'predicted_home_score': row[2],
                 'predicted_away_score': row[3]
             }
+
+        # Get all users' picks for games where deadlines have passed
+        # This will be used to show everyone's picks after deadlines
+        cursor.execute('''
+            SELECT g.id, u.username, up.selected_team, up.predicted_home_score, up.predicted_away_score
+            FROM user_picks up
+            JOIN nfl_games g ON up.game_id = g.id
+            JOIN users u ON up.user_id = u.id
+            WHERE g.week = ? AND g.year = ? AND u.is_admin = 0
+            ORDER BY u.username
+        ''', (week, year))
+        
+        all_picks = {}
+        for row in cursor.fetchall():
+            game_id = row[0]
+            if game_id not in all_picks:
+                all_picks[game_id] = []
+            all_picks[game_id].append({
+                'username': row[1],
+                'selected_team': row[2],
+                'predicted_home_score': row[3],
+                'predicted_away_score': row[4]
+            })
     
     # Get deadline information
     try:
@@ -334,6 +357,7 @@ def games():
     return render_template('games.html',
                           games=games_data,
                           user_picks=user_picks,
+                          all_picks=all_picks,
                           current_week=week,
                           current_year=year,
                           available_weeks=list(range(1, 19)),
