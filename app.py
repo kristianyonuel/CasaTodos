@@ -113,9 +113,39 @@ def index():
     dashboard_data = get_dashboard_data(session['user_id'], current_week, current_year)
     
     # Get deadline information using deadline manager
-    deadline_manager = DeadlineManager()
-    deadlines = deadline_manager.get_week_deadlines(current_week, current_year)
-    deadline_status = deadline_manager.get_deadline_status(current_week, current_year)
+    try:
+        deadline_manager = DeadlineManager()
+        deadline_data = deadline_manager.get_week_deadlines(current_week, current_year)
+        
+        # Convert to simple dict for template usage
+        deadlines = {}
+        deadline_status = {}
+        
+        for key, value in deadline_data.items():
+            if value and isinstance(value, dict) and 'deadline' in value:
+                deadlines[key] = value['deadline']
+                deadline_status[key] = {
+                    'passed': value['status']['is_closed'],
+                    'hours_until': value['status']['hours_until_deadline']
+                }
+        
+        # Simplify the key names for template
+        simple_deadlines = {
+            'thursday': deadlines.get('thursday_night'),
+            'sunday': deadlines.get('sunday_games'),  
+            'monday': deadlines.get('monday_night')
+        }
+        
+        simple_status = {
+            'thursday': deadline_status.get('thursday_night'),
+            'sunday': deadline_status.get('sunday_games'),
+            'monday': deadline_status.get('monday_night')
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting deadlines: {e}")
+        simple_deadlines = {}
+        simple_status = {}
     
     data = {
         'current_week': current_week,
@@ -126,8 +156,8 @@ def index():
         'user_wins': dashboard_data['user_wins'],
         'total_players': dashboard_data['total_players'],
         'available_weeks': list(range(1, 19)),
-        'deadlines': deadlines,
-        'deadline_status': deadline_status
+        'deadlines': simple_deadlines,
+        'deadline_status': simple_status
     }
     
     return render_template('index.html', **data)
@@ -283,6 +313,41 @@ def games():
                 'predicted_away_score': row[3]
             }
     
+    # Get deadline information
+    try:
+        deadline_manager = DeadlineManager()
+        deadline_data = deadline_manager.get_week_deadlines(week, year)
+        
+        # Convert to simple dict for template usage
+        deadlines = {}
+        deadline_status = {}
+        
+        for key, value in deadline_data.items():
+            if value and isinstance(value, dict) and 'deadline' in value:
+                deadlines[key] = value['deadline']
+                deadline_status[key] = {
+                    'passed': value['status']['is_closed'],
+                    'hours_until': value['status']['hours_until_deadline']
+                }
+        
+        # Simplify the key names for template
+        simple_deadlines = {
+            'thursday': deadlines.get('thursday_night'),
+            'sunday': deadlines.get('sunday_games'),  
+            'monday': deadlines.get('monday_night')
+        }
+        
+        simple_status = {
+            'thursday': deadline_status.get('thursday_night'),
+            'sunday': deadline_status.get('sunday_games'),
+            'monday': deadline_status.get('monday_night')
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting deadlines for games page: {e}")
+        simple_deadlines = {}
+        simple_status = {}
+    
     return render_template('games.html',
                           games=games_data,
                           user_picks=user_picks,
@@ -291,8 +356,8 @@ def games():
                           available_weeks=list(range(1, 19)),
                           current_nfl_week=1,
                           total_games=len(games_data),
-                          deadlines=DeadlineManager().get_week_deadlines(week, year),
-                          deadline_status=DeadlineManager().get_deadline_status(week, year))
+                          deadlines=simple_deadlines,
+                          deadline_status=simple_status)
 
 @app.route('/submit_picks', methods=['POST'])
 def submit_picks():
