@@ -856,71 +856,122 @@ def auto_populate_nfl_games():
     print(f"🎯 Auto-population complete! Total new games created: {total_games_created}")
     return total_games_created
 
-# ...existing code...
-
-if __name__ == '__main__':
-    # Create directories if they don't exist
-    if not os.path.exists('templates'):
-        os.makedirs('templates')
-    if not os.path.exists('static'):
-        os.makedirs('static')
-    
-    # Initialize database
-    print("🚀 Starting La Casa de Todos NFL Fantasy League...")
-    print("=" * 60)
+def fetch_nfl_games(week=None, year=None):
+    """Fetch NFL games from ESPN API"""
+    if not year:
+        year = datetime.datetime.now().year
+    if not week:
+        week = get_current_nfl_week()
     
     try:
-        print("📁 Initializing database...")
-        init_db()
-        print("✅ Database initialized successfully")
+        url = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+        params = {'seasontype': 2, 'week': week, 'year': year}
         
-        # Force auto-populate NFL games
-        total_created = auto_populate_nfl_games()
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
         
-        # Validate games were created
-        if validate_nfl_games():
-            print("✅ NFL games validation passed")
-        else:
-            print("⚠️  NFL games validation failed - creating emergency games...")
-            # Force create games for week 1 at minimum
-            ensure_games_exist(1, datetime.datetime.now().year)
+        games = []
+        for event in data.get('events', []):
+            try:
+                game_date_str = event['date']
+                # Handle different date formats from ESPN
+                if game_date_str.endswith('Z'):
+                    game_date = datetime.datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
+                else:
+                    game_date = datetime.datetime.fromisoformat(game_date_str)
+                
+                # Determine game type based on day and time
+                weekday = game_date.weekday()  # 0=Monday, 6=Sunday
+                hour = game_date.hour
+                
+                # Fix the Monday night condition (line 918 issue)
+                is_monday_night = (weekday == 0 and hour >= 18)  # Monday after 6 PM
+                is_thursday_night = (weekday == 3 and hour >= 18)  # Thursday after 6 PM
+                
+                game = {
+                    'id': event['id'],
+                    'week': week,
+                    'year': year,
+                    'home_team': event['competitions'][0]['competitors'][0]['team']['abbreviation'],
+                    'away_team': event['competitions'][0]['competitors'][1]['team']['abbreviation'],
+                    'home_team_name': event['competitions'][0]['competitors'][0]['team']['displayName'],
+                    'away_team_name': event['competitions'][0]['competitors'][1]['team']['displayName'],
+                    'game_date': game_date,
+                    'is_monday_night': is_monday_night,
+                    'is_thursday_night': is_thursday_night,
+                    'is_final': event['status']['type']['completed']
+                }
+                
+                if game['is_final']:
+                    competitors = event['competitions'][0]['competitors']
+                    game['home_score'] = int(competitors[0].get('score', 0))
+                    game['away_score'] = int(competitors[1].get('score', 0))
+                
+                games.append(game)
+                
+            except Exception as game_error:
+                print(f"Error processing individual game: {game_error}")
+                continue
         
-        # Final check for Week 1 specifically
+        return games
+    except Exception as e:
+        print(f"Error fetching NFL games: {e}")
+        return []
+
+@app.route('/games')
+def games():
+    print(f"Games route accessed - Session: {dict(session)}")
+    
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    week = request.args.get('week', get_current_nfl_week(), type=int)
+    year = request.args.get('year', datetime.datetime.now().year, type=int)
+    
+    try:
+        # Ensure games exist for this week
+        games_count = ensure_games_exist(week, year)
+        print(f"Week {week} has {games_count} games available")
+        
         conn = sqlite3.connect('nfl_fantasy.db')
         cursor = conn.cursor()
-        cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = 1 AND year = ?', (datetime.datetime.now().year,))
-        week1_games = cursor.fetchone()[0]
-        conn.close()
         
-        print(f"🔍 Week 1 verification: {week1_games} games available")
-        
-        if week1_games == 0:
-            print("🚨 Emergency: Force creating Week 1 games...")
-            ensure_games_exist(1, datetime.datetime.now().year)
-        
-        # Add debug mode
-        app.config['DEBUG'] = True
-        app.config['TEMPLATES_AUTO_RELOAD'] = True
-        
-        print("=" * 60)
-        print("🏈 Application ready!")
-        print("Access at: http://127.0.0.1:5000")
-        print("Network access: http://0.0.0.0:5000")
-        print("=" * 60)
-        
-        # Run on all interfaces
-        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-        
-    except Exception as e:
-        print(f"❌ Application startup failed: {e}")
-        import traceback
-        traceback.print_exc()
-                WHEN is_monday_night = 1 THEN 3
-                ELSE 2
-            END, game_date
+        # Get games for the week with proper ordering
+        cursor.execute('''
+            SELECT id, week, year, game_id, home_team, away_team, game_date, 
+                   is_monday_night, is_thursday_night, home_score, away_score, is_final
+            FROM nfl_games WHERE week = ? AND year = ? 
+            ORDER BY 
+                CASE 
+                    WHEN is_thursday_night = 1 THEN 1
+                    WHEN is_monday_night = 1 THEN 3
+                    ELSE 2
+                END, 
+                datetime(game_date)
         ''', (week, year))
         
         db_games = cursor.fetchall()
+        
+        if not db_games:
+            print(f"No games found in database for Week {week}, creating now...")
+            # Force create games
+            ensure_games_exist(week, year)
+            
+            # Try again
+            cursor.execute('''
+                SELECT id, week, year, game_id, home_team, away_team, game_date, 
+                       is_monday_night, is_thursday_night, home_score, away_score, is_final
+                FROM nfl_games WHERE week = ? AND year = ? 
+                ORDER BY 
+                    CASE 
+                        WHEN is_thursday_night = 1 THEN 1
+                        WHEN is_monday_night = 1 THEN 3
+                        ELSE 2
+                    END, 
+                    datetime(game_date)
+            ''', (week, year))
+            db_games = cursor.fetchall()
         
         # Get user's existing picks
         cursor.execute('''
@@ -945,14 +996,20 @@ if __name__ == '__main__':
             if game[6]:  # game_date
                 try:
                     if isinstance(game[6], str):
-                        # Parse UTC date and convert to AST for display
-                        dt = datetime.datetime.fromisoformat(game[6].replace('Z', '+00:00'))
-                        if dt.tzinfo is None:
-                            dt = pytz.utc.localize(dt)
-                        game_date = dt.astimezone(AST)
+                        # Parse date string
+                        try:
+                            game_date = datetime.datetime.fromisoformat(game[6])
+                        except ValueError:
+                            game_date = datetime.datetime.strptime(game[6], '%Y-%m-%d %H:%M:%S')
+                        
+                        # Convert to AST if needed
+                        if game_date.tzinfo is None:
+                            game_date = AST.localize(game_date)
+                        else:
+                            game_date = game_date.astimezone(AST)
                     else:
                         game_date = game[6]
-                        if game_date.tzinfo is None:
+                        if hasattr(game_date, 'tzinfo') and game_date.tzinfo is None:
                             game_date = AST.localize(game_date)
                 except Exception as date_error:
                     print(f"Date parsing error: {date_error}")
@@ -981,7 +1038,7 @@ if __name__ == '__main__':
         
         current_nfl_week = get_current_nfl_week()
         
-        print(f"Games page loaded: {len(games_list)} games for Week {week}")
+        print(f"Games page loaded successfully: {len(games_list)} games for Week {week}")
         
         return render_template('games.html', 
                              games=games_list, 
@@ -993,11 +1050,19 @@ if __name__ == '__main__':
                              total_games=len(games_list))
                              
     except Exception as e:
-        print(f"Games page error: {e}")
+        print(f"Games page error for Week {week}: {e}")
         import traceback
         traceback.print_exc()
-        flash(f'Error loading games for Week {week}. Please try a different week.', 'error')
-        return redirect(url_for('index'))
+        flash(f'Error loading games for Week {week}. Creating games now...', 'warning')
+        
+        # Emergency fallback - force create games and redirect
+        try:
+            ensure_games_exist(week, year)
+            return redirect(url_for('games', week=week, year=year))
+        except Exception as fallback_error:
+            print(f"Emergency fallback failed: {fallback_error}")
+            flash('Unable to load games. Please try a different week.', 'error')
+            return redirect(url_for('index'))
 
 @app.route('/force_create_games/<int:week>/<int:year>')
 def force_create_games(week, year):
@@ -1159,14 +1224,29 @@ if __name__ == '__main__':
         init_db()
         print("✅ Database initialized successfully")
         
-        # Auto-populate NFL games
-        auto_populate_nfl_games()
+        # Force auto-populate NFL games
+        total_created = auto_populate_nfl_games()
         
-        # Validate games
+        # Validate games were created
         if validate_nfl_games():
             print("✅ NFL games validation passed")
         else:
-            print("⚠️  NFL games validation failed - some features may not work")
+            print("⚠️  NFL games validation failed - creating emergency games...")
+            # Force create games for week 1 at minimum
+            ensure_games_exist(1, datetime.datetime.now().year)
+        
+        # Final check for Week 1 specifically
+        conn = sqlite3.connect('nfl_fantasy.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = 1 AND year = ?', (datetime.datetime.now().year,))
+        week1_games = cursor.fetchone()[0]
+        conn.close()
+        
+        print(f"🔍 Week 1 verification: {week1_games} games available")
+        
+        if week1_games == 0:
+            print("🚨 Emergency: Force creating Week 1 games...")
+            ensure_games_exist(1, datetime.datetime.now().year)
         
         # Add debug mode
         app.config['DEBUG'] = True
