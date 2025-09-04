@@ -1588,8 +1588,211 @@ def admin_simple_picks():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
+    import threading
+    import ssl
+    import os
+    from werkzeug.serving import make_server
+    
     # Initialize the database on startup
     initialize_app()
     
-    # Run the Flask app
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    def create_ssl_context():
+        """Create SSL context for HTTPS"""
+        try:
+            # Look for SSL certificate files
+            cert_file = 'cert.pem'
+            key_file = 'key.pem'
+            
+            if os.path.exists(cert_file) and os.path.exists(key_file):
+                context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                context.load_cert_chain(cert_file, key_file)
+                return context
+            else:
+                # Create self-signed certificate if none exists
+                logger.warning("SSL certificates not found. Creating self-signed certificate...")
+                create_self_signed_cert()
+                if os.path.exists(cert_file) and os.path.exists(key_file):
+                    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                    context.load_cert_chain(cert_file, key_file)
+                    return context
+                else:
+                    logger.error("Failed to create SSL certificates")
+                    return None
+        except Exception as e:
+            logger.error(f"Error creating SSL context: {e}")
+            return None
+    
+    def create_self_signed_cert():
+        """Create a self-signed SSL certificate"""
+        try:
+            from cryptography import x509
+            from cryptography.x509.oid import NameOID
+            from cryptography.hazmat.primitives import hashes
+            from cryptography.hazmat.primitives.asymmetric import rsa
+            from cryptography.hazmat.primitives import serialization
+            from datetime import datetime, timedelta
+            import ipaddress
+            
+            # Generate private key
+            private_key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=2048,
+            )
+            
+            # Generate certificate
+            subject = issuer = x509.Name([
+                x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
+                x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "State"),
+                x509.NameAttribute(NameOID.LOCALITY_NAME, "City"),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "La Casa de Todos"),
+                x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
+            ])
+            
+            cert = x509.CertificateBuilder().subject_name(
+                subject
+            ).issuer_name(
+                issuer
+            ).public_key(
+                private_key.public_key()
+            ).serial_number(
+                x509.random_serial_number()
+            ).not_valid_before(
+                datetime.utcnow()
+            ).not_valid_after(
+                datetime.utcnow() + timedelta(days=365)
+            ).add_extension(
+                x509.SubjectAlternativeName([
+                    x509.DNSName("localhost"),
+                    x509.DNSName("*.localhost"),
+                    x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+                    x509.IPAddress(ipaddress.ip_address("0.0.0.0")),
+                ]),
+                critical=False,
+            ).sign(private_key, hashes.SHA256())
+            
+            # Write certificate and key to files
+            with open("cert.pem", "wb") as f:
+                f.write(cert.public_bytes(serialization.Encoding.PEM))
+            
+            with open("key.pem", "wb") as f:
+                f.write(private_key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.PKCS8,
+                    encryption_algorithm=serialization.NoEncryption()
+                ))
+            
+            logger.info("Self-signed SSL certificate created successfully")
+            
+        except ImportError:
+            logger.warning("cryptography library not available. Install with: pip install cryptography")
+            logger.info("Creating simple OpenSSL certificate instead...")
+            
+            # Fallback to OpenSSL command if cryptography is not available
+            try:
+                import subprocess
+                subprocess.run([
+                    'openssl', 'req', '-x509', '-newkey', 'rsa:4096', '-keyout', 'key.pem',
+                    '-out', 'cert.pem', '-days', '365', '-nodes', '-subj',
+                    '/C=US/ST=State/L=City/O=La Casa de Todos/CN=localhost'
+                ], check=True, capture_output=True)
+                logger.info("SSL certificate created with OpenSSL")
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                logger.error("OpenSSL not available. Cannot create SSL certificate.")
+                
+        except Exception as e:
+            logger.error(f"Error creating self-signed certificate: {e}")
+    
+    def run_http_server():
+        """Run HTTP server on port 80"""
+        try:
+            logger.info("Starting HTTP server on port 80...")
+            http_server = make_server('0.0.0.0', 80, app)
+            http_server.serve_forever()
+        except PermissionError:
+            logger.warning("Permission denied for port 80. Trying port 8080...")
+            try:
+                http_server = make_server('0.0.0.0', 8080, app)
+                logger.info("HTTP server running on port 8080 (use sudo for port 80)")
+                http_server.serve_forever()
+            except Exception as e:
+                logger.error(f"Failed to start HTTP server: {e}")
+        except Exception as e:
+            logger.error(f"Failed to start HTTP server on port 80: {e}")
+    
+    def run_https_server():
+        """Run HTTPS server on port 443"""
+        try:
+            ssl_context = create_ssl_context()
+            if ssl_context:
+                logger.info("Starting HTTPS server on port 443...")
+                https_server = make_server('0.0.0.0', 443, app, ssl_context=ssl_context)
+                https_server.serve_forever()
+            else:
+                logger.error("Could not create SSL context. HTTPS server not started.")
+        except PermissionError:
+            logger.warning("Permission denied for port 443. Trying port 8443...")
+            try:
+                ssl_context = create_ssl_context()
+                if ssl_context:
+                    https_server = make_server('0.0.0.0', 8443, app, ssl_context=ssl_context)
+                    logger.info("HTTPS server running on port 8443 (use sudo for port 443)")
+                    https_server.serve_forever()
+                else:
+                    logger.error("Could not create SSL context for port 8443")
+            except Exception as e:
+                logger.error(f"Failed to start HTTPS server on port 8443: {e}")
+        except Exception as e:
+            logger.error(f"Failed to start HTTPS server on port 443: {e}")
+    
+    def run_development_server():
+        """Run development server on port 5000"""
+        logger.info("Starting development server on port 5000...")
+        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+    
+    # Determine which servers to run
+    import sys
+    if len(sys.argv) > 1:
+        mode = sys.argv[1].lower()
+        if mode == 'dev':
+            # Development mode - single server on port 5000
+            run_development_server()
+        elif mode == 'http':
+            # HTTP only
+            run_http_server()
+        elif mode == 'https':
+            # HTTPS only
+            run_https_server()
+        elif mode == 'production':
+            # Both HTTP and HTTPS
+            logger.info("Starting production servers (HTTP + HTTPS)...")
+            
+            # Start HTTP server in a separate thread
+            http_thread = threading.Thread(target=run_http_server, daemon=True)
+            http_thread.start()
+            
+            # Start HTTPS server in main thread
+            run_https_server()
+        else:
+            logger.error("Invalid mode. Use: dev, http, https, or production")
+            sys.exit(1)
+    else:
+        # Default: run both HTTP and HTTPS
+        logger.info("Starting both HTTP and HTTPS servers...")
+        logger.info("Available URLs:")
+        logger.info("  HTTP:  http://localhost (port 80) or http://localhost:8080")
+        logger.info("  HTTPS: https://localhost (port 443) or https://localhost:8443")
+        logger.info("  Dev:   http://localhost:5000")
+        
+        print("\nServer Options:")
+        print("  python app.py dev        - Development server (port 5000)")
+        print("  python app.py http       - HTTP only (port 80/8080)")
+        print("  python app.py https      - HTTPS only (port 443/8443)")
+        print("  python app.py production - Both HTTP and HTTPS")
+        print("  python app.py            - Both HTTP and HTTPS (default)")
+        
+        # Start HTTP server in a separate thread
+        http_thread = threading.Thread(target=run_http_server, daemon=True)
+        http_thread.start()
+        
+        # Start HTTPS server in main thread
+        run_https_server()
