@@ -14,6 +14,7 @@
                 <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
                 <a href="{{ url_for('games') }}" class="nav-link">Make Picks</a>
                 <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
+                <a href="{{ url_for('rules') }}" class="nav-link">Rules</a>
                 <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
             </nav>
         </header>
@@ -24,7 +25,6 @@
                 
                 <div class="admin-actions">
                     <button onclick="loadAllPicks()" class="btn btn-primary">View All Picks</button>
-                    <button onclick="loadUsers()" class="btn btn-secondary">Manage Users</button>
                     <button onclick="syncSeason()" class="btn btn-success">Sync NFL Season</button>
                 </div>
                 
@@ -41,19 +41,25 @@
                 const response = await fetch('/admin/all_picks');
                 const picks = await response.json();
                 
-                let html = '<h3>All User Picks</h3><table class="leaderboard-table">';
-                html += '<thead><tr><th>User</th><th>Game</th><th>Pick</th><th>Score Prediction</th></tr></thead><tbody>';
+                let html = '<h3>All User Picks</h3>';
+                if (picks.length > 0) {
+                    html += '<table class="leaderboard-table">';
+                    html += '<thead><tr><th>User</th><th>Game</th><th>Pick</th><th>Score Prediction</th></tr></thead><tbody>';
+                    
+                    picks.forEach(pick => {
+                        html += `<tr>
+                            <td>${pick.username}</td>
+                            <td>${pick.away_team} @ ${pick.home_team}</td>
+                            <td>${pick.selected_team}</td>
+                            <td>${pick.is_monday_night ? `${pick.predicted_away_score || 0} - ${pick.predicted_home_score || 0}` : 'N/A'}</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                } else {
+                    html += '<p>No picks found for current week.</p>';
+                }
                 
-                picks.forEach(pick => {
-                    html += `<tr>
-                        <td>${pick.username}</td>
-                        <td>${pick.away_team} @ ${pick.home_team}</td>
-                        <td>${pick.selected_team}</td>
-                        <td>${pick.is_monday_night ? `${pick.predicted_away_score || 0} - ${pick.predicted_home_score || 0}` : 'N/A'}</td>
-                    </tr>`;
-                });
-                
-                html += '</tbody></table>';
                 document.getElementById('admin-content').innerHTML = html;
             } catch (error) {
                 document.getElementById('admin-content').innerHTML = '<p>Error loading picks</p>';
@@ -63,14 +69,13 @@
         async function syncSeason() {
             if (!confirm('This will sync all 18 weeks of NFL games. Continue?')) return;
             
-            const year = new Date().getFullYear();
             document.getElementById('admin-content').innerHTML = '<p>Syncing NFL season data...</p>';
             
             try {
                 const response = await fetch('/sync_season', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ year: year })
+                    body: JSON.stringify({ year: new Date().getFullYear() })
                 });
                 
                 const result = await response.json();

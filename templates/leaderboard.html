@@ -14,6 +14,9 @@
                 <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
                 <a href="{{ url_for('games') }}" class="nav-link">Make Picks</a>
                 <a href="{{ url_for('rules') }}" class="nav-link">Rules</a>
+                {% if session.get('is_admin') %}
+                <a href="{{ url_for('admin') }}" class="nav-link admin">Admin</a>
+                {% endif %}
                 <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
             </nav>
         </header>
@@ -22,6 +25,7 @@
             <div class="leaderboard-container">
                 <h2>Family League Standings</h2>
                 
+                {% if leaderboard %}
                 <table class="leaderboard-table">
                     <thead>
                         <tr>
@@ -41,13 +45,16 @@
                             <td>{{ player.avg_correct }}</td>
                             <td>{{ player.total_points }}</td>
                         </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="5" style="text-align: center;">No results yet</td>
-                        </tr>
                         {% endfor %}
                     </tbody>
                 </table>
+                {% else %}
+                <div class="no-results">
+                    <h3>No results yet</h3>
+                    <p>Complete some weeks to see the leaderboard!</p>
+                    <a href="{{ url_for('games') }}" class="btn btn-primary">Make Your Picks</a>
+                </div>
+                {% endif %}
             </div>
         </main>
     </div>

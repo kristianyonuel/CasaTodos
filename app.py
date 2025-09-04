@@ -739,6 +739,57 @@ def sync_season():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/leaderboard')
+def leaderboard():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        conn = sqlite3.connect('nfl_fantasy.db')
+        cursor = conn.cursor()
+        
+        # Get weekly winners and stats
+        cursor.execute('''
+            SELECT u.username, 
+                   COUNT(CASE WHEN wr.is_winner = 1 THEN 1 END) as wins,
+                   AVG(wr.correct_picks) as avg_correct,
+                   SUM(wr.points) as total_points
+            FROM users u
+            LEFT JOIN weekly_results wr ON u.id = wr.user_id
+            WHERE u.is_admin = 0
+            GROUP BY u.id, u.username
+            ORDER BY wins DESC, total_points DESC
+        ''')
+        
+        leaderboard_data = []
+        for row in cursor.fetchall():
+            leaderboard_data.append({
+                'username': row[0],
+                'wins': row[1] or 0,
+                'avg_correct': round(row[2] or 0, 1),
+                'total_points': row[3] or 0
+            })
+        
+        conn.close()
+        return render_template('leaderboard.html', leaderboard=leaderboard_data)
+        
+    except Exception as e:
+        print(f"Leaderboard error: {e}")
+        flash('Error loading leaderboard', 'error')
+        return redirect(url_for('index'))
+
+@app.route('/rules')
+def rules():
+    return render_template('rules.html')
+
+@app.route('/admin')
+def admin():
+    if 'user_id' not in session or not session.get('is_admin'):
+        flash('Admin access required', 'error')
+        return redirect(url_for('index'))
+    
+    return render_template('admin.html')
+
 if __name__ == '__main__':
     print("Creating database and starting application...")
     

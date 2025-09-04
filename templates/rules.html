@@ -14,6 +14,9 @@
                 <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
                 <a href="{{ url_for('games') }}" class="nav-link">Make Picks</a>
                 <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
+                {% if session.get('is_admin') %}
+                <a href="{{ url_for('admin') }}" class="nav-link admin">Admin</a>
+                {% endif %}
                 <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
             </nav>
         </header>
@@ -43,29 +46,26 @@
                 </div>
                 
                 <div class="rule-item">
-                    <h3>5. Format</h3>
-                    <p>Standard weekly rules format is used based on each participant's selections. An elimination format is used when playing the weekly pool.</p>
-                </div>
-                
-                <div class="rule-item">
-                    <h3>6. Entry Fees</h3>
+                    <h3>5. Entry Fees</h3>
                     <ul>
-                        <li><strong>$5</strong> is paid per week by each participant if using only the weekly pool.</li>
-                        <li><strong>$10</strong> is paid per week if using the full-season pool.</li>
+                        <li><strong>$5</strong> per week for weekly pool only</li>
+                        <li><strong>$10</strong> per week for full-season pool</li>
                     </ul>
                 </div>
                 
                 <div class="rule-item">
-                    <h3>7. Game Formats</h3>
-                    <p>All formats are played, including:</p>
+                    <h3>6. Game Formats</h3>
                     <ul>
-                        <li><strong>Elimination:</strong> Picks must be submitted 7 days before Saturday (to start the week)</li>
                         <li><strong>Weekly Pool:</strong> Standard weekly competition</li>
-                        <li><strong>Full team selection for the week:</strong> Pick all games</li>
+                        <li><strong>Elimination:</strong> Picks due 7 days before Saturday</li>
+                        <li><strong>Full Season:</strong> Complete season participation</li>
                     </ul>
                 </div>
-                
-                <div class="rule-item">
+            </div>
+        </main>
+    </div>
+</body>
+</html>
                     <h3>8. Elimination Rules</h3>
                     <p>Elimination format is used during elimination weeks. Before the weekly games begin, team selections must be submitted to participate. <strong>If no selection is submitted, the participant is eliminated.</strong></p>
                 </div>
