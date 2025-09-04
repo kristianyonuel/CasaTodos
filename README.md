@@ -28,27 +28,31 @@ La Casa de Todos is a custom NFL fantasy league designed for family fun and comp
 
 ## 🚀 Quick Start
 
-### Running on Port 443 (HTTPS/HTTP)
+### Running on All Network Interfaces
 
-#### Method 1: Run as Administrator (Recommended for Port 443)
+#### Method 1: Network launcher (Recommended)
 ```bash
-# Right-click and "Run as Administrator"
-run-443.bat
-
-# Or in Admin PowerShell/CMD:
-python run-port-443.py
+python run-network.py
 ```
 
-#### Method 2: Direct execution with admin privileges
+#### Method 2: Direct execution
 ```bash
-# Run PowerShell/CMD as Administrator, then:
 python app.py
 ```
 
-### Access URLs
-- **Port 443 HTTPS**: https://localhost:443 or https://127.0.0.1:443
-- **Port 443 HTTP**: http://localhost:443 or http://127.0.0.1:443
-- **Fallback Port**: http://127.0.0.1:5000 or http://127.0.0.1:8443
+### Access the Application
+- **Local Access**: http://127.0.0.1:5000
+- **Network Access**: http://[YOUR-IP]:5000
+- **Find Your IP**: 
+  - Windows: `ipconfig`
+  - Linux/Mac: `ip addr` or `ifconfig`
+
+### Network Configuration
+The application runs on:
+- **Host**: 0.0.0.0 (all network interfaces)
+- **Port**: 5000
+- **Protocol**: HTTP
+- **Threading**: Enabled for multiple connections
 
 ## 🎮 How to Play
 
@@ -119,17 +123,16 @@ The application uses SQLite database with the following tables:
 
 ## 🔧 Configuration
 
-### Port 443 Setup
-- **Windows**: Requires Administrator privileges
-- **HTTPS**: Self-signed certificate (browser warnings expected)
-- **HTTP Fallback**: If HTTPS fails
-- **Alternative Ports**: 8443, 5000 if 443 unavailable
+### Network Access
+- **Local Network**: Accessible from any device on same network
+- **Port Forwarding**: Configure router to allow external access
+- **Firewall**: Ensure port 5000 is allowed
+- **Mobile Access**: Use network IP to access from phones/tablets
 
-### SSL Certificate Warnings
-When using self-signed certificates on port 443:
-1. Browser will show security warnings
-2. Click "Advanced" then "Proceed to localhost (unsafe)"
-3. Or add certificate exception in browser settings
+### Security Notes
+- Application runs without HTTPS for simplicity
+- Suitable for home/family network use
+- For public deployment, consider adding SSL/HTTPS
 
 ### Common Issues
 - **Externally-managed error**: Use the provided launcher scripts

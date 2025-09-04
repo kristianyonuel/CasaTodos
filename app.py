@@ -504,12 +504,17 @@ if __name__ == '__main__':
         init_db()
         print("Database initialized successfully")
         
-        # Add debug mode
+        # Add debug mode and network configuration
         app.config['DEBUG'] = True
         app.config['TEMPLATES_AUTO_RELOAD'] = True
         
-        print("Starting Flask application...")
-        app.run(debug=True, host='127.0.0.1', port=5000)
+        print("Starting Flask application on all network interfaces...")
+        print("Access locally at: http://127.0.0.1:5000")
+        print("Access from network at: http://[YOUR-IP]:5000")
+        print("To find your IP: ipconfig (Windows) or ip addr (Linux)")
+        
+        # Run on all network interfaces (0.0.0.0) on port 5000
+        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
         
     except Exception as e:
         print(f"Application startup failed: {e}")
