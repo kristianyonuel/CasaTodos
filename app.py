@@ -34,45 +34,6 @@ def get_db_connection():
     finally:
         conn.close()
 
-def init_complete_database():
-    """Initialize complete database schema"""
-    # Use the comprehensive setup function
-    return setup_complete_database()
-
-def create_sample_games(cursor, year):
-    """Create sample NFL games for testing - simplified version"""
-    teams = ['KC', 'BUF', 'DAL', 'SF', 'GB', 'NE', 'PIT', 'BAL', 'DEN', 'LAC', 'MIA', 'NYJ']
-    
-    for week in range(1, 6):  # Create first 5 weeks
-        base_date = datetime(year, 9, 5) + timedelta(weeks=week-1)
-        
-        # Thursday Night Football (except week 1)
-        if week > 1:
-            thursday_date = base_date + timedelta(days=3)
-            cursor.execute('''
-                INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_thursday_night, game_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (week, year, f'tnf_{week}_{year}', teams[0], teams[1], 
-                  thursday_date.replace(hour=20, minute=15), True, 'scheduled'))
-        
-        # Sunday games
-        sunday = base_date + timedelta(days=6)
-        for i in range(2, min(len(teams), 10), 2):
-            if i + 1 < len(teams):
-                cursor.execute('''
-                    INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, game_status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (week, year, f'sun_{week}_{year}_{i//2}', teams[i], teams[i+1], 
-                      sunday.replace(hour=13), 'scheduled'))
-        
-        # Monday Night Football
-        monday = base_date + timedelta(days=7)
-        cursor.execute('''
-            INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_monday_night, game_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (week, year, f'mnf_{week}_{year}', teams[-2], teams[-1], 
-              monday.replace(hour=20, minute=15), True, 'scheduled'))
-
 def get_dashboard_data(user_id):
     """Get dashboard data from database"""
     with get_db_connection() as conn:
@@ -157,11 +118,13 @@ def get_user_picks_for_week(user_id, week, year):
 def initialize_app():
     """Initialize application on first request"""
     try:
-        logger.info("Initializing application with complete database setup...")
-        if setup_complete_database():
-            logger.info("Application initialized successfully")
+        logger.info("Checking database initialization...")
+        # Only run setup if database doesn't exist
+        if not os.path.exists(DATABASE_PATH):
+            logger.info("Database not found, running setup...")
+            setup_complete_database()
         else:
-            logger.error("Database setup failed")
+            logger.info("Database exists, skipping setup")
     except Exception as e:
         logger.error(f"Application initialization failed: {e}")
 
@@ -463,6 +426,43 @@ def sync_season():
         year = request.json.get('year', datetime.datetime.now().year)
         games_added = auto_populate_all_games()
         return jsonify({
+            'success': True,
+            'message': f'Synced games for {year} season',
+            'games_added': games_added
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+if __name__ == '__main__':
+    if not os.path.exists('templates'):
+        os.makedirs('templates')
+    if not os.path.exists('static'):
+        os.makedirs('static')
+    
+    print("🚀 Starting La Casa de Todos NFL Fantasy League...")
+    print("=" * 60)
+    
+    try:
+        print("📁 Initializing database...")
+        init_database()
+        
+        print("🏈 Auto-populating NFL games...")
+        auto_populate_all_games()
+        
+        app.config['DEBUG'] = True
+        app.config['TEMPLATES_AUTO_RELOAD'] = True
+        
+        print("=" * 60)
+        print("🏈 Application ready!")
+        print("Access at: http://127.0.0.1:5000")
+        print("=" * 60)
+        
+        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+        
+    except Exception as e:
+        print(f"❌ Application startup failed: {e}")
+        import traceback
+        traceback.print_exc()
             'success': True,
             'message': f'Synced games for {year} season',
             'games_added': games_added
