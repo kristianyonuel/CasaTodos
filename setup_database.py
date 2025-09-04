@@ -503,6 +503,37 @@ def create_current_season():
         
         conn.commit()
 
+def create_sample_games(cursor, year):
+    """Create sample NFL games for testing"""
+    teams = ['KC', 'BUF', 'DAL', 'SF', 'GB', 'NE', 'PIT', 'BAL', 'DEN', 'LAC', 'MIA', 'NYJ']
+    
+    for week in range(1, 6):  # Create first 5 weeks
+        base_date = datetime(year, 9, 5) + timedelta(weeks=week-1)
+        
+        # Thursday Night Football (except week 1)
+        if week > 1:
+            thursday_date = base_date + timedelta(days=3)
+            cursor.execute('''
+                INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_thursday_night, game_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (week, year, f'tnf_{week}_{year}', teams[0], teams[1], thursday_date.replace(hour=20, minute=15), True, 'scheduled'))
+        
+        # Sunday games
+        sunday = base_date + timedelta(days=6)
+        for i in range(2, min(len(teams), 10), 2):
+            if i + 1 < len(teams):
+                cursor.execute('''
+                    INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, game_status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (week, year, f'sun_{week}_{year}_{i//2}', teams[i], teams[i+1], sunday.replace(hour=13), 'scheduled'))
+        
+        # Monday Night Football
+        monday = base_date + timedelta(days=7)
+        cursor.execute('''
+            INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_monday_night, game_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (week, year, f'mnf_{week}_{year}', teams[-2], teams[-1], monday.replace(hour=20, minute=15), True, 'scheduled'))
+
 def setup_complete_database():
     """Main function to setup complete database"""
     logger.info("🚀 Starting complete database setup...")
