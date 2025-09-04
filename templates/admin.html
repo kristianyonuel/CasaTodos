@@ -47,6 +47,7 @@
                     <button onclick="loadGameResults()" class="btn btn-warning">Update Game Results</button>
                     <button onclick="loadDeadlineOverrides()" class="btn btn-danger">Deadline Overrides</button>
                     <button onclick="syncSeason()" class="btn btn-secondary">Sync NFL Season</button>
+                    <button onclick="emergencyDeadlineExtend()" class="btn btn-danger">🚨 Emergency Deadline Extend</button>
                 </div>
                 
                 <div id="admin-content">
@@ -1123,6 +1124,43 @@
                 }
             } catch (error) {
                 alert('Error removing deadline override');
+                console.error('Error:', error);
+            }
+        }
+
+        async function emergencyDeadlineExtend() {
+            const minutes = prompt('How many minutes to extend all current deadlines?', '60');
+            if (!minutes || isNaN(minutes)) {
+                alert('Please enter a valid number of minutes');
+                return;
+            }
+            
+            if (!confirm(`Are you sure you want to extend ALL current deadlines by ${minutes} minutes?`)) {
+                return;
+            }
+            
+            try {
+                const week = document.getElementById('admin-week').value;
+                const year = document.getElementById('admin-year').value;
+                
+                const response = await fetch('/admin/emergency_deadline_extend', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        minutes: parseInt(minutes),
+                        week: parseInt(week),
+                        year: parseInt(year)
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('SUCCESS: ' + result.message);
+                } else {
+                    alert('ERROR: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error extending deadlines');
                 console.error('Error:', error);
             }
         }

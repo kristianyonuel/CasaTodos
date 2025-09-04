@@ -19,9 +19,9 @@ class DeadlineManager:
         
         # Default deadline offsets (minutes before game start)
         self.deadline_offsets = {
-            'thursday_night': 30,    # 30 minutes before TNF
-            'sunday_games': 60,      # 1 hour before first Sunday game  
-            'monday_night': 30,      # 30 minutes before MNF
+            'thursday_night': 5,     # 5 minutes before TNF (more lenient)
+            'sunday_games': 15,      # 15 minutes before first Sunday game  
+            'monday_night': 5,       # 5 minutes before MNF (more lenient)
             'elimination': 10080     # 7 days (7 * 24 * 60) before Saturday
         }
     
@@ -203,7 +203,6 @@ class DeadlineManager:
     def can_make_picks(self, week: int, year: int, game_date: str = None) -> bool:
         """Check if picks can still be made for a specific game or week"""
         try:
-            deadlines = self.get_week_deadlines(week, year)
             now = datetime.now(self.ast_tz)
             
             if game_date:
@@ -211,18 +210,30 @@ class DeadlineManager:
                 game_time = datetime.strptime(game_date, '%Y-%m-%d %H:%M:%S')
                 game_time_ast = convert_to_ast(game_time)
                 
-                # Determine game type based on day of week
+                # Determine game type and use appropriate deadline offset
                 weekday = game_time_ast.weekday()  # Monday = 0, Sunday = 6
                 
                 if weekday == 3:  # Thursday
-                    deadline_info = deadlines.get('thursday_night')
-                elif weekday == 0:  # Monday
-                    deadline_info = deadlines.get('monday_night')
-                else:  # Sunday and other days (assume Sunday deadline)
-                    deadline_info = deadlines.get('sunday_games')
+                    offset_minutes = self.deadline_offsets['thursday_night']
+                elif weekday == 0:  # Monday  
+                    offset_minutes = self.deadline_offsets['monday_night']
+                else:  # Sunday and other days
+                    offset_minutes = self.deadline_offsets['sunday_games']
                 
-                if deadline_info and deadline_info.get('deadline'):
-                    return now < deadline_info['deadline']
+                # Calculate deadline using appropriate offset
+                deadline = game_time_ast - timedelta(minutes=offset_minutes)
+                
+                # Debug logging
+                print(f"DEBUG: Game time (AST): {game_time_ast}")
+                print(f"DEBUG: Current time (AST): {now}")
+                print(f"DEBUG: Deadline ({offset_minutes} min before): {deadline}")
+                print(f"DEBUG: Minutes until deadline: {(deadline - now).total_seconds() / 60:.1f}")
+                print(f"DEBUG: Can make picks: {now < deadline}")
+                
+                return now < deadline
+            
+            # If no specific game date, check general week deadlines
+            deadlines = self.get_week_deadlines(week, year)
             
             # If no specific game date, check if any deadline is still open
             for key, deadline_info in deadlines.items():
@@ -234,7 +245,8 @@ class DeadlineManager:
             
         except Exception as e:
             print(f"Error checking pick availability: {e}")
-            return True  # Default to allowing picks if error occurs
+            # Default to allowing picks if error occurs (safer for users)
+            return True
     
     def get_deadline_summary(self, week: int, year: int) -> Dict[str, Any]:
         """Get a user-friendly summary of deadlines with hours remaining"""

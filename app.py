@@ -4,7 +4,7 @@ from flask import Flask, render_template, request, jsonify, session, redirect, u
 import sqlite3
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from werkzeug.security import generate_password_hash, check_password_hash
 from setup_database import setup_complete_database
@@ -1077,6 +1077,66 @@ def admin_remove_deadline_override():
             
     except Exception as e:
         logger.error(f"Error removing deadline override: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/admin/emergency_deadline_extend', methods=['POST'])
+def emergency_deadline_extend():
+    """Emergency route to quickly extend all deadlines by X minutes"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        minutes_to_extend = data.get('minutes', 60)  # Default 1 hour extension
+        week = data.get('week', 1)
+        year = data.get('year', 2025)
+        
+        override_manager = DeadlineOverrideManager()
+        
+        # Get current deadlines
+        deadline_manager = DeadlineManager()
+        current_deadlines = deadline_manager.get_week_deadlines(week, year)
+        
+        extensions_created = 0
+        
+        for deadline_type, deadline_info in current_deadlines.items():
+            if deadline_info and deadline_info.get('deadline'):
+                # Create new deadline with extension
+                original_deadline = deadline_info['deadline']
+                new_deadline = original_deadline + timedelta(minutes=minutes_to_extend)
+                
+                # Map deadline types
+                db_type = deadline_type.replace('_night', '').replace('_games', '')
+                if db_type == 'thursday':
+                    db_type = 'thursday'
+                elif db_type == 'sunday':
+                    db_type = 'sunday'
+                elif db_type == 'monday':
+                    db_type = 'monday'
+                else:
+                    continue
+                
+                success = override_manager.create_override(
+                    week=week,
+                    year=year,
+                    deadline_type=db_type,
+                    new_deadline=new_deadline,
+                    admin_id=session['user_id'],
+                    user_id=None,  # Global override
+                    reason=f"Emergency extension: +{minutes_to_extend} minutes"
+                )
+                
+                if success:
+                    extensions_created += 1
+        
+        logger.info(f"Admin {session['username']} created emergency deadline extensions (+{minutes_to_extend} min)")
+        return jsonify({
+            'success': True, 
+            'message': f'Extended {extensions_created} deadlines by {minutes_to_extend} minutes'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error creating emergency deadline extension: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
