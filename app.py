@@ -1,139 +1,57 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
-import logging
-from datetime import datetime, timedelta
-import os
 import sqlite3
+import os
+from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
-from contextlib import contextmanager
 from setup_database import setup_complete_database
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('nfl_fantasy.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = 'nfl-fantasy-secret-key-2024'
 
-# Database Configuration
 DATABASE_PATH = 'nfl_fantasy.db'
 
-@contextmanager
-def get_db_connection():
-    """Database connection context manager"""
+def get_db():
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-def get_dashboard_data(user_id):
-    """Get dashboard data from database"""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        
-        # Get current week and year
-        current_year = datetime.now().year
-        current_week = 1  # Simplified for now
-        
-        # Get user's picks count for current week
-        cursor.execute('''
-            SELECT COUNT(*) FROM user_picks up
-            JOIN nfl_games g ON up.game_id = g.id
-            WHERE up.user_id = ? AND g.week = ? AND g.year = ?
-        ''', (user_id, current_week, current_year))
-        user_picks_count = cursor.fetchone()[0]
-        
-        # Get total games for current week
-        cursor.execute('''
-            SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?
-        ''', (current_week, current_year))
-        total_games = cursor.fetchone()[0]
-        
-        # Get user's total wins
-        cursor.execute('''
-            SELECT COUNT(*) FROM weekly_results WHERE user_id = ? AND is_winner = 1
-        ''', (user_id,))
-        user_wins = cursor.fetchone()[0]
-        
-        # Get total players
-        cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = 0')
-        total_players = cursor.fetchone()[0]
-        
-        # Get available weeks
-        cursor.execute('SELECT DISTINCT week FROM nfl_games WHERE year = ? ORDER BY week', (current_year,))
-        available_weeks = [row[0] for row in cursor.fetchall()]
-        
-        return {
-            'current_week': current_week,
-            'current_year': current_year,
-            'user_picks_count': user_picks_count,
-            'total_games': total_games,
-            'user_wins': user_wins,
-            'total_players': total_players,
-            'available_weeks': available_weeks or list(range(1, 19))
-        }
-
-def get_games_for_week(week, year):
-    """Get games for a specific week from database"""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT * FROM nfl_games 
-            WHERE week = ? AND year = ? 
-            ORDER BY 
-                CASE 
-                    WHEN is_thursday_night = 1 THEN 1
-                    WHEN is_monday_night = 1 THEN 3
-                    ELSE 2
-                END, 
-                datetime(game_date)
-        ''', (week, year))
-        return cursor.fetchall()
-
-def get_user_picks_for_week(user_id, week, year):
-    """Get user's picks for a specific week"""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT g.id, up.selected_team, up.predicted_home_score, up.predicted_away_score
-            FROM user_picks up
-            JOIN nfl_games g ON up.game_id = g.id
-            WHERE up.user_id = ? AND g.week = ? AND g.year = ?
-        ''', (user_id, week, year))
-        return {row[0]: {
-            'selected_team': row[1],
-            'predicted_home_score': row[2],
-            'predicted_away_score': row[3]
-        } for row in cursor.fetchall()}
+    return conn
 
 @app.before_first_request
 def initialize_app():
-    """Initialize application on first request"""
-    logger.info("Checking database initialization...")
     if not os.path.exists(DATABASE_PATH):
-        logger.info("Database not found, running setup...")
+        print("Database not found, running setup...")
         setup_complete_database()
     else:
-        logger.info("Database exists, skipping setup")
+        print("Database exists, ready to run")
 
 @app.route('/')
 def index():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    dashboard_data = get_dashboard_data(session['user_id'])
-    dashboard_data['username'] = session.get('username', 'User')
+    conn = get_db()
+    cursor = conn.cursor()
     
-    logger.info(f"Dashboard loaded for user: {session.get('username')}")
-    return render_template('index.html', **dashboard_data)
+    # Get basic dashboard data
+    cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = 1 AND year = ?', (datetime.now().year,))
+    total_games = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = 0')
+    total_players = cursor.fetchone()[0]
+    
+    conn.close()
+    
+    data = {
+        'current_week': 1,
+        'current_year': datetime.now().year,
+        'username': session.get('username', 'User'),
+        'user_picks_count': 0,
+        'total_games': total_games,
+        'user_wins': 0,
+        'total_players': total_players,
+        'available_weeks': list(range(1, 19))
+    }
+    
+    return render_template('index.html', **data)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -145,17 +63,16 @@ def login():
             flash('Please enter both username and password', 'error')
             return render_template('login.html')
         
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
-            user = cursor.fetchone()
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
+        user = cursor.fetchone()
+        conn.close()
         
         if user and check_password_hash(user[1], password):
             session['user_id'] = user[0]
             session['username'] = username
             session['is_admin'] = bool(user[2])
-            
-            logger.info(f"User {username} logged in successfully")
             flash('Successfully logged in!', 'success')
             return redirect(url_for('index'))
         else:
@@ -165,9 +82,7 @@ def login():
 
 @app.route('/logout')
 def logout():
-    username = session.get('username')
     session.clear()
-    logger.info(f"User {username} logged out")
     flash('You have been logged out', 'info')
     return redirect(url_for('login'))
 
@@ -179,8 +94,34 @@ def games():
     week = request.args.get('week', 1, type=int)
     year = request.args.get('year', datetime.now().year, type=int)
     
-    games_data = get_games_for_week(week, year)
-    user_picks = get_user_picks_for_week(session['user_id'], week, year)
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Get games for the week
+    cursor.execute('''
+        SELECT * FROM nfl_games 
+        WHERE week = ? AND year = ? 
+        ORDER BY game_date
+    ''', (week, year))
+    games_data = cursor.fetchall()
+    
+    # Get user picks
+    cursor.execute('''
+        SELECT g.id, up.selected_team, up.predicted_home_score, up.predicted_away_score
+        FROM user_picks up
+        JOIN nfl_games g ON up.game_id = g.id
+        WHERE up.user_id = ? AND g.week = ? AND g.year = ?
+    ''', (session['user_id'], week, year))
+    
+    user_picks = {}
+    for row in cursor.fetchall():
+        user_picks[row[0]] = {
+            'selected_team': row[1],
+            'predicted_home_score': row[2],
+            'predicted_away_score': row[3]
+        }
+    
+    conn.close()
     
     return render_template('games.html',
                           games=games_data,
@@ -199,29 +140,27 @@ def submit_picks():
     data = request.get_json()
     picks = data.get('picks', [])
     
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        successful_picks = 0
+    conn = get_db()
+    cursor = conn.cursor()
+    successful_picks = 0
+    
+    for pick in picks:
+        game_id = pick.get('game_id')
+        selected_team = pick.get('selected_team')
+        home_score = pick.get('home_score')
+        away_score = pick.get('away_score')
         
-        for pick in picks:
-            game_id = pick.get('game_id')
-            selected_team = pick.get('selected_team')
-            home_score = pick.get('home_score')
-            away_score = pick.get('away_score')
-            
-            if not game_id or not selected_team:
-                continue
-            
+        if game_id and selected_team:
             cursor.execute('''
                 INSERT OR REPLACE INTO user_picks 
                 (user_id, game_id, selected_team, predicted_home_score, predicted_away_score)
                 VALUES (?, ?, ?, ?, ?)
             ''', (session['user_id'], game_id, selected_team, home_score, away_score))
             successful_picks += 1
-        
-        conn.commit()
     
-    logger.info(f"User {session['user_id']} submitted {successful_picks} picks")
+    conn.commit()
+    conn.close()
+    
     return jsonify({'success': True, 'message': f'Successfully submitted {successful_picks} picks!'})
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -236,25 +175,86 @@ def register():
                 flash('Password must be at least 6 characters long', 'error')
                 return render_template('register.html')
             
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
-                if cursor.fetchone():
-                    flash('Username already exists', 'error')
-                    return render_template('register.html')
-                
-                password_hash = generate_password_hash(password)
-                cursor.execute('''
-                    INSERT INTO users (username, password_hash, email)
-                    VALUES (?, ?, ?)
-                ''', (username, password_hash, email))
-                
-                conn.commit()
-                
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+            if cursor.fetchone():
+                flash('Username already exists', 'error')
+                return render_template('register.html')
+            
+            password_hash = generate_password_hash(password)
+            cursor.execute('''
+                INSERT INTO users (username, password_hash, email)
+                VALUES (?, ?, ?)
+            ''', (username, password_hash, email))
+            
+            conn.commit()
+            conn.close()
+            
             flash('Registration successful! Please log in.', 'success')
             return redirect(url_for('login'))
             
+        except Exception as e:
+            print(f"Registration error: {e}")
+            flash('Registration failed. Please try again.', 'error')
+    
+    return render_template('register.html')
+
+@app.route('/leaderboard')
+def leaderboard():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT u.username, 
+               COUNT(CASE WHEN wr.is_winner = 1 THEN 1 END) as wins,
+               AVG(wr.correct_picks) as avg_correct,
+               SUM(wr.total_points) as total_points
+        FROM users u
+        LEFT JOIN weekly_results wr ON u.id = wr.user_id
+        WHERE u.is_admin = 0
+        GROUP BY u.id, u.username
+        ORDER BY wins DESC, total_points DESC
+    ''')
+    
+    leaderboard_data = []
+    for row in cursor.fetchall():
+        leaderboard_data.append({
+            'username': row[0],
+            'wins': row[1] or 0,
+            'avg_correct': round(row[2] or 0, 1),
+            'total_points': row[3] or 0
+        })
+    
+    conn.close()
+    return render_template('leaderboard.html', leaderboard=leaderboard_data)
+
+@app.route('/rules')
+def rules():
+    return render_template('rules.html')
+
+@app.route('/admin')
+def admin():
+    if 'user_id' not in session or not session.get('is_admin'):
+        flash('Admin access required', 'error')
+        return redirect(url_for('index'))
+    
+    return render_template('admin.html')
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('error.html', error="Page not found"), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return render_template('error.html', error="Internal server error"), 500
+
+if __name__ == '__main__':
+    print("🚀 Starting La Casa de Todos NFL Fantasy League...")
+    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
         except Exception as e:
             logger.error(f"Registration error: {e}")
             flash('Registration failed. Please try again.', 'error')
