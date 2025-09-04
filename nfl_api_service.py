@@ -12,9 +12,6 @@ logger = logging.getLogger(__name__)
 
 class NFLAPIService:
     def __init__(self):
-        # BallDontLie API (Free) - Note: Originally for NBA, checking if NFL is available
-        self.balldontlie_base = "https://api.balldontlie.io/v1"
-        
         # ESPN as primary (free and reliable for NFL)
         self.espn_base = "https://site.api.espn.com/apis/site/v2/sports/football/nfl"
         
