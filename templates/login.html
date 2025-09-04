@@ -5,12 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - La Casa de Todos</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='login.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
         <div class="login-container">
-            <h1>La Casa de Todos</h1>
+            <div class="logo-section">
+                <!-- Replace 'logo.png' with your actual logo filename -->
+                <!-- Options: logo.png, logo.jpg, logo.svg, etc. -->
+                <img src="{{ url_for('static', filename='images/logo.png') }}" 
+                     alt="La Casa de Todos Logo" 
+                     class="logo"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                
+                <!-- Fallback placeholder if no logo image is found -->
+                <div class="logo-placeholder" style="display: none;">
+                    🏠
+                </div>
+                
+                <h1>La Casa de Todos</h1>
+            </div>
             <h2>Login</h2>
             
             {% with messages = get_flashed_messages(with_categories=true) %}

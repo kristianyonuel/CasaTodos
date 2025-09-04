@@ -1,0 +1,107 @@
+/* Login page specific styles for La Casa de Todos */
+
+.login-container {
+    max-width: 400px;
+    margin: 50px auto;
+    padding: 40px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.logo-section {
+    margin-bottom: 30px;
+}
+
+.logo-section .logo {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 15px;
+    display: block;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.logo-section .logo:hover {
+    transform: scale(1.05);
+}
+
+.logo-section h1 {
+    color: #2c3e50;
+    font-size: 2rem;
+    margin: 0;
+    font-weight: 600;
+}
+
+.login-container h2 {
+    color: #34495e;
+    font-size: 1.5rem;
+    margin-bottom: 30px;
+    font-weight: 500;
+}
+
+.login-form {
+    margin-bottom: 25px;
+}
+
+.sample-users {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 20px 0;
+    font-size: 0.9rem;
+    color: #6c757d;
+    border-left: 4px solid #007bff;
+}
+
+.sample-users strong {
+    color: #495057;
+}
+
+/* Alternative logo styles for different logo types */
+
+/* For horizontal/wide logos */
+.logo-section .logo.wide {
+    width: 120px;
+    height: 60px;
+    border-radius: 8px;
+}
+
+/* For square logos */
+.logo-section .logo.square {
+    width: 70px;
+    height: 70px;
+    border-radius: 10px;
+}
+
+/* For text-based logos */
+.logo-section .logo.text-logo {
+    width: auto;
+    height: 50px;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* Logo placeholder for when no logo is available */
+.logo-placeholder {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 15px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 2rem;
+    font-weight: bold;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.logo-placeholder:hover {
+    transform: scale(1.05);
+}
