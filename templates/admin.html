@@ -75,10 +75,19 @@
             try {
                 document.getElementById('admin-content').innerHTML = '<p>Loading picks...</p>';
                 
-                const response = await fetch(`/admin/all_picks?week=${currentWeek}`);
-                const picks = await response.json();
+                console.log(`Fetching picks for Week ${currentWeek}, Year ${currentYear}`);
+                const response = await fetch(`/admin/all_picks?week=${currentWeek}&year=${currentYear}`);
                 
-                let html = `<h3>All User Picks - Week ${currentWeek}</h3>`;
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const picks = await response.json();
+                console.log('Received picks:', picks);
+                
+                let html = `<h3>All User Picks - Week ${currentWeek}, ${currentYear}</h3>`;
+                html += `<p><em>Found ${picks.length} picks</em></p>`;
+                
                 if (picks.length > 0) {
                     html += '<div class="picks-management">';
                     html += '<table class="admin-picks-table">';
@@ -110,13 +119,16 @@
                     
                     html += '</tbody></table></div>';
                 } else {
-                    html += '<p>No picks found for this week.</p>';
+                    html += '<p>No picks found for Week ' + currentWeek + ', Year ' + currentYear + '.</p>';
+                    html += '<p><em>Try selecting a different week or year from the dropdowns above.</em></p>';
                 }
                 
                 document.getElementById('admin-content').innerHTML = html;
             } catch (error) {
-                document.getElementById('admin-content').innerHTML = '<p>Error loading picks</p>';
-                console.error('Error:', error);
+                console.error('Error loading picks:', error);
+                document.getElementById('admin-content').innerHTML = 
+                    `<p class="error">Error loading picks: ${error.message}</p>
+                     <p>Check the browser console for more details.</p>`;
             }
         }
 
