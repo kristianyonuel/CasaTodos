@@ -280,6 +280,15 @@ body {
     background: #5a6268;
 }
 
+.btn-info {
+    background: #17a2b8;
+    color: white;
+}
+
+.btn-info:hover {
+    background: #138496;
+}
+
 /* Button sizes */
 .btn-sm {
     padding: 6px 12px;
@@ -369,6 +378,7 @@ body {
 .game-time {
     font-size: 0.9rem;
     color: #666;
+    font-weight: 500;
 }
 
 .mnf-badge, .tnf-badge {
@@ -457,6 +467,14 @@ body {
     text-align: center;
 }
 
+.score-prediction small {
+    display: block;
+    text-align: center;
+    color: #666;
+    margin-top: 8px;
+    font-style: italic;
+}
+
 .score-inputs {
     display: flex;
     align-items: center;
@@ -483,6 +501,12 @@ body {
     text-align: center;
     font-size: 1.1rem;
     font-weight: 600;
+}
+
+/* Form Validation */
+.score-input.error {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
 }
 
 .score-separator {
@@ -903,6 +927,34 @@ body {
 
 .btn-danger:hover {
     background: #c82333;
+}
+
+/* User Pick Final Display */
+.user-pick-final {
+    margin-top: 10px;
+    padding: 10px;
+    background: #e8f4f8;
+    border-radius: 4px;
+    border-left: 4px solid #17a2b8;
+    font-size: 0.9rem;
+}
+
+/* Week Stats */
+.week-stats {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin: 15px 0;
+    flex-wrap: wrap;
+}
+
+.week-stats .stat {
+    background: #e3f2fd;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    color: #1976d2;
+    font-weight: 500;
 }
 
 /* Responsive admin table */

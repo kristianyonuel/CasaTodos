@@ -7,11 +7,99 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 from nfl_schedule_2025 import get_2025_schedule, get_current_nfl_week_2025, NFL_TEAMS
 from nfl_2025_official_schedule import get_official_2025_games, populate_all_2025_weeks
+import pytz
 
 app = Flask(__name__)
 app.secret_key = 'nfl-fantasy-secret-key-2024'
 
-# Initialize database
+AST = pytz.timezone('America/Puerto_Rico')  # Atlantic Standard Time
+
+def auto_populate_nfl_games():
+    """Auto-populate NFL games for all weeks when starting the application"""
+    print("🏈 Auto-populating NFL games for current season...")
+    
+    current_year = datetime.datetime.now().year
+    total_games_created = 0
+    
+    for week in range(1, 19):
+        try:
+            print(f"   Checking Week {week}...")
+            
+            # Check if games already exist for this week
+            conn = sqlite3.connect('nfl_fantasy.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, current_year))
+            existing_games = cursor.fetchone()[0]
+            conn.close()
+            
+            if existing_games == 0:
+                print(f"   Creating games for Week {week}...")
+                games_created = ensure_games_exist(week, current_year)
+                total_games_created += games_created
+                print(f"   ✓ Created {games_created} games for Week {week}")
+            else:
+                print(f"   ✓ Week {week} already has {existing_games} games")
+                
+        except Exception as e:
+            print(f"   ❌ Error processing Week {week}: {e}")
+            continue
+    
+    print(f"🎯 Auto-population complete! Total new games created: {total_games_created}")
+    return total_games_created
+
+def validate_nfl_games():
+    """Validate that we have sufficient games in the database"""
+    print("🔍 Validating NFL games in database...")
+    
+    conn = sqlite3.connect('nfl_fantasy.db')
+    cursor = conn.cursor()
+    
+    # Get total games count
+    cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE year = ?', (datetime.datetime.now().year,))
+    total_games = cursor.fetchone()[0]
+    
+    # Get games by week
+    cursor.execute('''
+        SELECT week, COUNT(*) as game_count 
+        FROM nfl_games 
+        WHERE year = ? 
+        GROUP BY week 
+        ORDER BY week
+    ''', (datetime.datetime.now().year,))
+    
+    weeks_data = cursor.fetchall()
+    conn.close()
+    
+    print(f"   📊 Total games in database: {total_games}")
+    print(f"   📅 Weeks with games: {len(weeks_data)}/18")
+    
+    # Show games per week
+    for week, count in weeks_data:
+        print(f"      Week {week}: {count} games")
+    
+    # Validate minimum requirements
+    if total_games < 50:  # Minimum expected games
+        print("   ⚠️  Warning: Low game count detected")
+        return False
+    
+    if len(weeks_data) < 5:  # At least 5 weeks should have games
+        print("   ⚠️  Warning: Few weeks have games")
+        return False
+    
+    print("   ✅ NFL games validation passed")
+    return True
+
+def get_week_game_count(week, year):
+    """Get the number of games in a specific week"""
+    conn = sqlite3.connect('nfl_fantasy.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, year))
+    game_count = cursor.fetchone()[0]
+    
+    conn.close()
+    return game_count
+
 def init_db():
     conn = sqlite3.connect('nfl_fantasy.db')
     cursor = conn.cursor()
@@ -323,12 +411,15 @@ def index():
         total_players = 0
         available_weeks = []
         
+        # Get week-specific game count
+        total_games = get_week_game_count(current_week, current_year)
+        
         # Try to get database stats safely
         try:
             conn = sqlite3.connect('nfl_fantasy.db')
             cursor = conn.cursor()
             
-            # Get user's total picks this week (safe query)
+            # Get user's total picks this week
             cursor.execute('''
                 SELECT COUNT(*) FROM user_picks up
                 JOIN nfl_games g ON up.game_id = g.id
@@ -367,7 +458,7 @@ def index():
             available_weeks = [row[0] for row in cursor.fetchall()]
             
             conn.close()
-            print(f"Database queries completed successfully")
+            print(f"Dashboard stats: Picks {user_picks_count}/{total_games}, Wins: {user_wins}")
             
         except Exception as db_error:
             print(f"Database error (using defaults): {db_error}")
@@ -565,6 +656,21 @@ def ensure_games_exist(week, year):
         # Insert games into database
         for game in games:
             try:
+                # Convert game_date to AST timezone
+                game_date = game['game_date']
+                if isinstance(game_date, str):
+                    try:
+                        game_date = datetime.datetime.fromisoformat(game_date)
+                    except:
+                        game_date = datetime.datetime.strptime(game_date, '%Y-%m-%d %H:%M:%S')
+                
+                # Ensure timezone is set to AST
+                if game_date.tzinfo is None:
+                    game_date = AST.localize(game_date)
+                
+                # Store as UTC but display in AST
+                game_date_utc = game_date.astimezone(pytz.utc)
+                
                 cursor.execute('''
                     INSERT OR REPLACE INTO nfl_games 
                     (game_id, week, year, home_team, away_team, game_date, 
@@ -576,7 +682,7 @@ def ensure_games_exist(week, year):
                     game['year'], 
                     game['home_team'], 
                     game['away_team'], 
-                    game['game_date'], 
+                    game_date_utc.isoformat(),
                     game.get('is_monday_night', False), 
                     game.get('is_thursday_night', False),
                     game.get('home_score'),
@@ -596,13 +702,19 @@ def ensure_games_exist(week, year):
         # Emergency fallback - create minimal games
         emergency_games = create_emergency_games(week, year)
         for game in emergency_games:
-            cursor.execute('''
-                INSERT OR REPLACE INTO nfl_games 
-                (game_id, week, year, home_team, away_team, game_date, is_monday_night, is_thursday_night)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (game['game_id'], game['week'], game['year'], game['home_team'], 
-                  game['away_team'], game['game_date'], game['is_monday_night'], game['is_thursday_night']))
-            games_created += 1
+            try:
+                game_date = AST.localize(game['game_date'])
+                cursor.execute('''
+                    INSERT OR REPLACE INTO nfl_games 
+                    (game_id, week, year, home_team, away_team, game_date, is_monday_night, is_thursday_night)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (game['game_id'], game['week'], game['year'], game['home_team'], 
+                      game['away_team'], game_date.astimezone(pytz.utc).isoformat(), 
+                      game['is_monday_night'], game['is_thursday_night']))
+                games_created += 1
+            except Exception as emergency_error:
+                print(f"Emergency game creation error: {emergency_error}")
+                continue
         conn.commit()
     
     conn.close()
@@ -791,7 +903,7 @@ def games():
     try:
         # Ensure games exist for this week
         games_count = ensure_games_exist(week, year)
-        print(f"Ensured {games_count} games exist for Week {week}")
+        print(f"Week {week} has {games_count} games available")
         
         conn = sqlite3.connect('nfl_fantasy.db')
         cursor = conn.cursor()
@@ -826,29 +938,26 @@ def games():
         
         conn.close()
         
-        # Format games for template
+        # Format games for template with proper AST timezone
         games_list = []
         for game in db_games:
             game_date = None
             if game[6]:  # game_date
                 try:
                     if isinstance(game[6], str):
-                        # Handle different date formats
-                        for fmt in ['%Y-%m-%d %H:%M:%S.%f%z', '%Y-%m-%d %H:%M:%S%z', '%Y-%m-%d %H:%M:%S']:
-                            try:
-                                game_date = datetime.datetime.strptime(game[6].replace('Z', '+0000'), fmt)
-                                break
-                            except ValueError:
-                                continue
-                        if not game_date:
-                            game_date = datetime.datetime.fromisoformat(game[6].replace('Z', '+00:00'))
+                        # Parse UTC date and convert to AST for display
+                        dt = datetime.datetime.fromisoformat(game[6].replace('Z', '+00:00'))
+                        if dt.tzinfo is None:
+                            dt = pytz.utc.localize(dt)
+                        game_date = dt.astimezone(AST)
                     else:
                         game_date = game[6]
+                        if game_date.tzinfo is None:
+                            game_date = AST.localize(game_date)
                 except Exception as date_error:
                     print(f"Date parsing error: {date_error}")
-                    # Default to a reasonable time
-                    base_date = datetime.datetime(year, 9, 1) + datetime.timedelta(weeks=week-1, days=6)
-                    game_date = base_date.replace(hour=13, minute=0)
+                    # Default to current time in AST
+                    game_date = datetime.datetime.now(AST)
             
             games_list.append({
                 'id': game[0],
@@ -872,7 +981,7 @@ def games():
         
         current_nfl_week = get_current_nfl_week()
         
-        print(f"Games page loaded successfully: {len(games_list)} games, {len(user_picks)} user picks")
+        print(f"Games page loaded: {len(games_list)} games for Week {week}")
         
         return render_template('games.html', 
                              games=games_list, 
@@ -880,7 +989,8 @@ def games():
                              current_week=week,
                              current_year=year,
                              available_weeks=available_weeks,
-                             current_nfl_week=current_nfl_week)
+                             current_nfl_week=current_nfl_week,
+                             total_games=len(games_list))
                              
     except Exception as e:
         print(f"Games page error: {e}")
@@ -1034,35 +1144,44 @@ def admin():
     return render_template('admin.html')
 
 if __name__ == '__main__':
-    print("Creating database and starting application...")
+    # Create directories if they don't exist
+    if not os.path.exists('templates'):
+        os.makedirs('templates')
+    if not os.path.exists('static'):
+        os.makedirs('static')
+    
+    # Initialize database
+    print("🚀 Starting La Casa de Todos NFL Fantasy League...")
+    print("=" * 60)
     
     try:
+        print("📁 Initializing database...")
         init_db()
-        print("Database initialized successfully")
+        print("✅ Database initialized successfully")
         
-        # Add debug mode and network configuration
+        # Auto-populate NFL games
+        auto_populate_nfl_games()
+        
+        # Validate games
+        if validate_nfl_games():
+            print("✅ NFL games validation passed")
+        else:
+            print("⚠️  NFL games validation failed - some features may not work")
+        
+        # Add debug mode
         app.config['DEBUG'] = True
         app.config['TEMPLATES_AUTO_RELOAD'] = True
         
-        print("Starting Flask application on all network interfaces...")
-        print("Access locally at: http://127.0.0.1:5000")
-        print("Access from network at: http://[YOUR-IP]:5000")
-        print("To find your IP: ipconfig (Windows) or ip addr (Linux)")
+        print("=" * 60)
+        print("🏈 Application ready!")
+        print("Access at: http://127.0.0.1:5000")
+        print("Network access: http://0.0.0.0:5000")
+        print("=" * 60)
         
-        # Run on all network interfaces (0.0.0.0) on port 5000
+        # Run on all interfaces
         app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
         
     except Exception as e:
-        print(f"Application startup failed: {e}")
-        import traceback
-        traceback.print_exc()
-        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-        
-    except Exception as e:
-        print(f"Application startup failed: {e}")
-        import traceback
-        traceback.print_exc()
-    except Exception as e:
-        print(f"Application startup failed: {e}")
+        print(f"❌ Application startup failed: {e}")
         import traceback
         traceback.print_exc()

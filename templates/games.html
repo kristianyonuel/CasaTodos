@@ -19,10 +19,23 @@
         </header>
 
         <main class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
             <div class="picks-container">
                 <div class="picks-header">
-                    <h2>Make Your Picks</h2>
+                    <h2>Make Your Picks - Week {{ current_week }}</h2>
                     <p>Select the winning team for each game. Monday Night Football requires score prediction.</p>
+                    <div class="week-stats">
+                        <span class="stat">📅 Week {{ current_week }} of 18</span>
+                        <span class="stat">🏈 {{ total_games or 0 }} Games</span>
+                        <span class="stat">⏰ Times shown in AST</span>
+                    </div>
                     
                     <!-- Week Navigation -->
                     <div class="week-navigation">
@@ -38,7 +51,8 @@
                         </div>
                         <div class="week-info">
                             <p><strong>Current NFL Week:</strong> {{ current_nfl_week }}</p>
-                            <p><strong>Viewing:</strong> Week {{ current_week }}</p>
+                            <p><strong>Viewing:</strong> Week {{ current_week }} ({{ current_year }})</p>
+                            <p><strong>All times shown in AST (Atlantic Standard Time)</strong></p>
                             {% if session.get('is_admin') %}
                             <p>
                                 <a href="{{ url_for('force_create_games', week=current_week, year=current_year) }}" 
@@ -57,7 +71,13 @@
                         {% for game in games %}
                         <div class="game-card {% if game.is_monday_night %}monday-night{% endif %} {% if game.is_thursday_night %}thursday-night{% endif %} {% if game.is_final %}final{% endif %}">
                             <div class="game-header">
-                                <span class="game-time">{{ game.game_date.strftime('%a %m/%d %I:%M %p') if game.game_date else 'TBD' }}</span>
+                                <span class="game-time">
+                                    {% if game.game_date %}
+                                        {{ game.game_date.strftime('%a %m/%d %I:%M %p AST') }}
+                                    {% else %}
+                                        TBD
+                                    {% endif %}
+                                </span>
                                 {% if game.is_monday_night %}
                                 <span class="mnf-badge">Monday Night Football</span>
                                 {% elif game.is_thursday_night %}
@@ -81,6 +101,18 @@
                                     <span class="score">{{ game.home_score }}</span>
                                 </div>
                             </div>
+                            
+                            <!-- Show user's pick if game is final -->
+                            {% if user_picks.get(game.id) %}
+                            <div class="user-pick-final">
+                                <strong>Your pick:</strong> {{ user_picks.get(game.id).selected_team }}
+                                {% if game.is_monday_night and user_picks.get(game.id).predicted_home_score %}
+                                <br><strong>Score prediction:</strong> 
+                                {{ user_picks.get(game.id).predicted_away_score }} - {{ user_picks.get(game.id).predicted_home_score }}
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            
                             {% else %}
                             <!-- Show pick options -->
                             <div class="teams">
@@ -114,9 +146,8 @@
                                     </label>
                                 </div>
                             </div>
-                            {% endif %}
                             
-                            {% if game.is_monday_night and not game.is_final %}
+                            {% if game.is_monday_night %}
                             <div class="score-prediction">
                                 <h4>Score Prediction (Tiebreaker)</h4>
                                 <div class="score-inputs">
@@ -126,6 +157,7 @@
                                                id="away_score_{{ game.id }}" 
                                                name="away_score_{{ game.id }}"
                                                min="0" max="99"
+                                               placeholder="0"
                                                value="{{ user_picks.get(game.id, {}).get('predicted_away_score', '') }}">
                                     </div>
                                     <div class="score-separator">-</div>
@@ -135,10 +167,13 @@
                                                id="home_score_{{ game.id }}" 
                                                name="home_score_{{ game.id }}"
                                                min="0" max="99"
+                                               placeholder="0"
                                                value="{{ user_picks.get(game.id, {}).get('predicted_home_score', '') }}">
                                     </div>
                                 </div>
+                                <small>Required for Monday Night Football tiebreaker</small>
                             </div>
+                            {% endif %}
                             {% endif %}
                             
                             <input type="hidden" name="game_id" value="{{ game.id }}">
@@ -146,10 +181,13 @@
                         {% endfor %}
                     </div>
                     
+                    {% if games and not all(game.is_final for game in games) %}
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">Submit Picks</button>
                         <button type="button" class="btn btn-secondary" onclick="clearPicks()">Clear All</button>
+                        <button type="button" class="btn btn-info" onclick="validatePicks()">Validate Picks</button>
                     </div>
+                    {% endif %}
                 </form>
                 {% else %}
                 <div class="no-games">
@@ -173,6 +211,10 @@
     <script>
         document.getElementById('picks-form').addEventListener('submit', async function(e) {
             e.preventDefault();
+            
+            if (!validatePicks()) {
+                return;
+            }
             
             const formData = new FormData(this);
             const picks = [];
@@ -199,6 +241,9 @@
             }
             
             try {
+                document.querySelector('.btn-primary').disabled = true;
+                document.querySelector('.btn-primary').textContent = 'Submitting...';
+                
                 const response = await fetch('/submit_picks', {
                     method: 'POST',
                     headers: {
@@ -211,14 +256,44 @@
                 
                 if (result.success) {
                     alert('Picks submitted successfully!');
+                    location.reload();
                 } else {
                     alert('Error submitting picks: ' + result.error);
                 }
             } catch (error) {
                 console.error('Error:', error);
                 alert('Error submitting picks. Please try again.');
+            } finally {
+                document.querySelector('.btn-primary').disabled = false;
+                document.querySelector('.btn-primary').textContent = 'Submit Picks';
             }
         });
+        
+        function validatePicks() {
+            const mondayNightGames = document.querySelectorAll('.monday-night:not(.final)');
+            let valid = true;
+            let errorMessage = '';
+            
+            mondayNightGames.forEach(gameCard => {
+                const gameId = gameCard.querySelector('input[name="game_id"]').value;
+                const selectedTeam = gameCard.querySelector(`input[name="game_${gameId}"]:checked`);
+                const homeScore = gameCard.querySelector(`input[name="home_score_${gameId}"]`);
+                const awayScore = gameCard.querySelector(`input[name="away_score_${gameId}"]`);
+                
+                if (selectedTeam && (!homeScore.value || !awayScore.value)) {
+                    valid = false;
+                    errorMessage = 'Monday Night Football games require score predictions for tiebreaker.';
+                    homeScore.style.borderColor = '#dc3545';
+                    awayScore.style.borderColor = '#dc3545';
+                }
+            });
+            
+            if (!valid) {
+                alert(errorMessage);
+            }
+            
+            return valid;
+        }
         
         function clearPicks() {
             if (confirm('Are you sure you want to clear all picks?')) {
@@ -227,6 +302,7 @@
                 });
                 document.querySelectorAll('input[type="number"]').forEach(input => {
                     input.value = '';
+                    input.style.borderColor = '';
                 });
             }
         }
