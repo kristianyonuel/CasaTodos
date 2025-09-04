@@ -5,41 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - La Casa de Todos</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        <div class="auth-container">
-            <div class="auth-card">
-                <h1>🏠 La Casa de Todos</h1>
-                <p>NFL Fantasy League Login</p>
-                
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ category }}">{{ message }}</div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
+        <div class="login-container">
+            <h1>La Casa de Todos</h1>
+            <h2>Login</h2>
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
 
-                <form method="POST">
-                    <div class="form-group">
-                        <label for="username">Username</label>
-                        <input type="text" id="username" name="username" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="password">Password</label>
-                        <input type="password" id="password" name="password" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Login</button>
-                </form>
-
-                <div class="demo-accounts">
-                    <h3>Demo Accounts</h3>
-                    <p><strong>Admin:</strong> admin / admin123</p>
-                    <p><strong>Family:</strong> dad, mom, son, daughter / family123</p>
+            <form method="POST" class="login-form">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" required>
                 </div>
-            </div>
+                
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Login</button>
+            </form>
+            
+            <p>Don't have an account? <a href="{{ url_for('register') }}">Register here</a></p>
         </div>
+    </div>
+</body>
+</html>
     </div>
 </body>
 </html>
