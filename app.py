@@ -1591,10 +1591,21 @@ if __name__ == '__main__':
     import threading
     import ssl
     import os
+    import signal
+    import time
     from werkzeug.serving import make_server
     
     # Initialize the database on startup
     initialize_app()
+    
+    # Signal handler for graceful shutdown
+    def signal_handler(signum, frame):
+        logger.info("🛑 Received shutdown signal. Stopping servers...")
+        print("\n🛑 Shutting down servers...")
+        os._exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     
     def create_ssl_context():
         """Create SSL context for HTTPS"""
@@ -1657,9 +1668,9 @@ if __name__ == '__main__':
             ).serial_number(
                 x509.random_serial_number()
             ).not_valid_before(
-                datetime.utcnow()
+                datetime.now(datetime.timezone.utc)
             ).not_valid_after(
-                datetime.utcnow() + timedelta(days=365)
+                datetime.now(datetime.timezone.utc) + timedelta(days=365)
             ).add_extension(
                 x509.SubjectAlternativeName([
                     x509.DNSName("localhost"),
@@ -1707,17 +1718,36 @@ if __name__ == '__main__':
         try:
             logger.info("Starting HTTP server on port 80...")
             http_server = make_server('0.0.0.0', 80, app)
+            logger.info("✅ HTTP server successfully started on port 80")
+            print(f"🌐 HTTP server running on http://localhost")
             http_server.serve_forever()
         except PermissionError:
-            logger.warning("Permission denied for port 80. Trying port 8080...")
+            logger.warning("❌ Permission denied for port 80. Trying port 8080...")
             try:
                 http_server = make_server('0.0.0.0', 8080, app)
-                logger.info("HTTP server running on port 8080 (use sudo for port 80)")
+                logger.info("✅ HTTP server successfully started on port 8080")
+                print(f"🌐 HTTP server running on http://localhost:8080")
                 http_server.serve_forever()
             except Exception as e:
-                logger.error(f"Failed to start HTTP server: {e}")
+                logger.error(f"❌ Failed to start HTTP server on port 8080: {e}")
+                print("💡 Try running with 'dev' mode: python app.py dev")
+        except OSError as e:
+            if "Address already in use" in str(e):
+                logger.error("❌ Port 80 is already in use. Trying port 8080...")
+                try:
+                    http_server = make_server('0.0.0.0', 8080, app)
+                    logger.info("✅ HTTP server successfully started on port 8080")
+                    print(f"🌐 HTTP server running on http://localhost:8080")
+                    http_server.serve_forever()
+                except Exception as e2:
+                    logger.error(f"❌ Failed to start HTTP server on port 8080: {e2}")
+                    print("💡 Try running with 'dev' mode: python app.py dev")
+            else:
+                logger.error(f"❌ Failed to start HTTP server on port 80: {e}")
+                print("💡 Try running with 'dev' mode: python app.py dev")
         except Exception as e:
-            logger.error(f"Failed to start HTTP server on port 80: {e}")
+            logger.error(f"❌ Unexpected error starting HTTP server: {e}")
+            print("💡 Try running with 'dev' mode: python app.py dev")
     
     def run_https_server():
         """Run HTTPS server on port 443"""
@@ -1726,23 +1756,45 @@ if __name__ == '__main__':
             if ssl_context:
                 logger.info("Starting HTTPS server on port 443...")
                 https_server = make_server('0.0.0.0', 443, app, ssl_context=ssl_context)
+                logger.info("✅ HTTPS server successfully started on port 443")
                 https_server.serve_forever()
             else:
                 logger.error("Could not create SSL context. HTTPS server not started.")
         except PermissionError:
-            logger.warning("Permission denied for port 443. Trying port 8443...")
+            logger.warning("❌ Permission denied for port 443. Trying port 8443...")
             try:
                 ssl_context = create_ssl_context()
                 if ssl_context:
                     https_server = make_server('0.0.0.0', 8443, app, ssl_context=ssl_context)
-                    logger.info("HTTPS server running on port 8443 (use sudo for port 443)")
+                    logger.info("✅ HTTPS server successfully started on port 8443")
+                    print(f"🔒 HTTPS server running on https://localhost:8443")
                     https_server.serve_forever()
                 else:
                     logger.error("Could not create SSL context for port 8443")
             except Exception as e:
-                logger.error(f"Failed to start HTTPS server on port 8443: {e}")
+                logger.error(f"❌ Failed to start HTTPS server on port 8443: {e}")
+                print("💡 Try running with 'dev' mode: python app.py dev")
+        except OSError as e:
+            if "Address already in use" in str(e):
+                logger.error("❌ Port 443 is already in use. Trying port 8443...")
+                try:
+                    ssl_context = create_ssl_context()
+                    if ssl_context:
+                        https_server = make_server('0.0.0.0', 8443, app, ssl_context=ssl_context)
+                        logger.info("✅ HTTPS server successfully started on port 8443")
+                        print(f"🔒 HTTPS server running on https://localhost:8443")
+                        https_server.serve_forever()
+                    else:
+                        logger.error("Could not create SSL context for port 8443")
+                except Exception as e2:
+                    logger.error(f"❌ Failed to start HTTPS server on port 8443: {e2}")
+                    print("💡 Try running with 'dev' mode: python app.py dev")
+            else:
+                logger.error(f"❌ Failed to start HTTPS server on port 443: {e}")
+                print("💡 Try running with 'dev' mode: python app.py dev")
         except Exception as e:
-            logger.error(f"Failed to start HTTPS server on port 443: {e}")
+            logger.error(f"❌ Unexpected error starting HTTPS server: {e}")
+            print("💡 Try running with 'dev' mode: python app.py dev")
     
     def run_development_server():
         """Run development server on port 5000"""
@@ -1777,22 +1829,32 @@ if __name__ == '__main__':
             sys.exit(1)
     else:
         # Default: run both HTTP and HTTPS
+        print("🚀 La Casa de Todos NFL Fantasy Server")
+        print("=" * 50)
         logger.info("Starting both HTTP and HTTPS servers...")
-        logger.info("Available URLs:")
-        logger.info("  HTTP:  http://localhost (port 80) or http://localhost:8080")
-        logger.info("  HTTPS: https://localhost (port 443) or https://localhost:8443")
-        logger.info("  Dev:   http://localhost:5000")
-        
-        print("\nServer Options:")
-        print("  python app.py dev        - Development server (port 5000)")
-        print("  python app.py http       - HTTP only (port 80/8080)")
-        print("  python app.py https      - HTTPS only (port 443/8443)")
-        print("  python app.py production - Both HTTP and HTTPS")
-        print("  python app.py            - Both HTTP and HTTPS (default)")
+        print("📍 Available URLs:")
+        print("   🌐 HTTP:  http://localhost (port 80) or http://localhost:8080")
+        print("   🔒 HTTPS: https://localhost (port 443) or https://localhost:8443")
+        print("   🛠️ Dev:   http://localhost:5000")
+        print()
+        print("⚙️ Server Options:")
+        print("   python app.py dev        - Development server (port 5000)")
+        print("   python app.py http       - HTTP only (port 80/8080)")
+        print("   python app.py https      - HTTPS only (port 443/8443)")
+        print("   python app.py production - Both HTTP and HTTPS")
+        print("   python app.py            - Both HTTP and HTTPS (default)")
+        print()
+        print("💡 Tip: Use Ctrl+C to stop the server")
+        print("=" * 50)
         
         # Start HTTP server in a separate thread
+        print("🌐 Starting HTTP server...")
         http_thread = threading.Thread(target=run_http_server, daemon=True)
         http_thread.start()
         
+        # Give HTTP server time to start
+        time.sleep(2)
+        
         # Start HTTPS server in main thread
+        print("🔒 Starting HTTPS server...")
         run_https_server()
