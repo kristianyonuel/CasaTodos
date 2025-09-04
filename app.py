@@ -413,34 +413,37 @@ def submit_picks():
         return jsonify({'error': 'Failed to submit picks'}), 500
 
 # ...existing code for other routes...
-
-@app.errorhandler(Exception)
-def handle_exception(e):
-    logger.error(f"Unhandled exception: {e}", exc_info=True)
-    return render_template('error.html', error="An unexpected error occurred"), 500
-
-if __name__ == '__main__':
+@app.route('/update_user', methods=['POST'])
+def update_user():
     try:
-        logger.info("🚀 Starting La Casa de Todos NFL Fantasy League...")
-        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+        data = request.get_json()
+        username = data.get('username')
+        email = data.get('email')
+        is_admin = data.get('is_admin')
+        user_id = data.get('id')
+        new_password = data.get('new_password')
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if new_password:
+            password_hash = generate_password_hash(new_password)
+            cursor.execute('''
+                UPDATE users SET username = ?, email = ?, is_admin = ?, password_hash = ? WHERE id = ?
+            ''', (username, email, is_admin, password_hash, user_id))
+        else:
+            cursor.execute('''
+                UPDATE users SET username = ?, email = ?, is_admin = ? WHERE id = ?
+            ''', (username, email, is_admin, user_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'success': True, 'message': 'User updated successfully'})
+
     except Exception as e:
-        logger.error(f"❌ Startup failed: {e}")
-    cursor = conn.cursor()
-    
-    if new_password:
-        password_hash = generate_password_hash(new_password)
-        cursor.execute('''
-            UPDATE users SET username = ?, email = ?, is_admin = ?, password_hash = ? WHERE id = ?
-        ''', (username, email, is_admin, password_hash, user_id))
-    else:
-        cursor.execute('''
-            UPDATE users SET username = ?, email = ?, is_admin = ? WHERE id = ?
-        ''', (username, email, is_admin, user_id))
-    
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True, 'message': 'User updated successfully'})
+        logger.error(f"Error updating user: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to update user'}), 500
 
 @app.errorhandler(404)
 def not_found_error(error):
