@@ -16,7 +16,7 @@
                 <a href="{{ url_for('games') }}" class="nav-link">Make Picks</a>
                 <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
                 <a href="{{ url_for('rules') }}" class="nav-link">Rules</a>
-                {% if session.is_admin %}
+                {% if session.get('is_admin') %}
                 <a href="{{ url_for('admin') }}" class="nav-link admin">Admin</a>
                 {% endif %}
                 <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
@@ -26,18 +26,18 @@
         <main class="main-content">
             <div class="dashboard">
                 <div class="welcome-card">
-                    <h2>Welcome back, {{ username }}! 🏈</h2>
-                    <p>Ready to make your picks for Week {{ current_week }}?</p>
+                    <h2>Welcome back, {{ username or 'Player' }}! 🏈</h2>
+                    <p>Ready to make your picks for Week {{ current_week or 1 }}?</p>
                 </div>
 
                 <div class="stats-grid">
                     <div class="stat-card">
                         <h3>Current Week</h3>
-                        <div class="stat-value">{{ current_week }}</div>
+                        <div class="stat-value">{{ current_week or 1 }}</div>
                     </div>
                     <div class="stat-card">
                         <h3>Season</h3>
-                        <div class="stat-value">{{ current_year }}</div>
+                        <div class="stat-value">{{ current_year or 2024 }}</div>
                     </div>
                     <div class="stat-card">
                         <h3>Weekly Fee</h3>
