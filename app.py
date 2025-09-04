@@ -81,29 +81,79 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        
-        conn = sqlite3.connect('nfl_fantasy.db')
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
-        user = cursor.fetchone()
-        conn.close()
-        
-        if user and check_password_hash(user[1], password):
-            session['user_id'] = user[0]
-            session['is_admin'] = user[2] == 1
-            return redirect(url_for('dashboard'))
-        else:
-            flash('Invalid username or password', 'danger')
+        try:
+            username = request.form.get('username', '').strip()
+            password = request.form.get('password', '').strip()
+            
+            if not username or not password:
+                flash('Please enter both username and password', 'error')
+                return render_template('login.html')
+            
+            conn = sqlite3.connect('nfl_fantasy.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
+            user = cursor.fetchone()
+            conn.close()
+            
+            if user and check_password_hash(user[1], password):
+                session['user_id'] = user[0]
+                session['username'] = username
+                session['is_admin'] = bool(user[2])
+                flash('Successfully logged in!', 'success')
+                return redirect(url_for('index'))
+            else:
+                flash('Invalid username or password', 'error')
+                
+        except Exception as e:
+            print(f"Login error: {e}")
+            flash('Login error occurred. Please try again.', 'error')
     
     return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        try:
+            username = request.form.get('username', '').strip()
+            password = request.form.get('password', '').strip()
+            email = request.form.get('email', '').strip()
+            
+            if len(password) < 6:
+                flash('Password must be at least 6 characters long', 'error')
+                return render_template('register.html')
+            
+            conn = sqlite3.connect('nfl_fantasy.db')
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+            if cursor.fetchone():
+                flash('Username already exists', 'error')
+                conn.close()
+                return render_template('register.html')
+            
+            password_hash = generate_password_hash(password)
+            cursor.execute('''
+                INSERT INTO users (username, password_hash, email)
+                VALUES (?, ?, ?)
+            ''', (username, password_hash, email))
+            
+            conn.commit()
+            conn.close()
+            
+            flash('Registration successful! Please log in.', 'success')
+            return redirect(url_for('login'))
+            
+        except Exception as e:
+            print(f"Registration error: {e}")
+            flash('Registration failed. Please try again.', 'error')
+    
+    return render_template('register.html')
 
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('index'))
+    flash('You have been logged out', 'info')
+    return redirect(url_for('login'))
 
 @app.route('/dashboard')
 def dashboard():
@@ -455,99 +505,79 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        
-        conn = sqlite3.connect('nfl_fantasy.db')
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
-        user = cursor.fetchone()
-        conn.close()
-        
-        if user and check_password_hash(user[1], password):
-            session['user_id'] = user[0]
-            session['is_admin'] = user[2] == 1
-            return redirect(url_for('dashboard'))
-        else:
-            flash('Invalid username or password', 'danger')
+        try:
+            username = request.form.get('username', '').strip()
+            password = request.form.get('password', '').strip()
+            
+            if not username or not password:
+                flash('Please enter both username and password', 'error')
+                return render_template('login.html')
+            
+            conn = sqlite3.connect('nfl_fantasy.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
+            user = cursor.fetchone()
+            conn.close()
+            
+            if user and check_password_hash(user[1], password):
+                session['user_id'] = user[0]
+                session['username'] = username
+                session['is_admin'] = bool(user[2])
+                flash('Successfully logged in!', 'success')
+                return redirect(url_for('index'))
+            else:
+                flash('Invalid username or password', 'error')
+                
+        except Exception as e:
+            print(f"Login error: {e}")
+            flash('Login error occurred. Please try again.', 'error')
     
     return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        try:
+            username = request.form.get('username', '').strip()
+            password = request.form.get('password', '').strip()
+            email = request.form.get('email', '').strip()
+            
+            if len(password) < 6:
+                flash('Password must be at least 6 characters long', 'error')
+                return render_template('register.html')
+            
+            conn = sqlite3.connect('nfl_fantasy.db')
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+            if cursor.fetchone():
+                flash('Username already exists', 'error')
+                conn.close()
+                return render_template('register.html')
+            
+            password_hash = generate_password_hash(password)
+            cursor.execute('''
+                INSERT INTO users (username, password_hash, email)
+                VALUES (?, ?, ?)
+            ''', (username, password_hash, email))
+            
+            conn.commit()
+            conn.close()
+            
+            flash('Registration successful! Please log in.', 'success')
+            return redirect(url_for('login'))
+            
+        except Exception as e:
+            print(f"Registration error: {e}")
+            flash('Registration failed. Please try again.', 'error')
+    
+    return render_template('register.html')
 
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('index'))
-
-@app.route('/dashboard')
-def dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    return render_template('dashboard.html')
-
-@app.route('/admin')
-def admin():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return redirect(url_for('login'))
-    
-    return render_template('admin_dashboard.html')
-
-@app.route('/api/user')
-def api_user():
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    user_id = session['user_id']
-    
-    conn = sqlite3.connect('nfl_fantasy.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT id, username, email, is_admin FROM users WHERE id = ?', (user_id,))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if user:
-        return jsonify({
-            'id': user[0],
-            'username': user[1],
-            'email': user[2],
-            'is_admin': user[3]
-        })
-    else:
-        return jsonify({'error': 'User not found'}), 404
-
-@app.route('/api/weekly_results')
-def api_weekly_results():
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    user_id = session['user_id']
-    year = request.args.get('year', datetime.datetime.now().year, type=int)
-    week = request.args.get('week', datetime.datetime.now().isocalendar()[1], type=int)
-    
-    conn = sqlite3.connect('nfl_fantasy.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT correct_picks, total_picks, monday_score_diff, is_winner, points 
-        FROM weekly_results 
-        WHERE user_id = ? AND year = ? AND week = ?
-    ''', (user_id, year, week))
-    
-    result = cursor.fetchone()
-    conn.close()
-    
-    if result:
-        return jsonify({
-            'correct_picks': result[0],
-            'total_picks': result[1],
-            'monday_score_diff': result[2],
-            'is_winner': result[3],
-            'points': result[4]
-        })
-    else:
-        return jsonify({'error': 'Results not found'}), 404
+    flash('You have been logged out', 'info')
+    return redirect(url_for('login'))
 
 @app.route('/submit_picks', methods=['POST'])
 def submit_picks():
@@ -586,6 +616,94 @@ def submit_picks():
     except Exception as e:
         print(f"Submit picks error: {e}")
         return jsonify({'error': 'Failed to submit picks'}), 500
+
+@app.route('/leaderboard')
+def leaderboard():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        conn = sqlite3.connect('nfl_fantasy.db')
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT u.username, 
+                   COUNT(CASE WHEN wr.is_winner = 1 THEN 1 END) as wins,
+                   AVG(wr.correct_picks) as avg_correct,
+                   SUM(wr.points) as total_points
+            FROM users u
+            LEFT JOIN weekly_results wr ON u.id = wr.user_id
+            WHERE u.is_admin = 0
+            GROUP BY u.id, u.username
+            ORDER BY wins DESC, total_points DESC
+        ''')
+        
+        leaderboard_data = []
+        for row in cursor.fetchall():
+            leaderboard_data.append({
+                'username': row[0],
+                'wins': row[1] or 0,
+                'avg_correct': round(row[2] or 0, 1),
+                'total_points': row[3] or 0
+            })
+        
+        conn.close()
+        return render_template('leaderboard.html', leaderboard=leaderboard_data)
+        
+    except Exception as e:
+        print(f"Leaderboard error: {e}")
+        flash('Error loading leaderboard', 'error')
+        return redirect(url_for('index'))
+
+@app.route('/rules')
+def rules():
+    return render_template('rules.html')
+
+@app.route('/admin')
+def admin():
+    if 'user_id' not in session or not session.get('is_admin'):
+        flash('Admin access required', 'error')
+        return redirect(url_for('index'))
+    
+    return render_template('admin.html')
+
+@app.route('/admin/all_picks')
+def admin_all_picks():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    week = request.args.get('week', get_current_nfl_week(), type=int)
+    year = request.args.get('year', datetime.datetime.now().year, type=int)
+    
+    conn = sqlite3.connect('nfl_fantasy.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT u.username, g.home_team, g.away_team, g.is_monday_night,
+               up.selected_team, up.predicted_home_score, up.predicted_away_score, up.id, u.id
+        FROM user_picks up
+        JOIN users u ON up.user_id = u.id
+        JOIN nfl_games g ON up.game_id = g.id
+        WHERE g.week = ? AND g.year = ?
+        ORDER BY u.username, g.game_date
+    ''', (week, year))
+    
+    picks_data = []
+    for row in cursor.fetchall():
+        picks_data.append({
+            'username': row[0],
+            'home_team': row[1],
+            'away_team': row[2],
+            'is_monday_night': bool(row[3]),
+            'selected_team': row[4],
+            'predicted_home_score': row[5],
+            'predicted_away_score': row[6],
+            'pick_id': row[7],
+            'user_id': row[8]
+        })
+    
+    conn.close()
+    return jsonify(picks_data)
 
 @app.route('/admin/users')
 def admin_users():
@@ -639,88 +757,94 @@ def admin_modify_user():
     
     return jsonify({'success': True, 'message': 'User updated successfully'})
 
-def auto_populate_nfl_games():
-    """Auto-populate NFL games for 2025-2026 seasons"""
-    print("🏈 Auto-populating NFL games for 2025-2026 seasons...")
-    
-    total_games_created = 0
-    for year in [2025, 2026]:
-        for week in range(1, 19):
-            conn = sqlite3.connect('nfl_fantasy.db')
-            cursor = conn.cursor()
-            cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, year))
-            existing_games = cursor.fetchone()[0]
-            conn.close()
-            
-            if existing_games == 0:
-                games_created = ensure_games_exist(week, year)
-                total_games_created += games_created
-    
-    return total_games_created
-
-@app.route('/admin/schedule')
-def admin_schedule():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    year = request.args.get('year', datetime.datetime.now().year, type=int)
-    
-    try:
-        conn = sqlite3.connect('nfl_fantasy.db')
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT id, year, week, home_team, away_team, game_time, is_monday_night, is_thursday_night
-            FROM nfl_schedule 
-            WHERE year = ?
-            ORDER BY week, game_time
-        ''', (year,))
-        
-        schedule = []
-        for row in cursor.fetchall():
-            schedule.append({
-                'id': row[0],
-                'year': row[1],
-                'week': row[2],
-                'home_team': row[3],
-                'away_team': row[4],
-                'game_time': row[5],
-                'is_monday_night': bool(row[6]),
-                'is_thursday_night': bool(row[7])
-            })
-        
-        conn.close()
-        return jsonify(schedule)
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/admin/create_schedule', methods=['POST'])
-def admin_create_schedule():
+@app.route('/admin/modify_pick', methods=['POST'])
+def admin_modify_pick():
     if 'user_id' not in session or not session.get('is_admin'):
         return jsonify({'error': 'Admin access required'}), 403
     
     try:
         data = request.get_json()
-        year = data.get('year')
+        pick_id = data.get('pick_id')
+        selected_team = data.get('selected_team')
+        home_score = data.get('home_score')
+        away_score = data.get('away_score')
         
-        # Check if schedule already exists
         conn = sqlite3.connect('nfl_fantasy.db')
         cursor = conn.cursor()
-        cursor.execute('SELECT COUNT(*) FROM nfl_schedule WHERE year = ?', (year,))
-        existing_count = cursor.fetchone()[0]
+        
+        cursor.execute('''
+            UPDATE user_picks 
+            SET selected_team = ?, predicted_home_score = ?, predicted_away_score = ?
+            WHERE id = ?
+        ''', (selected_team, home_score, away_score, pick_id))
+        
+        conn.commit()
         conn.close()
         
-        if existing_count > 0:
-            return jsonify({'error': f'Schedule for {year} already exists'}), 400
-        
-        # Create schedule
-        create_default_schedule_in_db(year)
-        
-        return jsonify({'success': True, 'message': f'Schedule created for {year}'})
+        return jsonify({'success': True, 'message': 'Pick updated successfully'})
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/delete_pick', methods=['POST'])
+def admin_delete_pick():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        pick_id = data.get('pick_id')
+        
+        conn = sqlite3.connect('nfl_fantasy.db')
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM user_picks WHERE id = ?', (pick_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'Pick deleted successfully'})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/force_create_games/<int:week>/<int:year>')
+def force_create_games(week, year):
+    if 'user_id' not in session or not session.get('is_admin'):
+        flash('Admin access required', 'error')
+        return redirect(url_for('games'))
+    
+    try:
+        games_created = ensure_games_exist(week, year)
+        flash(f'Successfully created {games_created} games for Week {week}', 'success')
+    except Exception as e:
+        flash(f'Error creating games: {str(e)}', 'error')
+    
+    return redirect(url_for('games', week=week, year=year))
+
+@app.route('/sync_season', methods=['POST'])
+def sync_season():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        year = request.json.get('year', datetime.datetime.now().year)
+        games_added = auto_populate_all_games()
+        return jsonify({
+            'success': True, 
+            'message': f'Synced games for {year} season',
+            'games_added': games_added
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('error.html', error="Page not found"), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return render_template('error.html', error="Internal server error"), 500
 
 if __name__ == '__main__':
     if not os.path.exists('templates'):
@@ -752,130 +876,6 @@ if __name__ == '__main__':
         print(f"❌ Application startup failed: {e}")
         import traceback
         traceback.print_exc()
-    try:
-        data = request.get_json()
-        year = data.get('year')
-        
-        # Check if schedule already exists
-        conn = sqlite3.connect('nfl_fantasy.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT COUNT(*) FROM nfl_schedule WHERE year = ?', (year,))
-        existing_count = cursor.fetchone()[0]
-        conn.close()
-        
-        if existing_count > 0:
-            return jsonify({'error': f'Schedule for {year} already exists'}), 400
-        
-        # Create schedule
-        create_default_schedule_in_db(year)
-        
-        return jsonify({'success': True, 'message': f'Schedule created for {year}'})
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        
-        conn = sqlite3.connect('nfl_fantasy.db')
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
-        user = cursor.fetchone()
-        conn.close()
-        
-        if user and check_password_hash(user[1], password):
-            session['user_id'] = user[0]
-            session['is_admin'] = user[2] == 1
-            return redirect(url_for('dashboard'))
-        else:
-            flash('Invalid username or password', 'danger')
-    
-    return render_template('login.html')
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('index'))
-
-@app.route('/dashboard')
-def dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    return render_template('dashboard.html')
-
-@app.route('/admin')
-def admin():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return redirect(url_for('login'))
-    
-    return render_template('admin_dashboard.html')
-
-@app.route('/api/user')
-def api_user():
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    user_id = session['user_id']
-    
-    conn = sqlite3.connect('nfl_fantasy.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT id, username, email, is_admin FROM users WHERE id = ?', (user_id,))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if user:
-        return jsonify({
-            'id': user[0],
-            'username': user[1],
-            'email': user[2],
-            'is_admin': user[3]
-        })
-    else:
-        return jsonify({'error': 'User not found'}), 404
-
-@app.route('/api/weekly_results')
-def api_weekly_results():
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    user_id = session['user_id']
-    year = request.args.get('year', datetime.datetime.now().year, type=int)
-    week = request.args.get('week', datetime.datetime.now().isocalendar()[1], type=int)
-    
-    conn = sqlite3.connect('nfl_fantasy.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT correct_picks, total_picks, monday_score_diff, is_winner, points 
-        FROM weekly_results 
-        WHERE user_id = ? AND year = ? AND week = ?
-    ''', (user_id, year, week))
-    
-    result = cursor.fetchone()
-    conn.close()
-    
-    if result:
-        return jsonify({
-            'correct_picks': result[0],
-            'total_picks': result[1],
-            'monday_score_diff': result[2],
-            'is_winner': result[3],
-            'points': result[4]
-        })
-    else:
-        return jsonify({'error': 'Results not found'}), 404
-
-@app.route('/submit_picks', methods=['POST'])
 def submit_picks():
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
