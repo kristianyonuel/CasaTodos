@@ -70,9 +70,17 @@
                         <div class="game-card" data-game-id="{{ game.id }}">
                             <div class="game-info">
                                 <div class="game-date">
-                                    {{ game.game_date.strftime('%A, %B %d') if game.game_date else 'TBD' }}
-                                    <br>
-                                    {{ game.game_date.strftime('%I:%M %p ET') if game.game_date else '' }}
+                                    {% if game.game_date %}
+                                        {% set game_datetime = game.game_date %}
+                                        {{ game_datetime.strftime('%A, %B %d') }}
+                                        <br>
+                                        {{ game_datetime.strftime('%I:%M %p ET') }}
+                                    {% else %}
+                                        TBD
+                                        <br>
+                                        Time TBD
+                                    {% endif %}
+                                    
                                     {% if game.is_thursday_night %}
                                         <span class="game-type tnf">TNF</span>
                                     {% elif game.is_monday_night %}

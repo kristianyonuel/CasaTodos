@@ -147,7 +147,20 @@ def games():
         WHERE week = ? AND year = ? 
         ORDER BY game_date
     ''', (week, year))
-    games_data = cursor.fetchall()
+    games_raw = cursor.fetchall()
+    
+    # Convert games to proper format with datetime objects
+    games_data = []
+    for game in games_raw:
+        game_dict = dict(game)
+        # Convert string date to datetime object
+        if game_dict['game_date']:
+            try:
+                if isinstance(game_dict['game_date'], str):
+                    game_dict['game_date'] = datetime.strptime(game_dict['game_date'], '%Y-%m-%d %H:%M:%S')
+            except (ValueError, TypeError):
+                game_dict['game_date'] = None
+        games_data.append(game_dict)
     
     cursor.execute('''
         SELECT g.id, up.selected_team, up.predicted_home_score, up.predicted_away_score
