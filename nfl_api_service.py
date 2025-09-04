@@ -58,6 +58,21 @@ def get_live_scores(week: int, year: int = 2025) -> List[Dict]:
     """Get live scores from BallDontLie"""
     return get_week_games(week, year)
 
+def get_teams() -> List[Dict]:
+    """Get all NFL teams from BallDontLie"""
+    try:
+        url = f"{BALLDONTLIE_BASE}/teams"
+        
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        return data.get('data', [])
+        
+    except Exception as e:
+        logger.error(f"Error fetching teams: {e}")
+        return []
+
 def normalize_games(games_data: List[Dict], week: int, year: int) -> List[Dict]:
     """Normalize BallDontLie game data"""
     normalized = []
@@ -141,21 +156,6 @@ def normalize_status(status: str) -> str:
     }
     
     return status_map.get(status_lower, 'scheduled')
-
-# Global API service instance
-nfl_api = NFLAPIService()
-
-class NFLAPIService:
-    # ... (existing methods above)
-
-    def _normalize_espn_games(self, games_data: List[Dict], week: int, year: int) -> List[Dict]:
-        """Normalize ESPN game data"""
-        normalized = []
-        
-        for event in games_data:
-            try:
-                competition = event.get('competitions', [{}])[0]
-                competitors = competition.get('competitors', [])
                 
                 if len(competitors) != 2:
                     continue
