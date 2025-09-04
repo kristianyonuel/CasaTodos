@@ -42,9 +42,7 @@
                 <div class="admin-actions">
                     <button onclick="loadAllPicks()" class="btn btn-primary">View All Picks</button>
                     <button onclick="loadUsers()" class="btn btn-info">Manage Users</button>
-                    <button onclick="loadSchedule()" class="btn btn-warning">Manage Schedule</button>
                     <button onclick="syncSeason()" class="btn btn-success">Sync NFL Season</button>
-                    <button onclick="createWeekGames()" class="btn btn-secondary">Create Week Games</button>
                 </div>
                 
                 <div id="admin-content">
@@ -117,154 +115,73 @@
 
         async function loadUsers() {
             try {
-                document.getElementById('admin-content').innerHTML = '<p>Loading users...</p>';
-                
                 const response = await fetch('/admin/users');
                 const users = await response.json();
                 
-                let html = '<h3>Manage Users</h3>';
-                html += '<div class="users-management">';
-                html += '<table class="admin-picks-table">';
-                html += '<thead><tr><th>Username</th><th>Email</th><th>Admin</th><th>Created</th><th>Actions</th></tr></thead><tbody>';
+                let html = '<h3>Manage Users</h3><table class="admin-picks-table">';
+                html += '<thead><tr><th>Username</th><th>Email</th><th>Admin</th><th>Actions</th></tr></thead><tbody>';
                 
                 users.forEach(user => {
-                    html += `<tr data-user-id="${user.id}">
-                        <td><input type="text" class="user-username" value="${user.username}" data-user-id="${user.id}"></td>
-                        <td><input type="email" class="user-email" value="${user.email}" data-user-id="${user.id}"></td>
-                        <td><input type="checkbox" class="user-admin" ${user.is_admin ? 'checked' : ''} data-user-id="${user.id}"></td>
-                        <td>${new Date(user.created_at).toLocaleDateString()}</td>
+                    html += `<tr>
+                        <td><input type="text" value="${user.username}" id="username-${user.id}"></td>
+                        <td><input type="email" value="${user.email}" id="email-${user.id}"></td>
+                        <td><input type="checkbox" ${user.is_admin ? 'checked' : ''} id="admin-${user.id}"></td>
                         <td>
-                            <button onclick="showPasswordDialog(${user.id})" class="btn btn-sm btn-warning">Reset Password</button>
                             <button onclick="updateUser(${user.id})" class="btn btn-sm btn-primary">Update</button>
-                            <button onclick="deleteUser(${user.id})" class="btn btn-sm btn-danger">Delete</button>
+                            <button onclick="resetPassword(${user.id})" class="btn btn-sm btn-warning">Reset Password</button>
                         </td>
                     </tr>`;
                 });
                 
-                html += '</tbody></table></div>';
-                
+                html += '</tbody></table>';
                 document.getElementById('admin-content').innerHTML = html;
             } catch (error) {
                 document.getElementById('admin-content').innerHTML = '<p>Error loading users</p>';
-                console.error('Error:', error);
             }
         }
         
-        function showPasswordDialog(userId) {
-            const newPassword = prompt('Enter new password (leave blank to keep current):');
-            if (newPassword !== null) {
-                updateUser(userId, newPassword);
-            }
-        }
-        
-        async function updatePick(pickId) {
+        async function updateUser(userId) {
+            const username = document.getElementById(`username-${userId}`).value;
+            const email = document.getElementById(`email-${userId}`).value;
+            const isAdmin = document.getElementById(`admin-${userId}`).checked;
+            
             try {
-                const selectedTeam = document.querySelector(`.pick-select[data-pick-id="${pickId}"]`).value;
-                const awayScore = document.querySelector(`.score-input[data-type="away"][data-pick-id="${pickId}"]`)?.value || null;
-                const homeScore = document.querySelector(`.score-input[data-type="home"][data-pick-id="${pickId}"]`)?.value || null;
-                
-                const response = await fetch('/admin/modify_pick', {
+                const response = await fetch('/admin/modify_user', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        pick_id: pickId,
-                        selected_team: selectedTeam,
-                        home_score: homeScore,
-                        away_score: awayScore
+                        user_id: userId,
+                        username: username,
+                        email: email,
+                        is_admin: isAdmin
                     })
                 });
                 
                 const result = await response.json();
-                if (result.success) {
-                    alert('Pick updated successfully!');
-                } else {
-                    alert('Error updating pick: ' + result.error);
-                }
+                alert(result.success ? 'User updated!' : 'Error: ' + result.error);
             } catch (error) {
-                alert('Error updating pick');
-                console.error('Error:', error);
+                alert('Error updating user');
             }
         }
         
-        async function updateUser(userId, newPassword = null) {
+        async function resetPassword(userId) {
+            const newPassword = prompt('Enter new password:');
+            if (!newPassword) return;
+            
             try {
-                const username = document.querySelector(`.user-username[data-user-id="${userId}"]`).value;
-                const email = document.querySelector(`.user-email[data-user-id="${userId}"]`).value;
-                const isAdmin = document.querySelector(`.user-admin[data-user-id="${userId}"]`).checked;
-                
-                const updateData = {
-                    user_id: userId,
-                    username: username,
-                    email: email,
-                    is_admin: isAdmin
-                };
-                
-                if (newPassword) {
-                    updateData.new_password = newPassword;
-                }
-                
                 const response = await fetch('/admin/modify_user', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updateData)
+                    body: JSON.stringify({
+                        user_id: userId,
+                        new_password: newPassword
+                    })
                 });
                 
                 const result = await response.json();
-                if (result.success) {
-                    alert('User updated successfully!');
-                } else {
-                    alert('Error updating user: ' + result.error);
-                }
+                alert(result.success ? 'Password updated!' : 'Error: ' + result.error);
             } catch (error) {
-                alert('Error updating user');
-                console.error('Error:', error);
-            }
-        }
-        
-        async function deletePick(pickId) {
-            if (!confirm('Are you sure you want to delete this pick?')) return;
-            
-            try {
-                const response = await fetch('/admin/delete_pick', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pick_id: pickId })
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    // Remove the row from the table
-                    document.querySelector(`tr[data-pick-id="${pickId}"]`).remove();
-                    alert('Pick deleted successfully!');
-                } else {
-                    alert('Error deleting pick: ' + result.error);
-                }
-            } catch (error) {
-                alert('Error deleting pick');
-                console.error('Error:', error);
-            }
-        }
-        
-        async function deleteUser(userId) {
-            if (!confirm('Are you sure you want to delete this user? This will remove all their picks and data.')) return;
-            
-            try {
-                const response = await fetch('/admin/delete_user', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: userId })
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    document.querySelector(`tr[data-user-id="${userId}"]`).remove();
-                    alert('User deleted successfully!');
-                } else {
-                    alert('Error deleting user: ' + result.error);
-                }
-            } catch (error) {
-                alert('Error deleting user');
-                console.error('Error:', error);
+                alert('Error updating password');
             }
         }
 
@@ -291,6 +208,89 @@
             } catch (error) {
                 document.getElementById('admin-content').innerHTML = 
                     '<h3>Sync Failed</h3><p>Network error occurred</p>';
+            }
+        }
+        
+        async function createWeekGames() {
+            const year = new Date().getFullYear();
+            const url = `/force_create_games/${currentWeek}/${year}`;
+            
+            if (!confirm(`Create games for Week ${currentWeek}?`)) return;
+            
+            try {
+                window.location.href = url;
+            } catch (error) {
+                alert('Error creating games');
+            }
+        }
+
+        async function loadSchedule() {
+            try {
+                document.getElementById('admin-content').innerHTML = '<p>Loading schedule data...</p>';
+                
+                const response = await fetch(`/admin/schedule?year=${currentYear}`);
+                const schedule = await response.json();
+                
+                let html = `<h3>NFL Schedule Management - ${currentYear}</h3>`;
+                html += '<p>Schedule data is stored in the database. Use this panel to view and modify the schedule.</p>';
+                html += '<button onclick="createScheduleForYear()" class="btn btn-success">Create Schedule for Year</button>';
+                
+                if (schedule.length > 0) {
+                    html += '<div class="schedule-management">';
+                    html += '<table class="admin-picks-table">';
+                    html += '<thead><tr><th>Week</th><th>Game</th><th>Date/Time</th><th>Type</th><th>Actions</th></tr></thead><tbody>';
+                    
+                    schedule.forEach(game => {
+                        const gameType = game.is_thursday_night ? 'TNF' : game.is_monday_night ? 'MNF' : 'Regular';
+                        html += `<tr>
+                            <td>Week ${game.week}</td>
+                            <td>${game.away_team} @ ${game.home_team}</td>
+                            <td>${new Date(game.game_time).toLocaleString()}</td>
+                            <td>${gameType}</td>
+                            <td>
+                                <button onclick="editScheduleGame(${game.id})" class="btn btn-sm btn-primary">Edit</button>
+                                <button onclick="deleteScheduleGame(${game.id})" class="btn btn-sm btn-danger">Delete</button>
+                            </td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table></div>';
+                } else {
+                    html += '<p>No schedule data found for this year.</p>';
+                }
+                
+                document.getElementById('admin-content').innerHTML = html;
+            } catch (error) {
+                document.getElementById('admin-content').innerHTML = '<p>Error loading schedule</p>';
+                console.error('Error:', error);
+            }
+        }
+        
+        async function createScheduleForYear() {
+            if (!confirm(`Create default schedule for ${currentYear}?`)) return;
+            
+            try {
+                const response = await fetch('/admin/create_schedule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ year: parseInt(currentYear) })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('Schedule created successfully!');
+                    loadSchedule();
+                } else {
+                    alert('Error creating schedule: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error creating schedule');
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
             }
         }
         

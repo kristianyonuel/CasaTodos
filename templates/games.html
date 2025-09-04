@@ -193,54 +193,54 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const form = document.getElementById('picks-form');
-            if (form) {
-                form.addEventListener('submit', async function(e) {
-                    e.preventDefault();
-                    
-                    const submitBtn = document.querySelector('button[type="submit"]');
-                    const originalText = submitBtn.textContent;
-                    submitBtn.textContent = 'Submitting...';
-                    submitBtn.disabled = true;
-                    
-                    try {
-                        const formData = new FormData(this);
-                        const picks = [];
-                        const gameIds = formData.getAll('game_id');
-                        
-                        gameIds.forEach(gameId => {
-                            const selectedTeam = formData.get(`game_${gameId}`);
-                            const homeScore = formData.get(`home_score_${gameId}`);
-                            const awayScore = formData.get(`away_score_${gameId}`);
-                            
-                            if (selectedTeam) {
-                                picks.push({
-                                    game_id: parseInt(gameId),
-                                    selected_team: selectedTeam,
-                                    home_score: homeScore ? parseInt(homeScore) : null,
-                                    away_score: awayScore ? parseInt(awayScore) : null
-                                });
-                            }
-                        });
-                        
-                        if (picks.length === 0) {
-                            alert('Please make at least one pick before submitting.');
-                            return;
-                        }
-                        
-                        console.log('Submitting picks:', picks);
-                        
-                        const response = await fetch('/submit_picks', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ picks: picks })
-                        });
-                        
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
+        document.getElementById('picks-form')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const picks = [];
+            const gameIds = formData.getAll('game_id');
+            
+            gameIds.forEach(gameId => {
+                const selectedTeam = formData.get(`game_${gameId}`);
+                const homeScore = formData.get(`home_score_${gameId}`);
+                const awayScore = formData.get(`away_score_${gameId}`);
+                
+                if (selectedTeam) {
+                    picks.push({
+                        game_id: parseInt(gameId),
+                        selected_team: selectedTeam,
+                        home_score: homeScore ? parseInt(homeScore) : null,
+                        away_score: awayScore ? parseInt(awayScore) : null
+                    });
+                }
+            });
+            
+            if (picks.length === 0) {
+                alert('Please make at least one pick before submitting.');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/submit_picks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ picks: picks })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert(result.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error submitting picks. Please try again.');
+            }
+        });
+    </script>
+</body>
+</html>
                         }
                         
                         const result = await response.json();
