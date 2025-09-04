@@ -194,5 +194,3 @@ def normalize_status(status: str) -> str:
         }
         return status_map.get(status, 'scheduled')
 
-# Global API service instance
-nfl_api = NFLAPIService()
