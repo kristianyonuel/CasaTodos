@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, send_from_directory, send_from_directory
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 import sqlite3
 import os
 import logging
@@ -1587,301 +1587,118 @@ def admin_simple_picks():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/.well-known/<path:filename>')
-def serve_well_known(filename):
-    """Serve files from .well-known directory (for SSL certificates, etc.)"""
-    try:
-        # Serve files from a .well-known directory
-        return send_from_directory('.well-known', filename)
-    except FileNotFoundError:
-        return "File not found", 404
-
-@app.route('/.folder/<path:filename>')
-def serve_hidden_folder(filename):
-    """Serve files from .folder directory"""
-    try:
-        # Serve files from a .folder directory
-        return send_from_directory('.folder', filename)
-    except FileNotFoundError:
-        return "File not found", 404
-
-@app.route('/.config/<path:filename>')
-def serve_config_folder(filename):
-    """Serve files from .config directory"""
-    try:
-        # Serve files from a .config directory
-        return send_from_directory('.config', filename)
-    except FileNotFoundError:
-        return "File not found", 404
-
-# Alternative approach: Serve specific files with custom logic
-@app.route('/.env')
-def serve_env_file():
-    """Serve .env file (be careful with security!)"""
-    # SECURITY WARNING: Only serve this in development
-    if app.debug:
-        try:
-            return send_from_directory('.', '.env')
-        except FileNotFoundError:
-            return "Environment file not found", 404
-    else:
-        return "Not available in production", 403
-
-@app.route('/.htaccess')
-def serve_htaccess():
-    """Serve .htaccess file"""
-    try:
-        return send_from_directory('.', '.htaccess')
-    except FileNotFoundError:
-        return "File not found", 404
-
-@app.route('/robots.txt')
-def serve_robots():
-    """Serve robots.txt file"""
-    try:
-        return send_from_directory('.', 'robots.txt')
-    except FileNotFoundError:
-        # Return a default robots.txt if file doesn't exist
-        return """User-agent: *
-Allow: /
-Disallow: /admin/
-Disallow: /.well-known/
-Sitemap: https://yourdomain.com/sitemap.xml""", 200, {'Content-Type': 'text/plain'}
-
 if __name__ == '__main__':
-    import threading
-    import ssl
     import os
-    import signal
-    import time
+    import ssl
     from werkzeug.serving import make_server
     
     # Initialize the database on startup
     initialize_app()
     
-    # Signal handler for graceful shutdown
-    def signal_handler(signum, frame):
-        logger.info("🛑 Received shutdown signal. Stopping servers...")
-        print("\n🛑 Shutting down servers...")
-        os._exit(0)
-    
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
-    def create_ssl_context():
-        """Create SSL context for HTTPS"""
+    # Simple SSL context setup for existing certificates
+    def setup_ssl_context():
+        """Setup SSL context using existing certificates"""
         try:
-            # Look for SSL certificate files
-            cert_file = 'cert.pem'
-            key_file = 'key.pem'
+            # Look for standard SSL certificate files
+            cert_files = [
+                ('cert.pem', 'key.pem'),
+                ('certificate.crt', 'private.key'),
+                ('ssl_cert.pem', 'ssl_key.pem'),
+                ('fullchain.pem', 'privkey.pem')  # Let's Encrypt format
+            ]
             
-            if os.path.exists(cert_file) and os.path.exists(key_file):
-                context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-                context.load_cert_chain(cert_file, key_file)
-                return context
-            else:
-                # Create self-signed certificate if none exists
-                logger.warning("SSL certificates not found. Creating self-signed certificate...")
-                create_self_signed_cert()
+            for cert_file, key_file in cert_files:
                 if os.path.exists(cert_file) and os.path.exists(key_file):
+                    logger.info(f"Using SSL certificates: {cert_file}, {key_file}")
                     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
                     context.load_cert_chain(cert_file, key_file)
                     return context
-                else:
-                    logger.error("Failed to create SSL certificates")
-                    return None
+            
+            logger.warning("No SSL certificates found. HTTPS will not be available.")
+            return None
+            
         except Exception as e:
-            logger.error(f"Error creating SSL context: {e}")
+            logger.error(f"Error setting up SSL: {e}")
             return None
     
-    def create_self_signed_cert():
-        """Create a self-signed SSL certificate"""
+    # Serve .well-known directory for SSL validation
+    @app.route('/.well-known/<path:filename>')
+    def wellknown(filename):
+        """Serve files from .well-known directory for SSL validation"""
         try:
-            from cryptography import x509
-            from cryptography.x509.oid import NameOID
-            from cryptography.hazmat.primitives import hashes
-            from cryptography.hazmat.primitives.asymmetric import rsa
-            from cryptography.hazmat.primitives import serialization
-            from datetime import datetime, timedelta
-            import ipaddress
-            
-            # Generate private key
-            private_key = rsa.generate_private_key(
-                public_exponent=65537,
-                key_size=2048,
-            )
-            
-            # Generate certificate
-            subject = issuer = x509.Name([
-                x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
-                x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "State"),
-                x509.NameAttribute(NameOID.LOCALITY_NAME, "City"),
-                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "La Casa de Todos"),
-                x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
-            ])
-            
-            cert = x509.CertificateBuilder().subject_name(
-                subject
-            ).issuer_name(
-                issuer
-            ).public_key(
-                private_key.public_key()
-            ).serial_number(
-                x509.random_serial_number()
-            ).not_valid_before(
-                datetime.now(datetime.timezone.utc)
-            ).not_valid_after(
-                datetime.now(datetime.timezone.utc) + timedelta(days=365)
-            ).add_extension(
-                x509.SubjectAlternativeName([
-                    x509.DNSName("localhost"),
-                    x509.DNSName("*.localhost"),
-                    x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
-                    x509.IPAddress(ipaddress.ip_address("0.0.0.0")),
-                ]),
-                critical=False,
-            ).sign(private_key, hashes.SHA256())
-            
-            # Write certificate and key to files
-            with open("cert.pem", "wb") as f:
-                f.write(cert.public_bytes(serialization.Encoding.PEM))
-            
-            with open("key.pem", "wb") as f:
-                f.write(private_key.private_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PrivateFormat.PKCS8,
-                    encryption_algorithm=serialization.NoEncryption()
-                ))
-            
-            logger.info("Self-signed SSL certificate created successfully")
-            
-        except ImportError:
-            logger.warning("cryptography library not available. Install with: pip install cryptography")
-            logger.info("Creating simple OpenSSL certificate instead...")
-            
-            # Fallback to OpenSSL command if cryptography is not available
-            try:
-                import subprocess
-                subprocess.run([
-                    'openssl', 'req', '-x509', '-newkey', 'rsa:4096', '-keyout', 'key.pem',
-                    '-out', 'cert.pem', '-days', '365', '-nodes', '-subj',
-                    '/C=US/ST=State/L=City/O=La Casa de Todos/CN=localhost'
-                ], check=True, capture_output=True)
-                logger.info("SSL certificate created with OpenSSL")
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                logger.error("OpenSSL not available. Cannot create SSL certificate.")
-                
-        except Exception as e:
-            logger.error(f"Error creating self-signed certificate: {e}")
-    
-    def run_http_server():
-        """Run HTTP server on port 80"""
-        try:
-            logger.info("Starting HTTP server on port 80...")
-            http_server = make_server('0.0.0.0', 80, app)
-            logger.info("✅ HTTP server successfully started on port 80")
-            print(f"🌐 HTTP server running on http://localhost")
-            http_server.serve_forever()
-        except PermissionError:
-            logger.warning("❌ Permission denied for port 80. Trying port 8080...")
-            try:
-                http_server = make_server('0.0.0.0', 8080, app)
-                logger.info("✅ HTTP server successfully started on port 8080")
-                print(f"🌐 HTTP server running on http://localhost:8080")
-                http_server.serve_forever()
-            except Exception as e:
-                logger.error(f"❌ Failed to start HTTP server on port 8080: {e}")
-                print("💡 Try running with 'dev' mode: python app.py dev")
-        except OSError as e:
-            if "Address already in use" in str(e):
-                logger.error("❌ Port 80 is already in use. Trying port 8080...")
-                try:
-                    http_server = make_server('0.0.0.0', 8080, app)
-                    logger.info("✅ HTTP server successfully started on port 8080")
-                    print(f"🌐 HTTP server running on http://localhost:8080")
-                    http_server.serve_forever()
-                except Exception as e2:
-                    logger.error(f"❌ Failed to start HTTP server on port 8080: {e2}")
-                    print("💡 Try running with 'dev' mode: python app.py dev")
+            return app.send_static_file(f'.well-known/{filename}')
+        except:
+            # If not in static, try current directory
+            well_known_path = os.path.join('.well-known', filename)
+            if os.path.exists(well_known_path):
+                with open(well_known_path, 'r') as f:
+                    return f.read(), 200, {'Content-Type': 'text/plain'}
             else:
-                logger.error(f"❌ Failed to start HTTP server on port 80: {e}")
-                print("💡 Try running with 'dev' mode: python app.py dev")
-        except Exception as e:
-            logger.error(f"❌ Unexpected error starting HTTP server: {e}")
-                        logger.info("✅ HTTPS server successfully started on port 8443")
-                        print(f"🔒 HTTPS server running on https://localhost:8443")
-                        https_server.serve_forever()
-                    else:
-                        logger.error("Could not create SSL context for port 8443")
-                except Exception as e2:
-                    logger.error(f"❌ Failed to start HTTPS server on port 8443: {e2}")
-                    print("💡 Try running with 'dev' mode: python app.py dev")
-            else:
-                logger.error(f"❌ Failed to start HTTPS server on port 443: {e}")
-                print("💡 Try running with 'dev' mode: python app.py dev")
-        except Exception as e:
-            logger.error(f"❌ Unexpected error starting HTTPS server: {e}")
-            print("💡 Try running with 'dev' mode: python app.py dev")
+                return 'File not found', 404
     
-    def run_development_server():
-        """Run development server on port 5000"""
-        logger.info("Starting development server on port 5000...")
-        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-    
-    # Determine which servers to run
+    # Determine run mode
     import sys
-    if len(sys.argv) > 1:
-        mode = sys.argv[1].lower()
-        if mode == 'dev':
-            # Development mode - single server on port 5000
-            run_development_server()
-        elif mode == 'http':
-            # HTTP only
-            run_http_server()
-        elif mode == 'https':
-            # HTTPS only
-            run_https_server()
-        elif mode == 'production':
-            # Both HTTP and HTTPS
-            logger.info("Starting production servers (HTTP + HTTPS)...")
-            
-            # Start HTTP server in a separate thread
-            http_thread = threading.Thread(target=run_http_server, daemon=True)
-            http_thread.start()
-            
-            # Start HTTPS server in main thread
-            run_https_server()
-        else:
-            logger.error("Invalid mode. Use: dev, http, https, or production")
-            sys.exit(1)
+    mode = sys.argv[1].lower() if len(sys.argv) > 1 else 'production'
+    
+    print("🏈 La Casa de Todos NFL Fantasy Server")
+    print("=" * 50)
+    
+    if mode == 'dev':
+        print("🛠️ Development Mode")
+        print("📍 Access at: http://localhost:5000")
+        print("💡 Press Ctrl+C to stop")
+        print("=" * 50)
+        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+        
     else:
-        # Default: run both HTTP and HTTPS
-        print("🚀 La Casa de Todos NFL Fantasy Server")
-        print("=" * 50)
-        logger.info("Starting both HTTP and HTTPS servers...")
-        print("📍 Available URLs:")
-        print("   🌐 HTTP:  http://localhost (port 80) or http://localhost:8080")
-        print("   🔒 HTTPS: https://localhost (port 443) or https://localhost:8443")
-        print("   🛠️ Dev:   http://localhost:5000")
-        print()
-        print("⚙️ Server Options:")
-        print("   python app.py dev        - Development server (port 5000)")
-        print("   python app.py http       - HTTP only (port 80/8080)")
-        print("   python app.py https      - HTTPS only (port 443/8443)")
-        print("   python app.py production - Both HTTP and HTTPS")
-        print("   python app.py            - Both HTTP and HTTPS (default)")
-        print()
-        print("💡 Tip: Use Ctrl+C to stop the server")
+        # Production mode - HTTP on 80, HTTPS on 443 if certificates available
+        print("🚀 Production Mode")
+        print("🌐 HTTP Server: Starting on port 80...")
+        
+        ssl_context = setup_ssl_context()
+        if ssl_context:
+            print("🔒 HTTPS Server: SSL certificates found, starting on port 443...")
+        else:
+            print("⚠️ HTTPS Server: No SSL certificates, HTTPS disabled")
+        
+        print("📍 Access URLs:")
+        print("   🌐 HTTP:  http://your-domain.com")
+        if ssl_context:
+            print("   🔒 HTTPS: https://your-domain.com")
+        print("💡 Press Ctrl+C to stop")
         print("=" * 50)
         
-        # Start HTTP server in a separate thread
-        print("🌐 Starting HTTP server...")
-        http_thread = threading.Thread(target=run_http_server, daemon=True)
-        http_thread.start()
-        
-        # Give HTTP server time to start
-        time.sleep(2)
-        
-        # Start HTTPS server in main thread
-        print("🔒 Starting HTTPS server...")
-        run_https_server()
+        try:
+            # Start HTTP server
+            http_server = make_server('0.0.0.0', 80, app, threaded=True)
+            print("✅ HTTP server started on port 80")
+            
+            if ssl_context:
+                # Start HTTPS server if SSL is available
+                import threading
+                
+                def run_https():
+                    try:
+                        https_server = make_server('0.0.0.0', 443, app, ssl_context=ssl_context, threaded=True)
+                        print("✅ HTTPS server started on port 443")
+                        https_server.serve_forever()
+                    except Exception as e:
+                        logger.error(f"HTTPS server error: {e}")
+                
+                https_thread = threading.Thread(target=run_https, daemon=True)
+                https_thread.start()
+            
+            # Run HTTP server in main thread
+            http_server.serve_forever()
+            
+        except PermissionError:
+            print("❌ Permission denied for ports 80/443")
+            print("💡 Try running with sudo or use development mode:")
+            print("   sudo python app.py production")
+            print("   python app.py dev")
+        except KeyboardInterrupt:
+            print("\n🛑 Shutting down servers...")
+        except Exception as e:
+            logger.error(f"Server error: {e}")
+            print(f"❌ Server error: {e}")
+            print("� Try development mode: python app.py dev")
