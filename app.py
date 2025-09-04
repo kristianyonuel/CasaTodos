@@ -518,13 +518,10 @@ def admin_all_picks():
         with get_db() as conn:
             cursor = conn.cursor()
             
-            # First, let's try a simpler approach - get all picks and then get game info separately
-            # This helps us debug which part is failing
-            
             # Get picks for the week/year
             cursor.execute('''
                 SELECT p.id as pick_id, p.user_id, p.game_id, p.selected_team, 
-                       p.predicted_home_score, p.predicted_away_score, p.pick_time
+                       p.predicted_home_score, p.predicted_away_score, p.created_at
                 FROM user_picks p
                 JOIN nfl_games g ON p.game_id = g.id
                 WHERE g.week = ? AND g.year = ?
@@ -549,7 +546,7 @@ def admin_all_picks():
             if game_ids:
                 placeholders = ','.join('?' * len(game_ids))
                 cursor.execute(f'''
-                    SELECT id, away_team, home_team, game_time, 
+                    SELECT id, away_team, home_team, game_date as game_time, 
                            COALESCE(is_monday_night, 0) as is_monday_night
                     FROM nfl_games WHERE id IN ({placeholders})
                 ''', game_ids)
@@ -575,13 +572,12 @@ def admin_all_picks():
                         'selected_team': pick['selected_team'],
                         'predicted_home_score': pick['predicted_home_score'],
                         'predicted_away_score': pick['predicted_away_score'],
-                        'pick_time': pick['pick_time']
+                        'pick_time': pick['created_at']
                     })
             
             return jsonify(picks)
             
     except Exception as e:
-        # Simple error response without complex logging that might fail
         return jsonify({'error': f'Database error: {str(e)}'}), 500
 
 @app.route('/admin/update_pick', methods=['POST'])
@@ -1567,7 +1563,7 @@ def admin_simple_picks():
             
             # Get all picks with minimal joins
             cursor.execute('''
-                SELECT p.id, p.user_id, p.game_id, p.selected_team, p.pick_time,
+                SELECT p.id, p.user_id, p.game_id, p.selected_team, p.created_at,
                        u.username
                 FROM user_picks p
                 JOIN users u ON p.user_id = u.id
@@ -1583,7 +1579,7 @@ def admin_simple_picks():
                     'username': row['username'],
                     'game_id': row['game_id'],
                     'selected_team': row['selected_team'],
-                    'pick_time': row['pick_time']
+                    'pick_time': row['created_at']
                 })
             
             return jsonify(picks)
