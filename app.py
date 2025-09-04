@@ -21,11 +21,26 @@ def auto_populate_nfl_games():
     current_year = datetime.datetime.now().year
     total_games_created = 0
     
-    for week in range(1, 19):
+    # Force create games for at least the first 5 weeks
+    priority_weeks = [1, 2, 3, 4, 5]
+    
+    for week in priority_weeks:
+        try:
+            print(f"   Processing Priority Week {week}...")
+            games_created = ensure_games_exist(week, current_year)
+            total_games_created += games_created
+            print(f"   ✓ Week {week}: {games_created} games")
+                
+        except Exception as e:
+            print(f"   ❌ Error processing Week {week}: {e}")
+            continue
+    
+    # Then process remaining weeks
+    for week in range(6, 19):
         try:
             print(f"   Checking Week {week}...")
             
-            # Check if games already exist for this week
+            # Check if games already exist
             conn = sqlite3.connect('nfl_fantasy.db')
             cursor = conn.cursor()
             cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, current_year))
@@ -33,7 +48,6 @@ def auto_populate_nfl_games():
             conn.close()
             
             if existing_games == 0:
-                print(f"   Creating games for Week {week}...")
                 games_created = ensure_games_exist(week, current_year)
                 total_games_created += games_created
                 print(f"   ✓ Created {games_created} games for Week {week}")
@@ -620,201 +634,11 @@ def logout():
     flash('You have been logged out', 'info')
     return redirect(url_for('login'))
 
-def ensure_games_exist(week, year):
-    """Ensure games exist for the given week and year, create if missing"""
-    conn = sqlite3.connect('nfl_fantasy.db')
-    cursor = conn.cursor()
-    
-    # Check if games exist
-    cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, year))
-    existing_count = cursor.fetchone()[0]
-    
-    if existing_count > 0:
-        conn.close()
-        return existing_count
-    
-    print(f"Creating games for Week {week}, {year}")
-    
-    # Create games using multiple methods
-    games_created = 0
-    
-    try:
-        # Method 1: Use official schedule if available
-        if year >= 2025:
-            games = create_nfl_games_from_schedule(week, year)
-        else:
-            games = []
-        
-        # Method 2: Try ESPN API if no schedule games
-        if not games:
-            games = fetch_nfl_games(week, year)
-        
-        # Method 3: Create sample games as fallback
-        if not games:
-            games = create_sample_games(week, year)
-        
-        # Insert games into database
-        for game in games:
-            try:
-                # Convert game_date to AST timezone
-                game_date = game['game_date']
-                if isinstance(game_date, str):
-                    try:
-                        game_date = datetime.datetime.fromisoformat(game_date)
-                    except:
-                        game_date = datetime.datetime.strptime(game_date, '%Y-%m-%d %H:%M:%S')
-                
-                # Ensure timezone is set to AST
-                if game_date.tzinfo is None:
-                    game_date = AST.localize(game_date)
-                
-                # Store as UTC but display in AST
-                game_date_utc = game_date.astimezone(pytz.utc)
-                
-                cursor.execute('''
-                    INSERT OR REPLACE INTO nfl_games 
-                    (game_id, week, year, home_team, away_team, game_date, 
-                     is_monday_night, is_thursday_night, home_score, away_score, is_final)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    game.get('game_id', f'game_{week}_{year}_{games_created}'),
-                    game['week'], 
-                    game['year'], 
-                    game['home_team'], 
-                    game['away_team'], 
-                    game_date_utc.isoformat(),
-                    game.get('is_monday_night', False), 
-                    game.get('is_thursday_night', False),
-                    game.get('home_score'),
-                    game.get('away_score'),
-                    game.get('is_final', False)
-                ))
-                games_created += 1
-            except Exception as game_error:
-                print(f"Error inserting game: {game_error}")
-                continue
-        
-        conn.commit()
-        print(f"Successfully created {games_created} games for Week {week}")
-        
-    except Exception as e:
-        print(f"Error creating games: {e}")
-        # Emergency fallback - create minimal games
-        emergency_games = create_emergency_games(week, year)
-        for game in emergency_games:
-            try:
-                game_date = AST.localize(game['game_date'])
-                cursor.execute('''
-                    INSERT OR REPLACE INTO nfl_games 
-                    (game_id, week, year, home_team, away_team, game_date, is_monday_night, is_thursday_night)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (game['game_id'], game['week'], game['year'], game['home_team'], 
-                      game['away_team'], game_date.astimezone(pytz.utc).isoformat(), 
-                      game['is_monday_night'], game['is_thursday_night']))
-                games_created += 1
-            except Exception as emergency_error:
-                print(f"Emergency game creation error: {emergency_error}")
-                continue
-        conn.commit()
-    
-    conn.close()
-    return games_created
-
-@app.route('/admin/all_picks')
-def admin_all_picks():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    week = request.args.get('week', get_current_nfl_week(), type=int)
-    year = request.args.get('year', datetime.datetime.now().year, type=int)
-    
-    conn = sqlite3.connect('nfl_fantasy.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT u.username, g.home_team, g.away_team, g.is_monday_night,
-               up.selected_team, up.predicted_home_score, up.predicted_away_score, up.id, u.id
-        FROM user_picks up
-        JOIN users u ON up.user_id = u.id
-        JOIN nfl_games g ON up.game_id = g.id
-        WHERE g.week = ? AND g.year = ?
-        ORDER BY u.username, g.game_date
-    ''', (week, year))
-    
-    picks_data = []
-    for row in cursor.fetchall():
-        picks_data.append({
-            'username': row[0],
-            'home_team': row[1],
-            'away_team': row[2],
-            'is_monday_night': bool(row[3]),
-            'selected_team': row[4],
-            'predicted_home_score': row[5],
-            'predicted_away_score': row[6],
-            'pick_id': row[7],
-            'user_id': row[8]
-        })
-    
-    conn.close()
-    return jsonify(picks_data)
-
-@app.route('/admin/modify_pick', methods=['POST'])
-def admin_modify_pick():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    try:
-        data = request.get_json()
-        pick_id = data.get('pick_id')
-        selected_team = data.get('selected_team')
-        home_score = data.get('home_score')
-        away_score = data.get('away_score')
-        
-        conn = sqlite3.connect('nfl_fantasy.db')
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            UPDATE user_picks 
-            SET selected_team = ?, predicted_home_score = ?, predicted_away_score = ?
-            WHERE id = ?
-        ''', (selected_team, home_score, away_score, pick_id))
-        
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True, 'message': 'Pick updated successfully'})
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/admin/delete_pick', methods=['POST'])
-def admin_delete_pick():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    try:
-        data = request.get_json()
-        pick_id = data.get('pick_id')
-        
-        conn = sqlite3.connect('nfl_fantasy.db')
-        cursor = conn.cursor()
-        
-        cursor.execute('DELETE FROM user_picks WHERE id = ?', (pick_id,))
-        
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True, 'message': 'Pick deleted successfully'})
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# Fix the emergency games creation for Week 1
 def create_emergency_games(week, year):
     """Create emergency minimal games when all other methods fail"""
     teams = ['KC', 'BUF', 'DAL', 'SF', 'GB', 'NE', 'PIT', 'BAL', 'DEN', 'LAC', 'MIA', 'NYJ', 'CIN', 'CLE', 'HOU', 'IND']
     
-    # Calculate proper game dates
+    # Calculate proper game dates for AST timezone
     if year >= 2025:
         season_start = datetime.datetime(2025, 9, 4)  # 2025 season starts Sept 4
     else:
@@ -826,13 +650,14 @@ def create_emergency_games(week, year):
     
     # Thursday Night Football (except week 1)
     if week > 1:
+        thursday_date = week_start + datetime.timedelta(days=3)
         games.append({
             'game_id': f'emergency_tnf_{week}_{year}',
             'week': week,
             'year': year,
             'home_team': teams[0],
             'away_team': teams[1],
-            'game_date': week_start + datetime.timedelta(days=3, hours=20, minutes=15),  # Thursday 8:15 PM
+            'game_date': thursday_date.replace(hour=20, minute=15),  # Thursday 8:15 PM AST
             'is_monday_night': False,
             'is_thursday_night': True
         })
@@ -843,34 +668,37 @@ def create_emergency_games(week, year):
     # Sunday games
     sunday = week_start + datetime.timedelta(days=(6 if week == 1 else 6))  # First Sunday
     
-    # Early Sunday games (1:00 PM)
+    # Early Sunday games (1:00 PM AST)
+    game_counter = 0
     for i in range(used_teams, min(used_teams + 12, len(teams)), 2):
         if i + 1 < len(teams):
             games.append({
-                'game_id': f'emergency_sun_early_{week}_{year}_{i//2}',
+                'game_id': f'emergency_sun_early_{week}_{year}_{game_counter}',
                 'week': week,
                 'year': year,
                 'home_team': teams[i],
                 'away_team': teams[i + 1],
-                'game_date': sunday.replace(hour=13, minute=0),  # 1:00 PM
+                'game_date': sunday.replace(hour=13, minute=0),  # 1:00 PM AST
                 'is_monday_night': False,
                 'is_thursday_night': False
             })
+            game_counter += 1
     
-    # Late Sunday games (4:25 PM)
+    # Late Sunday games (4:25 PM AST)
     start_idx = used_teams + 12
     for i in range(start_idx, min(start_idx + 4, len(teams)), 2):
         if i + 1 < len(teams):
             games.append({
-                'game_id': f'emergency_sun_late_{week}_{year}_{i//2}',
+                'game_id': f'emergency_sun_late_{week}_{year}_{game_counter}',
                 'week': week,
                 'year': year,
                 'home_team': teams[i],
                 'away_team': teams[i + 1],
-                'game_date': sunday.replace(hour=16, minute=25),  # 4:25 PM
+                'game_date': sunday.replace(hour=16, minute=25),  # 4:25 PM AST
                 'is_monday_night': False,
                 'is_thursday_night': False
             })
+            game_counter += 1
     
     # Monday Night Football
     monday = week_start + datetime.timedelta(days=7)  # Next Monday
@@ -883,38 +711,210 @@ def create_emergency_games(week, year):
             'year': year,
             'home_team': remaining_teams[0],
             'away_team': remaining_teams[1],
-            'game_date': monday.replace(hour=20, minute=15),  # Monday 8:15 PM
+            'game_date': monday.replace(hour=20, minute=15),  # Monday 8:15 PM AST
             'is_monday_night': True,
             'is_thursday_night': False
         })
     
+    print(f"Created {len(games)} emergency games for Week {week}")
     return games
 
-@app.route('/games')
-def games():
-    print(f"Games route accessed - Session: {dict(session)}")
-    
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    week = request.args.get('week', get_current_nfl_week(), type=int)
-    year = request.args.get('year', datetime.datetime.now().year, type=int)
-    
+def ensure_games_exist(week, year):
+    """Ensure games exist for the given week and year, create if missing"""
     try:
-        # Ensure games exist for this week
-        games_count = ensure_games_exist(week, year)
-        print(f"Week {week} has {games_count} games available")
-        
         conn = sqlite3.connect('nfl_fantasy.db')
         cursor = conn.cursor()
         
-        # Get games for the week
-        cursor.execute('''
-            SELECT id, week, year, game_id, home_team, away_team, game_date, 
-                   is_monday_night, is_thursday_night, home_score, away_score, is_final
-            FROM nfl_games WHERE week = ? AND year = ? ORDER BY 
-            CASE 
-                WHEN is_thursday_night = 1 THEN 1
+        # Check if games exist
+        cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, year))
+        existing_count = cursor.fetchone()[0]
+        
+        if existing_count > 0:
+            print(f"Week {week} already has {existing_count} games")
+            conn.close()
+            return existing_count
+        
+        print(f"Creating games for Week {week}, {year}")
+        
+        # Create games using multiple methods
+        games_created = 0
+        games = []
+        
+        # Method 1: Use official schedule if available
+        try:
+            if year >= 2025:
+                games = create_nfl_games_from_schedule(week, year)
+                print(f"Created {len(games)} games from official schedule")
+        except Exception as e:
+            print(f"Official schedule failed: {e}")
+        
+        # Method 2: Try ESPN API if no schedule games
+        if not games:
+            try:
+                games = fetch_nfl_games(week, year)
+                print(f"Created {len(games)} games from ESPN API")
+            except Exception as e:
+                print(f"ESPN API failed: {e}")
+        
+        # Method 3: Create emergency games as fallback
+        if not games:
+            print("Creating emergency games as fallback...")
+            games = create_emergency_games(week, year)
+        
+        # Insert games into database
+        for game in games:
+            try:
+                # Handle game_date properly
+                game_date = game['game_date']
+                if isinstance(game_date, str):
+                    try:
+                        game_date = datetime.datetime.fromisoformat(game_date)
+                    except:
+                        game_date = datetime.datetime.strptime(game_date, '%Y-%m-%d %H:%M:%S')
+                
+                # Store in database with proper timezone handling
+                cursor.execute('''
+                    INSERT OR REPLACE INTO nfl_games 
+                    (game_id, week, year, home_team, away_team, game_date, 
+                     is_monday_night, is_thursday_night, home_score, away_score, is_final)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    game.get('game_id', f'game_{week}_{year}_{games_created}'),
+                    game['week'], 
+                    game['year'], 
+                    game['home_team'], 
+                    game['away_team'], 
+                    game_date.strftime('%Y-%m-%d %H:%M:%S'),
+                    game.get('is_monday_night', False), 
+                    game.get('is_thursday_night', False),
+                    game.get('home_score'),
+                    game.get('away_score'),
+                    game.get('is_final', False)
+                ))
+                games_created += 1
+                
+            except Exception as game_error:
+                print(f"Error inserting game: {game_error}")
+                continue
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"Successfully created {games_created} games for Week {week}")
+        return games_created
+        
+    except Exception as e:
+        print(f"Critical error in ensure_games_exist: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+
+def auto_populate_nfl_games():
+    """Auto-populate NFL games for all weeks when starting the application"""
+    print("🏈 Auto-populating NFL games for current season...")
+    
+    current_year = datetime.datetime.now().year
+    total_games_created = 0
+    
+    # Force create games for at least the first 5 weeks
+    priority_weeks = [1, 2, 3, 4, 5]
+    
+    for week in priority_weeks:
+        try:
+            print(f"   Processing Priority Week {week}...")
+            games_created = ensure_games_exist(week, current_year)
+            total_games_created += games_created
+            print(f"   ✓ Week {week}: {games_created} games")
+                
+        except Exception as e:
+            print(f"   ❌ Error processing Week {week}: {e}")
+            continue
+    
+    # Then process remaining weeks
+    for week in range(6, 19):
+        try:
+            print(f"   Checking Week {week}...")
+            
+            # Check if games already exist
+            conn = sqlite3.connect('nfl_fantasy.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, current_year))
+            existing_games = cursor.fetchone()[0]
+            conn.close()
+            
+            if existing_games == 0:
+                games_created = ensure_games_exist(week, current_year)
+                total_games_created += games_created
+                print(f"   ✓ Created {games_created} games for Week {week}")
+            else:
+                print(f"   ✓ Week {week} already has {existing_games} games")
+                
+        except Exception as e:
+            print(f"   ❌ Error processing Week {week}: {e}")
+            continue
+    
+    print(f"🎯 Auto-population complete! Total new games created: {total_games_created}")
+    return total_games_created
+
+# ...existing code...
+
+if __name__ == '__main__':
+    # Create directories if they don't exist
+    if not os.path.exists('templates'):
+        os.makedirs('templates')
+    if not os.path.exists('static'):
+        os.makedirs('static')
+    
+    # Initialize database
+    print("🚀 Starting La Casa de Todos NFL Fantasy League...")
+    print("=" * 60)
+    
+    try:
+        print("📁 Initializing database...")
+        init_db()
+        print("✅ Database initialized successfully")
+        
+        # Force auto-populate NFL games
+        total_created = auto_populate_nfl_games()
+        
+        # Validate games were created
+        if validate_nfl_games():
+            print("✅ NFL games validation passed")
+        else:
+            print("⚠️  NFL games validation failed - creating emergency games...")
+            # Force create games for week 1 at minimum
+            ensure_games_exist(1, datetime.datetime.now().year)
+        
+        # Final check for Week 1 specifically
+        conn = sqlite3.connect('nfl_fantasy.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = 1 AND year = ?', (datetime.datetime.now().year,))
+        week1_games = cursor.fetchone()[0]
+        conn.close()
+        
+        print(f"🔍 Week 1 verification: {week1_games} games available")
+        
+        if week1_games == 0:
+            print("🚨 Emergency: Force creating Week 1 games...")
+            ensure_games_exist(1, datetime.datetime.now().year)
+        
+        # Add debug mode
+        app.config['DEBUG'] = True
+        app.config['TEMPLATES_AUTO_RELOAD'] = True
+        
+        print("=" * 60)
+        print("🏈 Application ready!")
+        print("Access at: http://127.0.0.1:5000")
+        print("Network access: http://0.0.0.0:5000")
+        print("=" * 60)
+        
+        # Run on all interfaces
+        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+        
+    except Exception as e:
+        print(f"❌ Application startup failed: {e}")
+        import traceback
+        traceback.print_exc()
                 WHEN is_monday_night = 1 THEN 3
                 ELSE 2
             END, game_date
