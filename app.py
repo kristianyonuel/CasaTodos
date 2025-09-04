@@ -321,37 +321,66 @@ def submit_picks():
 def register():
     if request.method == 'POST':
         try:
-            username = request.form.get('username', '').strip()
-            password = request.form.get('password', '').strip()
-            email = request.form.get('email', '').strip()
+            username: str = request.form.get('username', '').strip()
+            password: str = request.form.get('password', '').strip()
+            email: str = request.form.get('email', '').strip()
+            
+            # Validation
+            if not username or not password:
+                flash('Username and password are required', 'error')
+                return render_template('register.html')
+            
+            if len(username) < 3:
+                flash('Username must be at least 3 characters long', 'error')
+                return render_template('register.html')
             
             if len(password) < 6:
                 flash('Password must be at least 6 characters long', 'error')
                 return render_template('register.html')
-            
-            conn = get_db()
-            cursor = conn.cursor()
-            
-            cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
-            if cursor.fetchone():
-                flash('Username already exists', 'error')
+                
+            # Optional email validation
+            if email and '@' not in email:
+                flash('Please enter a valid email address', 'error')
                 return render_template('register.html')
             
-            password_hash = generate_password_hash(password)
-            cursor.execute('''
-                INSERT INTO users (username, password_hash, email)
-                VALUES (?, ?, ?)
-            ''', (username, password_hash, email))
+            with get_db() as conn:
+                cursor = conn.cursor()
+                
+                # Check if username already exists
+                cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+                if cursor.fetchone():
+                    flash('Username already exists. Please choose a different one.', 'error')
+                    return render_template('register.html')
+                
+                # Check if email already exists (if provided)
+                if email:
+                    cursor.execute('SELECT id FROM users WHERE email = ?', (email,))
+                    if cursor.fetchone():
+                        flash('Email already registered. Please use a different email.', 'error')
+                        return render_template('register.html')
+                
+                # Create new user
+                password_hash = generate_password_hash(password)
+                cursor.execute('''
+                    INSERT INTO users (username, password_hash, email, is_admin, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (username, password_hash, email or None, False, datetime.now()))
+                
+                conn.commit()
+                logger.info(f"New user registered: {username}")
             
-            conn.commit()
-            conn.close()
-            
-            flash('Registration successful! Please log in.', 'success')
+            flash('Registration successful! Please log in with your new account.', 'success')
             return redirect(url_for('login'))
             
+        except sqlite3.IntegrityError as e:
+            logger.error(f"Database integrity error during registration: {e}")
+            flash('Registration failed due to data conflict. Please try different credentials.', 'error')
+        except sqlite3.Error as e:
+            logger.error(f"Database error during registration: {e}")
+            flash('Registration failed due to a database error. Please try again later.', 'error')
         except Exception as e:
-            logger.error(f"Registration error: {e}")
-            flash('Registration failed. Please try again.', 'error')
+            logger.error(f"Unexpected registration error: {e}")
+            flash('Registration failed due to an unexpected error. Please try again.', 'error')
     
     return render_template('register.html')
 
@@ -360,7 +389,7 @@ def leaderboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    conn = get_db()
+    conn = get_db_legacy()
     cursor = conn.cursor()
     cursor.execute('''
         SELECT u.username, 
