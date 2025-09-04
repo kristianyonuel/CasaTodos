@@ -244,9 +244,9 @@
         }
 
         async function syncSeason() {
-            if (!confirm('This will import the complete 2025 NFL schedule (all 18 weeks). Continue?')) return;
+            if (!confirm('This will sync the complete 2025 NFL schedule from free APIs (MySportsFeeds/BallDontLie). Continue?')) return;
             
-            document.getElementById('admin-content').innerHTML = '<p>Syncing 2025 NFL season data...</p>';
+            document.getElementById('admin-content').innerHTML = '<p>Syncing 2025 NFL season from free APIs...</p>';
             
             try {
                 const response = await fetch('/sync_season', {
@@ -259,9 +259,10 @@
                 if (result.success) {
                     document.getElementById('admin-content').innerHTML = 
                         `<div class="alert alert-success">
-                            <h3>Season Sync Complete!</h3>
+                            <h3>Free API Sync Complete!</h3>
                             <p>${result.message}</p>
                             <p><strong>Games imported:</strong> ${result.games_added}</p>
+                            <p><strong>Data Sources:</strong> MySportsFeeds & BallDontLie (Free APIs)</p>
                             <button onclick="loadSchedule()" class="btn btn-primary">View Schedule</button>
                         </div>`;
                 } else {
@@ -269,6 +270,7 @@
                         `<div class="alert alert-error">
                             <h3>Sync Failed</h3>
                             <p>Error: ${result.error}</p>
+                            <p><strong>Note:</strong> Free APIs may have limitations. Configure MySportsFeeds credentials for better results.</p>
                             <button onclick="syncSeason()" class="btn btn-warning">Retry</button>
                         </div>`;
                 }
@@ -278,13 +280,14 @@
                     `<div class="alert alert-error">
                         <h3>Sync Failed</h3>
                         <p>Network error: ${error.message}</p>
+                        <p>Free APIs may be rate-limited or temporarily unavailable.</p>
                         <button onclick="syncSeason()" class="btn btn-warning">Retry</button>
                     </div>`;
             }
         }
 
         async function generateWeekGames() {
-            if (!confirm(`Generate official NFL games for Week ${currentWeek}, 2025?`)) return;
+            if (!confirm(`Sync official NFL games for Week ${currentWeek}, 2025 from free APIs?`)) return;
             
             try {
                 const response = await fetch('/admin/generate_week', {
@@ -295,14 +298,14 @@
                 
                 const result = await response.json();
                 if (result.success) {
-                    alert(`Successfully generated ${result.games_created} games for Week ${currentWeek}`);
+                    alert(`Successfully synced ${result.games_created} games for Week ${currentWeek} from free APIs`);
                     loadSchedule();
                 } else {
-                    alert('Error generating games: ' + result.error);
+                    alert('Error syncing games: ' + result.error + '\nNote: Free APIs may have rate limits.');
                 }
             } catch (error) {
                 console.error('Generate games error:', error);
-                alert('Error generating games: ' + error.message);
+                alert('Error syncing games: ' + error.message);
             }
         }
 

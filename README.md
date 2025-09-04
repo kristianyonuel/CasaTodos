@@ -123,6 +123,32 @@ The application uses SQLite database with the following tables:
 
 ## 🔧 Configuration
 
+### Free API Setup
+
+#### MySportsFeeds (Recommended)
+1. Sign up at [MySportsFeeds.com](https://www.mysportsfeeds.com/)
+2. Get your free account credentials
+3. Edit `nfl_api_service.py`:
+   ```python
+   self.msf_username = "your_username"
+   self.msf_password = "your_password"
+   ```
+
+#### BallDontLie NFL API
+- No signup required
+- Rate limited to 60 requests per minute
+- Automatically used as secondary source
+
+#### ESPN API
+- No signup required
+- Used as backup source
+- May have occasional outages
+
+### API Rate Limits
+- **MySportsFeeds Free**: 250 requests/day
+- **BallDontLie**: 60 requests/minute
+- **ESPN**: No documented limits
+
 ### Network Access
 - **Local Network**: Accessible from any device on same network
 - **Port Forwarding**: Configure router to allow external access
@@ -145,9 +171,10 @@ The application uses SQLite database with the following tables:
 - ⚠️ **Change this password after first login!**
 
 ### NFL Data Source
-- **API**: ESPN NFL Scoreboard API
-- **Update**: Automatic game data synchronization
-- **Coverage**: Regular season weeks 1-18
+- **Primary API**: MySportsFeeds (Free tier for personal use)
+- **Secondary API**: BallDontLie NFL API (Free with rate limits)
+- **Backup API**: ESPN NFL API (Free, unlimited)
+- **Coverage**: Live scores, schedules, team information
 
 ## 🎨 Customization
 

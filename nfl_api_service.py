@@ -1,5 +1,5 @@
 """
-NFL API Service using SportsDataIO and ESPN APIs
+NFL API Service using free APIs: BallDontLie and MySportsFeeds
 Real-time NFL data fetching and game updates
 """
 import requests
@@ -12,21 +12,29 @@ logger = logging.getLogger(__name__)
 
 class NFLAPIService:
     def __init__(self):
-        # Primary API: SportsDataIO (requires subscription)
-        self.sportsdata_key = "YOUR_SPORTSDATA_API_KEY"  # Replace with actual key
-        self.sportsdata_base = "https://api.sportsdata.io/v3/nfl"
+        # BallDontLie API (Free)
+        self.balldontlie_base = "https://api.balldontlie.io/v1/nfl"
         
-        # Backup API: ESPN (free)
+        # MySportsFeeds API (Free tier)
+        self.msf_base = "https://api.mysportsfeeds.com/v2.1/pull/nfl"
+        self.msf_username = "YOUR_MSF_USERNAME"  # Replace with your username
+        self.msf_password = "YOUR_MSF_PASSWORD"  # Replace with your password
+        
+        # ESPN as backup (free)
         self.espn_base = "https://site.api.espn.com/apis/site/v2/sports/football/nfl"
         
-        # Current season
         self.current_season = 2025
         
     def get_season_schedule(self, year: int = 2025) -> List[Dict]:
         """Get complete season schedule"""
         try:
-            # Try SportsDataIO first
-            schedule = self._get_sportsdata_schedule(year)
+            # Try MySportsFeeds first
+            schedule = self._get_msf_schedule(year)
+            if schedule:
+                return schedule
+            
+            # Try BallDontLie
+            schedule = self._get_balldontlie_schedule(year)
             if schedule:
                 return schedule
             
@@ -40,8 +48,13 @@ class NFLAPIService:
     def get_week_games(self, week: int, year: int = 2025) -> List[Dict]:
         """Get games for specific week"""
         try:
-            # Try SportsDataIO first
-            games = self._get_sportsdata_week(week, year)
+            # Try MySportsFeeds first
+            games = self._get_msf_week(week, year)
+            if games:
+                return games
+            
+            # Try BallDontLie
+            games = self._get_balldontlie_week(week, year)
             if games:
                 return games
             
@@ -55,8 +68,13 @@ class NFLAPIService:
     def get_live_scores(self, week: int, year: int = 2025) -> List[Dict]:
         """Get live scores and game updates"""
         try:
-            # Try SportsDataIO first for live data
-            scores = self._get_sportsdata_scores(week, year)
+            # Try MySportsFeeds for live data
+            scores = self._get_msf_scores(week, year)
+            if scores:
+                return scores
+            
+            # Try BallDontLie
+            scores = self._get_balldontlie_scores(week, year)
             if scores:
                 return scores
             
@@ -67,70 +85,101 @@ class NFLAPIService:
             logger.error(f"Error fetching live scores: {e}")
             return []
     
-    def _get_sportsdata_schedule(self, year: int) -> List[Dict]:
-        """Get schedule from SportsDataIO"""
-        if not self.sportsdata_key or self.sportsdata_key == "YOUR_SPORTSDATA_API_KEY":
+    def _get_msf_schedule(self, year: int) -> List[Dict]:
+        """Get schedule from MySportsFeeds"""
+        if not self._has_msf_credentials():
             return []
         
         try:
-            url = f"{self.sportsdata_base}/scores/json/Schedules/{year}REG"
-            headers = {"Ocp-Apim-Subscription-Key": self.sportsdata_key}
+            url = f"{self.msf_base}/{year}-regular/games.json"
+            auth = (self.msf_username, self.msf_password)
             
-            response = requests.get(url, headers=headers, timeout=10)
+            response = requests.get(url, auth=auth, timeout=15)
+            if response.status_code == 401:
+                logger.warning("MySportsFeeds authentication failed")
+                return []
+            
             response.raise_for_status()
+            data = response.json()
             
-            games_data = response.json()
-            return self._normalize_sportsdata_games(games_data)
+            return self._normalize_msf_games(data.get('games', []))
             
         except Exception as e:
-            logger.error(f"SportsDataIO schedule error: {e}")
+            logger.error(f"MySportsFeeds schedule error: {e}")
             return []
     
-    def _get_sportsdata_week(self, week: int, year: int) -> List[Dict]:
-        """Get week games from SportsDataIO"""
-        if not self.sportsdata_key or self.sportsdata_key == "YOUR_SPORTSDATA_API_KEY":
+    def _get_msf_week(self, week: int, year: int) -> List[Dict]:
+        """Get week games from MySportsFeeds"""
+        if not self._has_msf_credentials():
             return []
         
         try:
-            url = f"{self.sportsdata_base}/scores/json/ScoresByWeek/{year}REG/{week}"
-            headers = {"Ocp-Apim-Subscription-Key": self.sportsdata_key}
+            url = f"{self.msf_base}/{year}-regular/week/{week}/games.json"
+            auth = (self.msf_username, self.msf_password)
             
-            response = requests.get(url, headers=headers, timeout=10)
+            response = requests.get(url, auth=auth, timeout=15)
+            if response.status_code == 401:
+                return []
+            
             response.raise_for_status()
+            data = response.json()
             
-            games_data = response.json()
-            return self._normalize_sportsdata_games(games_data)
+            return self._normalize_msf_games(data.get('games', []))
             
         except Exception as e:
-            logger.error(f"SportsDataIO week error: {e}")
+            logger.error(f"MySportsFeeds week error: {e}")
             return []
     
-    def _get_sportsdata_scores(self, week: int, year: int) -> List[Dict]:
-        """Get live scores from SportsDataIO"""
-        return self._get_sportsdata_week(week, year)
+    def _get_msf_scores(self, week: int, year: int) -> List[Dict]:
+        """Get live scores from MySportsFeeds"""
+        return self._get_msf_week(week, year)
     
-    def _get_espn_schedule(self, year: int) -> List[Dict]:
-        """Get schedule from ESPN API"""
+    def _get_balldontlie_schedule(self, year: int) -> List[Dict]:
+        """Get schedule from BallDontLie"""
         try:
             all_games = []
             
-            # ESPN doesn't have full season endpoint, so fetch week by week
+            # BallDontLie doesn't have full season endpoint, fetch week by week
             for week in range(1, 19):
-                week_games = self._get_espn_week(week, year)
+                week_games = self._get_balldontlie_week(week, year)
                 all_games.extend(week_games)
                 
             return all_games
             
         except Exception as e:
-            logger.error(f"ESPN schedule error: {e}")
+            logger.error(f"BallDontLie schedule error: {e}")
             return []
     
+    def _get_balldontlie_week(self, week: int, year: int) -> List[Dict]:
+        """Get week games from BallDontLie"""
+        try:
+            url = f"{self.balldontlie_base}/games"
+            params = {
+                'season': year,
+                'week': week,
+                'per_page': 20
+            }
+            
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            return self._normalize_balldontlie_games(data.get('data', []), week, year)
+            
+        except Exception as e:
+            logger.error(f"BallDontLie week error: {e}")
+            return []
+    
+    def _get_balldontlie_scores(self, week: int, year: int) -> List[Dict]:
+        """Get live scores from BallDontLie"""
+        return self._get_balldontlie_week(week, year)
+    
     def _get_espn_week(self, week: int, year: int) -> List[Dict]:
-        """Get week games from ESPN API"""
+        """Get week games from ESPN API (backup)"""
         try:
             url = f"{self.espn_base}/scoreboard"
             params = {
-                'seasontype': 2,  # Regular season
+                'seasontype': 2,
                 'week': week,
                 'year': year
             }
@@ -145,52 +194,135 @@ class NFLAPIService:
             logger.error(f"ESPN week error: {e}")
             return []
     
+    def _get_espn_schedule(self, year: int) -> List[Dict]:
+        """Get schedule from ESPN API"""
+        try:
+            all_games = []
+            for week in range(1, 19):
+                week_games = self._get_espn_week(week, year)
+                all_games.extend(week_games)
+            return all_games
+        except Exception as e:
+            logger.error(f"ESPN schedule error: {e}")
+            return []
+    
     def _get_espn_scores(self, week: int, year: int) -> List[Dict]:
         """Get live scores from ESPN"""
         return self._get_espn_week(week, year)
     
-    def _normalize_sportsdata_games(self, games_data: List[Dict]) -> List[Dict]:
-        """Normalize SportsDataIO game data"""
+    def _normalize_msf_games(self, games_data: List[Dict]) -> List[Dict]:
+        """Normalize MySportsFeeds game data"""
         normalized = []
         
         for game in games_data:
             try:
+                schedule = game.get('schedule', {})
+                score = game.get('score', {})
+                
                 # Parse game date
-                game_date = datetime.fromisoformat(game.get('DateTime', '').replace('Z', '+00:00'))
+                game_date_str = schedule.get('startTime')
+                if game_date_str:
+                    game_date = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
+                else:
+                    continue
+                
+                # Teams
+                away_team = schedule.get('awayTeam', {}).get('abbreviation')
+                home_team = schedule.get('homeTeam', {}).get('abbreviation')
+                
+                # Scores
+                away_score = score.get('awayScoreTotal')
+                home_score = score.get('homeScoreTotal')
+                
+                # Game status
+                game_status = self._normalize_msf_status(schedule.get('playedStatus'))
+                is_final = game_status == 'final'
                 
                 # Determine game type
                 weekday = game_date.weekday()
                 hour = game_date.hour
                 
-                is_thursday = weekday == 3 and hour >= 18
-                is_monday = weekday == 0 and hour >= 18
-                is_sunday_night = weekday == 6 and hour >= 18
-                
                 normalized_game = {
-                    'api_game_id': game.get('GameKey'),
-                    'week': game.get('Week'),
-                    'year': game.get('Season'),
-                    'away_team': game.get('AwayTeam'),
-                    'home_team': game.get('HomeTeam'),
+                    'api_game_id': game.get('schedule', {}).get('id'),
+                    'week': schedule.get('week'),
+                    'year': schedule.get('season'),
+                    'away_team': away_team,
+                    'home_team': home_team,
                     'game_date': game_date,
-                    'is_thursday_night': is_thursday,
-                    'is_monday_night': is_monday,
-                    'is_sunday_night': is_sunday_night,
-                    'away_score': game.get('AwayScore'),
-                    'home_score': game.get('HomeScore'),
-                    'game_status': self._normalize_game_status(game.get('Status')),
-                    'is_final': game.get('IsFinal', False),
-                    'quarter': game.get('Quarter'),
-                    'time_remaining': game.get('TimeRemainingMinutes'),
-                    'tv_network': game.get('Channel'),
-                    'stadium': game.get('Stadium', {}).get('Name'),
-                    'weather': game.get('Weather', {}).get('Description')
+                    'is_thursday_night': weekday == 3 and hour >= 18,
+                    'is_monday_night': weekday == 0 and hour >= 18,
+                    'is_sunday_night': weekday == 6 and hour >= 18,
+                    'away_score': away_score,
+                    'home_score': home_score,
+                    'game_status': game_status,
+                    'is_final': is_final,
+                    'quarter': score.get('currentPeriod'),
+                    'time_remaining': score.get('currentPeriodTimeRemaining'),
+                    'tv_network': None,
+                    'stadium': schedule.get('venue', {}).get('name')
                 }
                 
                 normalized.append(normalized_game)
                 
             except Exception as e:
-                logger.error(f"Error normalizing SportsDataIO game: {e}")
+                logger.error(f"Error normalizing MySportsFeeds game: {e}")
+                continue
+        
+        return normalized
+    
+    def _normalize_balldontlie_games(self, games_data: List[Dict], week: int, year: int) -> List[Dict]:
+        """Normalize BallDontLie game data"""
+        normalized = []
+        
+        for game in games_data:
+            try:
+                # Parse game date
+                game_date_str = game.get('date')
+                if game_date_str:
+                    game_date = datetime.fromisoformat(game_date_str)
+                else:
+                    continue
+                
+                # Teams
+                away_team = game.get('visitor_team', {}).get('abbreviation')
+                home_team = game.get('home_team', {}).get('abbreviation')
+                
+                # Scores
+                away_score = game.get('visitor_team_score')
+                home_score = game.get('home_team_score')
+                
+                # Game status
+                game_status = self._normalize_balldontlie_status(game.get('status'))
+                is_final = game.get('status') == 'Final'
+                
+                # Determine game type
+                weekday = game_date.weekday()
+                hour = game_date.hour
+                
+                normalized_game = {
+                    'api_game_id': game.get('id'),
+                    'week': week,
+                    'year': year,
+                    'away_team': away_team,
+                    'home_team': home_team,
+                    'game_date': game_date,
+                    'is_thursday_night': weekday == 3 and hour >= 18,
+                    'is_monday_night': weekday == 0 and hour >= 18,
+                    'is_sunday_night': weekday == 6 and hour >= 18,
+                    'away_score': away_score,
+                    'home_score': home_score,
+                    'game_status': game_status,
+                    'is_final': is_final,
+                    'quarter': game.get('period'),
+                    'time_remaining': game.get('time'),
+                    'tv_network': None,
+                    'stadium': None
+                }
+                
+                normalized.append(normalized_game)
+                
+            except Exception as e:
+                logger.error(f"Error normalizing BallDontLie game: {e}")
                 continue
         
         return normalized
@@ -261,8 +393,7 @@ class NFLAPIService:
                     'quarter': status.get('period'),
                     'time_remaining': status.get('displayClock'),
                     'tv_network': competition.get('broadcasts', [{}])[0].get('market', {}).get('media', {}).get('shortName'),
-                    'stadium': competition.get('venue', {}).get('fullName'),
-                    'weather': None  # ESPN doesn't always provide weather
+                    'stadium': competition.get('venue', {}).get('fullName')
                 }
                 
                 normalized.append(normalized_game)
@@ -273,25 +404,39 @@ class NFLAPIService:
         
         return normalized
     
-    def _normalize_game_status(self, status: str) -> str:
-        """Normalize game status from SportsDataIO"""
+    def _has_msf_credentials(self) -> bool:
+        """Check if MySportsFeeds credentials are configured"""
+        return (self.msf_username != "YOUR_MSF_USERNAME" and 
+                self.msf_password != "YOUR_MSF_PASSWORD" and
+                self.msf_username and self.msf_password)
+    
+    def _normalize_msf_status(self, status: str) -> str:
+        """Normalize MySportsFeeds game status"""
+        status_map = {
+            'UNPLAYED': 'scheduled',
+            'LIVE': 'in_progress',
+            'COMPLETED': 'final',
+            'POSTPONED': 'postponed'
+        }
+        return status_map.get(status, 'scheduled')
+    
+    def _normalize_balldontlie_status(self, status: str) -> str:
+        """Normalize BallDontLie game status"""
         status_map = {
             'Scheduled': 'scheduled',
             'InProgress': 'in_progress',
             'Final': 'final',
-            'Postponed': 'postponed',
-            'Canceled': 'canceled'
+            'Postponed': 'postponed'
         }
         return status_map.get(status, 'scheduled')
     
     def _normalize_espn_status(self, status: str) -> str:
-        """Normalize game status from ESPN"""
+        """Normalize ESPN game status"""
         status_map = {
             'STATUS_SCHEDULED': 'scheduled',
             'STATUS_IN_PROGRESS': 'in_progress',
             'STATUS_FINAL': 'final',
-            'STATUS_POSTPONED': 'postponed',
-            'STATUS_CANCELED': 'canceled'
+            'STATUS_POSTPONED': 'postponed'
         }
         return status_map.get(status, 'scheduled')
 
