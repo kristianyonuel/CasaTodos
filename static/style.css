@@ -539,6 +539,80 @@ body {
     margin: 0 10px;
 }
 
+/* Progress Bar */
+.progress-info {
+    margin-top: 15px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #28a745;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+/* Status Cards */
+.game-status {
+    margin-bottom: 30px;
+}
+
+.status-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.status-card {
+    background: #e3f2fd;
+    padding: 20px;
+    border-radius: 8px;
+    border-left: 4px solid #2196f3;
+    text-align: center;
+}
+
+.status-card h4 {
+    color: #1976d2;
+    margin-bottom: 10px;
+}
+
+/* Info Grid */
+.recent-activity h3 {
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.info-item {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #6c757d;
+}
+
+/* Admin button styling */
+.action-btn.admin {
+    background: #dc3545;
+    color: white;
+}
+
+.action-btn.admin:hover {
+    background: #c82333;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .container {

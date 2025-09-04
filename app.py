@@ -231,44 +231,57 @@ def index():
         current_week = get_current_nfl_week()
         current_year = datetime.datetime.now().year
         
-        print(f"Dashboard data - Week: {current_week}, Year: {current_year}, User: {session.get('username')}")
+        # Get user stats
+        conn = sqlite3.connect('nfl_fantasy.db')
+        cursor = conn.cursor()
         
-        # Verify all template variables are available
+        # Get user's total picks this week
+        cursor.execute('''
+            SELECT COUNT(*) FROM user_picks up
+            JOIN nfl_games g ON up.game_id = g.id
+            WHERE up.user_id = ? AND g.week = ? AND g.year = ?
+        ''', (session['user_id'], current_week, current_year))
+        user_picks_count = cursor.fetchone()[0]
+        
+        # Get total games this week
+        cursor.execute('''
+            SELECT COUNT(*) FROM nfl_games
+            WHERE week = ? AND year = ?
+        ''', (current_week, current_year))
+        total_games = cursor.fetchone()[0]
+        
+        # Get user's total wins
+        cursor.execute('''
+            SELECT COUNT(*) FROM weekly_results
+            WHERE user_id = ? AND is_winner = 1
+        ''', (session['user_id'],))
+        user_wins = cursor.fetchone()[0]
+        
+        # Get league stats
+        cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = 0')
+        total_players = cursor.fetchone()[0]
+        
+        conn.close()
+        
         template_data = {
             'current_week': current_week, 
             'current_year': current_year,
-            'username': session.get('username', 'Unknown')
+            'username': session.get('username', 'User'),
+            'user_picks_count': user_picks_count,
+            'total_games': total_games,
+            'user_wins': user_wins,
+            'total_players': total_players
         }
         
-        print(f"Template data: {template_data}")
-        
+        print(f"Dashboard loaded successfully: {template_data}")
         return render_template('index.html', **template_data)
         
     except Exception as e:
-        print(f"Index error: {e}")
+        print(f"Dashboard error: {e}")
         import traceback
         traceback.print_exc()
-        
-        # Try rendering with minimal data
-        try:
-            return render_template('index.html', 
-                                 current_week=1, 
-                                 current_year=2024,
-                                 username=session.get('username', 'User'))
-        except Exception as template_error:
-            print(f"Template error: {template_error}")
-            # Return simple HTML if template fails
-            return f'''
-            <html>
-                <body>
-                    <h1>La Casa de Todos</h1>
-                    <p>Welcome {session.get('username', 'User')}!</p>
-                    <p>Dashboard is loading...</p>
-                    <a href="/games">Make Picks</a> | 
-                    <a href="/logout">Logout</a>
-                </body>
-            </html>
-            '''
+        flash('Error loading dashboard', 'error')
+        return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -372,19 +385,16 @@ def games():
     print(f"Games route accessed - Session: {dict(session)}")
     
     if 'user_id' not in session:
-        print("No user_id in session, redirecting to login")
         return redirect(url_for('login'))
     
     week = request.args.get('week', get_current_nfl_week(), type=int)
     year = request.args.get('year', datetime.datetime.now().year, type=int)
     
-    print(f"Loading games for week {week}, year {year}")
-    
     try:
-        # Get games from database or fetch new ones
         conn = sqlite3.connect('nfl_fantasy.db')
         cursor = conn.cursor()
         
+        # Get games for the week
         cursor.execute('''
             SELECT id, week, year, game_id, home_team, away_team, game_date, 
                    is_monday_night, is_thursday_night, home_score, away_score, is_final
@@ -393,23 +403,21 @@ def games():
         
         db_games = cursor.fetchall()
         
+        # If no games in database, create sample games
         if not db_games:
-            # Fetch from API and store
-            api_games = fetch_nfl_games(week, year)
-            for game in api_games:
+            print(f"No games found for week {week}, creating sample games...")
+            sample_games = create_sample_games(week, year)
+            
+            for game in sample_games:
                 cursor.execute('''
-                    INSERT OR REPLACE INTO nfl_games 
-                    (game_id, week, year, home_team, away_team, game_date, 
-                     is_monday_night, is_thursday_night, home_score, away_score, is_final)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (game['id'], game['week'], game['year'], game['home_team'], 
-                      game['away_team'], game['game_date'], game['is_monday_night'],
-                      game['is_thursday_night'], game.get('home_score'), 
-                      game.get('away_score'), game['is_final']))
+                    INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_monday_night, is_thursday_night)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (game['week'], game['year'], game['game_id'], game['home_team'], 
+                      game['away_team'], game['game_date'], game['is_monday_night'], game['is_thursday_night']))
             
             conn.commit()
             
-            # Fetch again from database
+            # Fetch again
             cursor.execute('''
                 SELECT id, week, year, game_id, home_team, away_team, game_date, 
                        is_monday_night, is_thursday_night, home_score, away_score, is_final
@@ -451,8 +459,7 @@ def games():
                 'is_final': bool(game[11])
             })
         
-        print(f"Found {len(games_list)} games for week {week}")
-        print(f"User has {len(user_picks)} existing picks")
+        print(f"Games page loaded: {len(games_list)} games, {len(user_picks)} user picks")
         
         return render_template('games.html', 
                              games=games_list, 
@@ -466,6 +473,85 @@ def games():
         traceback.print_exc()
         flash('Error loading games. Please try again.', 'error')
         return redirect(url_for('index'))
+
+def create_sample_games(week, year):
+    """Create sample NFL games for testing"""
+    import random
+    
+    nfl_teams = [
+        'KC', 'BUF', 'DAL', 'NYG', 'SF', 'LAR', 'NE', 'MIA', 'GB', 'CHI',
+        'DEN', 'LV', 'LAC', 'PIT', 'BAL', 'CIN', 'CLE', 'HOU', 'IND', 'JAX',
+        'TEN', 'NO', 'ATL', 'CAR', 'TB', 'MIN', 'DET', 'PHI', 'WAS', 'NYJ',
+        'ARI', 'SEA'
+    ]
+    
+    base_date = datetime.datetime(year, 9, 7)  # Start of NFL season
+    week_start = base_date + datetime.timedelta(weeks=week-1)
+    
+    games = []
+    
+    # Thursday Night Football
+    home_team = random.choice(nfl_teams)
+    away_team = random.choice([t for t in nfl_teams if t != home_team])
+    games.append({
+        'week': week,
+        'year': year,
+        'game_id': f'tnf_week_{week}',
+        'home_team': home_team,
+        'away_team': away_team,
+        'game_date': week_start + datetime.timedelta(days=3, hours=20, minutes=15),  # Thursday 8:15 PM
+        'is_monday_night': False,
+        'is_thursday_night': True
+    })
+    
+    # Sunday games
+    used_teams = {home_team, away_team}
+    sunday_games = 14  # Typical number of Sunday games
+    
+    for i in range(sunday_games):
+        available_teams = [t for t in nfl_teams if t not in used_teams]
+        if len(available_teams) < 2:
+            break
+            
+        home_team = random.choice(available_teams)
+        away_team = random.choice([t for t in available_teams if t != home_team])
+        used_teams.update({home_team, away_team})
+        
+        # Distribute games across Sunday
+        if i < 8:  # 1 PM games
+            game_time = week_start + datetime.timedelta(days=6, hours=13)  # Sunday 1 PM
+        else:  # 4:25 PM games
+            game_time = week_start + datetime.timedelta(days=6, hours=16, minutes=25)  # Sunday 4:25 PM
+        
+        games.append({
+            'week': week,
+            'year': year,
+            'game_id': f'sun_week_{week}_game_{i+1}',
+            'home_team': home_team,
+            'away_team': away_team,
+            'game_date': game_time,
+            'is_monday_night': False,
+            'is_thursday_night': False
+        })
+    
+    # Monday Night Football
+    available_teams = [t for t in nfl_teams if t not in used_teams]
+    if len(available_teams) >= 2:
+        home_team = random.choice(available_teams)
+        away_team = random.choice([t for t in available_teams if t != home_team])
+        
+        games.append({
+            'week': week,
+            'year': year,
+            'game_id': f'mnf_week_{week}',
+            'home_team': home_team,
+            'away_team': away_team,
+            'game_date': week_start + datetime.timedelta(days=7, hours=20, minutes=15),  # Monday 8:15 PM
+            'is_monday_night': True,
+            'is_thursday_night': False
+        })
+    
+    return games
 
 @app.route('/submit_picks', methods=['POST'])
 def submit_picks():
