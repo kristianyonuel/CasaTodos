@@ -531,7 +531,7 @@ def admin_all_picks():
             
             if not picks_data:
                 return jsonify([])
-            
+
             # Get user info
             user_ids = list(set(row['user_id'] for row in picks_data))
             if user_ids:
@@ -1608,40 +1608,123 @@ def weekly_leaderboard(week=None, year=None):
         year = 2025
     
     try:
-        # Import the scoring manager
-        from scoring_manager import scoring_manager
+        conn = get_db_legacy()
+        cursor = conn.cursor()
         
-        # Get weekly rankings with Monday Night tiebreakers
-        weekly_results = scoring_manager.determine_week_winner(week, year)
+        # First, check if we have any completed games for this week
+        cursor.execute('''
+            SELECT COUNT(*) FROM nfl_games 
+            WHERE week = ? AND year = ? AND is_final = 1
+        ''', (week, year))
+        completed_games = cursor.fetchone()[0]
         
-        # Prepare data for template
+        if completed_games == 0:
+            # No completed games, show message
+            cursor.execute('''
+                SELECT DISTINCT week, year 
+                FROM nfl_games 
+                WHERE is_final = 1
+                ORDER BY year DESC, week DESC
+                LIMIT 10
+            ''')
+            available_weeks = cursor.fetchall()
+            conn.close()
+            
+            return render_template('weekly_leaderboard.html', 
+                                 leaderboard=[],
+                                 current_week=week,
+                                 current_year=year,
+                                 available_weeks=available_weeks,
+                                 no_data_message=f"No completed games for Week {week}, {year}")
+        
+        # Get users who made picks for this week with basic scoring
+        cursor.execute('''
+            SELECT u.id, u.username,
+                   COUNT(p.id) as total_picks,
+                   SUM(CASE WHEN p.is_correct = 1 THEN 1 ELSE 0 END) as correct_picks,
+                   SUM(COALESCE(p.points_earned, 0)) as total_points
+            FROM users u
+            JOIN user_picks p ON u.id = p.user_id
+            JOIN nfl_games g ON p.game_id = g.id
+            WHERE g.week = ? AND g.year = ? AND g.is_final = 1 AND u.is_admin = 0
+            GROUP BY u.id, u.username
+            HAVING total_picks > 0
+            ORDER BY correct_picks DESC, total_points DESC, u.username
+        ''', (week, year))
+        
+        user_results = cursor.fetchall()
+        
+        # Get Monday Night data for tiebreakers
         leaderboard_data = []
-        for i, user_data in enumerate(weekly_results, 1):
-            monday_data = user_data.get('monday_tiebreaker', {})
+        for i, (user_id, username, total_picks, correct_picks, total_points) in enumerate(user_results, 1):
+            
+            # Get Monday Night pick data for this user
+            cursor.execute('''
+                SELECT p.predicted_home_score, p.predicted_away_score,
+                       g.home_score, g.away_score, g.home_team, g.away_team
+                FROM user_picks p
+                JOIN nfl_games g ON p.game_id = g.id
+                WHERE p.user_id = ? AND g.week = ? AND g.year = ? 
+                  AND g.is_monday_night = 1 AND g.is_final = 1
+                LIMIT 1
+            ''', (user_id, week, year))
+            
+            monday_pick = cursor.fetchone()
+            
+            # Calculate Monday Night tiebreaker data
+            monday_tiebreaker = {'has_pick': False}
+            if monday_pick:
+                pred_home = monday_pick[0] or 0
+                pred_away = monday_pick[1] or 0
+                actual_home = monday_pick[2] or 0
+                actual_away = monday_pick[3] or 0
+                
+                monday_tiebreaker = {
+                    'has_pick': True,
+                    'home_diff': abs(pred_home - actual_home),
+                    'away_diff': abs(pred_away - actual_away),
+                    'total_diff': abs((pred_home + pred_away) - (actual_home + actual_away)),
+                    'home_team': monday_pick[4] or '',
+                    'away_team': monday_pick[5] or '',
+                    'predicted_home': pred_home,
+                    'predicted_away': pred_away,
+                    'actual_home': actual_home,
+                    'actual_away': actual_away
+                }
             
             leaderboard_data.append({
                 'rank': i,
-                'username': user_data['username'],
-                'total_score': user_data['total_score'],
-                'breakdown': user_data.get('breakdown', {}),
-                'monday_tiebreaker': {
-                    'has_pick': monday_data.get('has_monday_pick', False),
-                    'home_diff': monday_data.get('home_difference', 0),
-                    'away_diff': monday_data.get('away_difference', 0),
-                    'total_diff': monday_data.get('total_difference', 0),
-                    'home_team': monday_data.get('home_team', ''),
-                    'away_team': monday_data.get('away_team', ''),
-                    'predicted_home': monday_data.get('predicted_home', 0),
-                    'predicted_away': monday_data.get('predicted_away', 0),
-                    'actual_home': monday_data.get('actual_home', 0),
-                    'actual_away': monday_data.get('actual_away', 0)
+                'username': username,
+                'total_score': total_points or 0,
+                'total_picks': total_picks,
+                'correct_picks': correct_picks,
+                'breakdown': {
+                    'exact_predictions': correct_picks * 10,  # Simplified
+                    'proximity_points': max(0, (total_points or 0) - (correct_picks * 10)),
+                    'total_proximity_bonus': 0,
+                    'total_score': total_points or 0
                 },
+                'monday_tiebreaker': monday_tiebreaker,
                 'is_winner': i == 1
             })
         
+        # Re-sort with Monday Night tiebreaker logic if there are ties
+        # This is a simplified version - in practice you'd use the full scoring_manager
+        leaderboard_data.sort(key=lambda x: (
+            -x['correct_picks'],                               # Most correct picks first
+            -x['total_score'],                                 # Highest score
+            x['monday_tiebreaker'].get('home_diff', 999),      # Closest to home team
+            x['monday_tiebreaker'].get('away_diff', 999),      # Closest to away team
+            x['monday_tiebreaker'].get('total_diff', 999),     # Closest to total
+            x['username']                                      # Alphabetical as final tiebreaker
+        ))
+        
+        # Update ranks after sorting
+        for i, user in enumerate(leaderboard_data, 1):
+            user['rank'] = i
+            user['is_winner'] = i == 1
+        
         # Get available weeks for navigation
-        conn = get_db_legacy()
-        cursor = conn.cursor()
         cursor.execute('''
             SELECT DISTINCT week, year 
             FROM nfl_games 
@@ -1660,8 +1743,100 @@ def weekly_leaderboard(week=None, year=None):
     
     except Exception as e:
         logger.error(f"Error in weekly leaderboard: {e}")
-        flash('Error loading weekly leaderboard', 'error')
+        flash(f'Error loading weekly leaderboard: {str(e)}', 'error')
         return redirect(url_for('leaderboard'))
+
+@app.route('/debug_leaderboard')
+def debug_leaderboard():
+    """Debug route to test leaderboard functionality"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    if not session.get('is_admin'):
+        flash('Admin access required', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        debug_info = []
+        conn = get_db_legacy()
+        cursor = conn.cursor()
+        
+        # Check database structure
+        debug_info.append("=== DATABASE STRUCTURE ===")
+        
+        # Check users table
+        cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = 0')
+        user_count = cursor.fetchone()[0]
+        debug_info.append(f"Non-admin users: {user_count}")
+        
+        # Check games table
+        cursor.execute('SELECT COUNT(*) FROM nfl_games')
+        total_games = cursor.fetchone()[0]
+        debug_info.append(f"Total games: {total_games}")
+        
+        cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE is_final = 1')
+        completed_games = cursor.fetchone()[0]
+        debug_info.append(f"Completed games: {completed_games}")
+        
+        # Check picks table
+        cursor.execute('SELECT COUNT(*) FROM user_picks')
+        total_picks = cursor.fetchone()[0]
+        debug_info.append(f"Total picks: {total_picks}")
+        
+        # Sample games data
+        debug_info.append("\n=== SAMPLE GAMES ===")
+        cursor.execute('''
+            SELECT game_id, week, year, home_team, away_team, is_final, is_monday_night
+            FROM nfl_games 
+            ORDER BY year DESC, week DESC, game_date DESC
+            LIMIT 5
+        ''')
+        games = cursor.fetchall()
+        for game in games:
+            debug_info.append(f"Game: {game[0]} - Week {game[1]}/{game[2]} - {game[3]} vs {game[4]} - Final: {game[5]} - MNF: {game[6]}")
+        
+        # Current week calculation
+        debug_info.append("\n=== CURRENT WEEK CALCULATION ===")
+        from datetime import datetime
+        current_date = datetime.now()
+        season_start = datetime(2025, 9, 4)
+        days_since_start = (current_date - season_start).days
+        calculated_week = max(1, min(18, (days_since_start // 7) + 1))
+        debug_info.append(f"Current date: {current_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        debug_info.append(f"Days since season start: {days_since_start}")
+        debug_info.append(f"Calculated week: {calculated_week}")
+        
+        # Test leaderboard query
+        debug_info.append("\n=== LEADERBOARD QUERY TEST ===")
+        week = calculated_week
+        year = 2025
+        
+        cursor.execute('''
+            SELECT u.id, u.username,
+                   COUNT(p.id) as total_picks,
+                   SUM(CASE WHEN p.is_correct = 1 THEN 1 ELSE 0 END) as correct_picks,
+                   SUM(COALESCE(p.points_earned, 0)) as total_points
+            FROM users u
+            JOIN user_picks p ON u.id = p.user_id
+            JOIN nfl_games g ON p.game_id = g.id
+            WHERE g.week = ? AND g.year = ? AND g.is_final = 1 AND u.is_admin = 0
+            GROUP BY u.id, u.username
+            HAVING total_picks > 0
+            ORDER BY correct_picks DESC, total_points DESC, u.username
+        ''', (week, year))
+        
+        results = cursor.fetchall()
+        debug_info.append(f"Query for Week {week}, {year} returned {len(results)} users")
+        for result in results:
+            debug_info.append(f"  User: {result[1]} - Picks: {result[2]} - Correct: {result[3]} - Points: {result[4]}")
+        
+        conn.close()
+        
+        # Return debug info as plain text
+        return '<pre>' + '\n'.join(debug_info) + '</pre>'
+        
+    except Exception as e:
+        return f'<pre>Error in debug: {str(e)}</pre>'
 
 if __name__ == '__main__':
     import os
