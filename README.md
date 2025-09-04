@@ -28,44 +28,27 @@ La Casa de Todos is a custom NFL fantasy league designed for family fun and comp
 
 ## 🚀 Quick Start
 
-### For Externally-Managed Python Environments
+### Running on Port 443 (HTTPS/HTTP)
 
-If you get "externally-managed-environment" errors, use one of these methods:
-
-#### Method 1: Use the externally-managed launcher
+#### Method 1: Run as Administrator (Recommended for Port 443)
 ```bash
-python run-externally-managed.py
+# Right-click and "Run as Administrator"
+run-443.bat
+
+# Or in Admin PowerShell/CMD:
+python run-port-443.py
 ```
 
-#### Method 2: Install dependencies with system override
+#### Method 2: Direct execution with admin privileges
 ```bash
-python install-dependencies.py
+# Run PowerShell/CMD as Administrator, then:
 python app.py
 ```
 
-#### Method 3: Manual installation with user flag
-```bash
-pip install --user -r requirements.txt
-python app.py
-```
-
-#### Method 4: Override system protection (advanced users)
-```bash
-pip install --break-system-packages -r requirements.txt
-python app.py
-```
-
-### Standard Installation
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-python app.py
-```
-
-### Access the Application
-Open your browser and go to: **http://127.0.0.1:5000**
+### Access URLs
+- **Port 443 HTTPS**: https://localhost:443 or https://127.0.0.1:443
+- **Port 443 HTTP**: http://localhost:443 or http://127.0.0.1:443
+- **Fallback Port**: http://127.0.0.1:5000 or http://127.0.0.1:8443
 
 ## 🎮 How to Play
 
@@ -136,11 +119,17 @@ The application uses SQLite database with the following tables:
 
 ## 🔧 Configuration
 
-### Externally-Managed Environment Error
-If you see "This environment is externally managed", try:
-1. Run `python run-externally-managed.py`
-2. Use `pip install --user` flag
-3. Use `pip install --break-system-packages` (advanced users)
+### Port 443 Setup
+- **Windows**: Requires Administrator privileges
+- **HTTPS**: Self-signed certificate (browser warnings expected)
+- **HTTP Fallback**: If HTTPS fails
+- **Alternative Ports**: 8443, 5000 if 443 unavailable
+
+### SSL Certificate Warnings
+When using self-signed certificates on port 443:
+1. Browser will show security warnings
+2. Click "Advanced" then "Proceed to localhost (unsafe)"
+3. Or add certificate exception in browser settings
 
 ### Common Issues
 - **Externally-managed error**: Use the provided launcher scripts
