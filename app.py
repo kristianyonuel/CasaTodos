@@ -404,7 +404,7 @@ def admin_modify_user():
         
     except Exception as e:
         logger.error(f"Admin modify user error: {e}")
-        return jsonify({'error': str(e)}), 500
+        # Removed stray return statement that was outside any function
 
 @app.route('/admin/modify_pick', methods=['POST'])
 def admin_modify_pick():
@@ -493,164 +493,10 @@ def internal_error(error):
     return render_template('error.html', error="Internal server error"), 500
 
 if __name__ == '__main__':
-    logger.info("🚀 Starting La Casa de Todos NFL Fantasy League...")
+    if not os.path.exists('templates'):
+        os.makedirs('templates')
+    if not os.path.exists('static'):
+        os.makedirs('static')
+    print("🚀 Starting La Casa de Todos NFL Fantasy League...")
+    print("=" * 60)
     app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-    
-    try:
-        year = request.json.get('year', datetime.now().year)
-        return jsonify({
-            'success': True, 
-            'message': f'Season {year} data synchronized',
-            'games_added': 0
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.errorhandler(Exception)
-def handle_exception(e):
-    logger.error(f"Unhandled exception: {e}", exc_info=True)
-    return render_template('error.html', error="An unexpected error occurred"), 500
-
-@app.errorhandler(404)
-def not_found_error(error):
-    return render_template('error.html', error="Page not found"), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    return render_template('error.html', error="Internal server error"), 500
-
-# Make sure this is inside a function, not at the top level!
-@app.route('/sync_season', methods=['POST'])
-def sync_season():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-
-    try:
-        year = request.json.get('year', datetime.datetime.now().year)
-        games_added = auto_populate_all_games()
-        return jsonify({
-            'success': True,
-            'message': f'Synced games for {year} season',
-            'games_added': games_added
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    try:
-        logger.info("🚀 Starting La Casa de Todos NFL Fantasy League...")
-        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-    except Exception as e:
-        logger.error(f"❌ Startup failed: {e}")
-    print("🚀 Starting La Casa de Todos NFL Fantasy League...")
-    print("=" * 60)
-    
-    try:
-        print("📁 Initializing database...")
-        init_database()
-        
-        print("🏈 Auto-populating NFL games...")
-        auto_populate_all_games()
-        
-        app.config['DEBUG'] = True
-        app.config['TEMPLATES_AUTO_RELOAD'] = True
-        
-        print("=" * 60)
-        print("🏈 Application ready!")
-        print("Access at: http://127.0.0.1:5000")
-        print("=" * 60)
-        
-        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-        
-    except Exception as e:
-        print(f"❌ Application startup failed: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-        
-    except Exception as e:
-        print(f"❌ Application startup failed: {e}")
-        import traceback
-        traceback.print_exc()
-            'success': True,
-            'message': f'Synced games for {year} season',
-            'games_added': games_added
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    if not os.path.exists('templates'):
-        os.makedirs('templates')
-    if not os.path.exists('static'):
-        os.makedirs('static')
-    
-    print("🚀 Starting La Casa de Todos NFL Fantasy League...")
-    print("=" * 60)
-    
-    try:
-        print("📁 Initializing database...")
-        init_database()
-        
-        print("🏈 Auto-populating NFL games...")
-        auto_populate_all_games()
-        
-        app.config['DEBUG'] = True
-        app.config['TEMPLATES_AUTO_RELOAD'] = True
-        
-        print("=" * 60)
-        print("🏈 Application ready!")
-        print("Access at: http://127.0.0.1:5000")
-        print("=" * 60)
-        
-        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-        
-    except Exception as e:
-        print(f"❌ Application startup failed: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-        
-    except Exception as e:
-        print(f"❌ Application startup failed: {e}")
-        import traceback
-        traceback.print_exc()
-            'success': True,
-            'message': f'Synced games for {year} season',
-            'games_added': games_added
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    if not os.path.exists('templates'):
-        os.makedirs('templates')
-    if not os.path.exists('static'):
-        os.makedirs('static')
-    
-    print("🚀 Starting La Casa de Todos NFL Fantasy League...")
-    print("=" * 60)
-    
-    try:
-        print("📁 Initializing database...")
-        init_database()
-        
-        print("🏈 Auto-populating NFL games...")
-        auto_populate_all_games()
-        
-        app.config['DEBUG'] = True
-        app.config['TEMPLATES_AUTO_RELOAD'] = True
-        
-        print("=" * 60)
-        print("🏈 Application ready!")
-        print("Access at: http://127.0.0.1:5000")
-        print("=" * 60)
-        
-        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-        
-    except Exception as e:
-        print(f"❌ Application startup failed: {e}")
-        import traceback
-        traceback.print_exc()
