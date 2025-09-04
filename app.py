@@ -529,11 +529,6 @@ def admin_delete_game():
     if 'user_id' not in session or not session.get('is_admin'):
         return jsonify({'error': 'Admin access required'}), 403
     
-@app.route('/admin/delete_game', methods=['POST'])
-def admin_delete_game():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
     try:
         data = request.get_json()
         game_id = data.get('game_id')
