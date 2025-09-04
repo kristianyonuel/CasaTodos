@@ -108,13 +108,13 @@ def games():
     
     # Placeholder until game service is ready
     return render_template('games.html', 
-                         games=[], 
-                         user_picks={},
-                         current_week=1,
-                         current_year=2025,
-                         available_weeks=list(range(1, 19)),
-                         current_nfl_week=1,
-                         total_games=0)
+                          games=[], 
+                          user_picks={},
+                          current_week=1,
+                          current_year=2025,
+                          available_weeks=list(range(1, 19)),
+                          current_nfl_week=1,
+                          total_games=0)
 
 @app.errorhandler(Exception)
 def handle_exception(e):
