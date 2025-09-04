@@ -117,65 +117,49 @@ def get_user_picks_for_week(user_id, week, year):
 @app.before_first_request
 def initialize_app():
     """Initialize application on first request"""
-    try:
-        logger.info("Checking database initialization...")
-        # Only run setup if database doesn't exist
-        if not os.path.exists(DATABASE_PATH):
-            logger.info("Database not found, running setup...")
-            setup_complete_database()
-        else:
-            logger.info("Database exists, skipping setup")
-    except Exception as e:
-        logger.error(f"Application initialization failed: {e}")
+    logger.info("Checking database initialization...")
+    if not os.path.exists(DATABASE_PATH):
+        logger.info("Database not found, running setup...")
+        setup_complete_database()
+    else:
+        logger.info("Database exists, skipping setup")
 
 @app.route('/')
 def index():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    try:
-        dashboard_data = get_dashboard_data(session['user_id'])
-        dashboard_data['username'] = session.get('username', 'User')
-        
-        logger.info(f"Dashboard loaded for user: {session.get('username')}")
-        return render_template('index.html', **dashboard_data)
-        
-    except Exception as e:
-        logger.error(f"Dashboard error: {e}")
-        flash('Error loading dashboard', 'error')
-        return redirect(url_for('login'))
+    dashboard_data = get_dashboard_data(session['user_id'])
+    dashboard_data['username'] = session.get('username', 'User')
+    
+    logger.info(f"Dashboard loaded for user: {session.get('username')}")
+    return render_template('index.html', **dashboard_data)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        try:
-            username = request.form.get('username', '').strip()
-            password = request.form.get('password', '').strip()
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        if not username or not password:
+            flash('Please enter both username and password', 'error')
+            return render_template('login.html')
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
+            user = cursor.fetchone()
+        
+        if user and check_password_hash(user[1], password):
+            session['user_id'] = user[0]
+            session['username'] = username
+            session['is_admin'] = bool(user[2])
             
-            if not username or not password:
-                flash('Please enter both username and password', 'error')
-                return render_template('login.html')
-            
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
-                user = cursor.fetchone()
-            
-            if user and check_password_hash(user[1], password):
-                session['user_id'] = user[0]
-                session['username'] = username
-                session['is_admin'] = bool(user[2])
-                
-                logger.info(f"User {username} logged in successfully")
-                flash('Successfully logged in!', 'success')
-                return redirect(url_for('index'))
-            else:
-                logger.warning(f"Failed login attempt for username: {username}")
-                flash('Invalid username or password', 'error')
-                
-        except Exception as e:
-            logger.error(f"Login error: {e}")
-            flash('Login error occurred. Please try again.', 'error')
+            logger.info(f"User {username} logged in successfully")
+            flash('Successfully logged in!', 'success')
+            return redirect(url_for('index'))
+        else:
+            flash('Invalid username or password', 'error')
     
     return render_template('login.html')
 
@@ -195,61 +179,50 @@ def games():
     week = request.args.get('week', 1, type=int)
     year = request.args.get('year', datetime.now().year, type=int)
     
-    try:
-        games_data = get_games_for_week(week, year)
-        user_picks = get_user_picks_for_week(session['user_id'], week, year)
-        
-        return render_template('games.html',
-                               games=games_data,
-                               user_picks=user_picks,
-                               current_week=week,
-                               current_year=year,
-                               available_weeks=list(range(1, 19)),
-                               current_nfl_week=1,
-                               total_games=len(games_data))
-                               
-    except Exception as e:
-        logger.error(f"Games page error: {e}")
-        flash(f'Error loading games for Week {week}', 'error')
-        return redirect(url_for('index'))
+    games_data = get_games_for_week(week, year)
+    user_picks = get_user_picks_for_week(session['user_id'], week, year)
+    
+    return render_template('games.html',
+                          games=games_data,
+                          user_picks=user_picks,
+                          current_week=week,
+                          current_year=year,
+                          available_weeks=list(range(1, 19)),
+                          current_nfl_week=1,
+                          total_games=len(games_data))
 
 @app.route('/submit_picks', methods=['POST'])
 def submit_picks():
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
     
-    try:
-        data = request.get_json()
-        picks = data.get('picks', [])
+    data = request.get_json()
+    picks = data.get('picks', [])
+    
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        successful_picks = 0
         
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            successful_picks = 0
+        for pick in picks:
+            game_id = pick.get('game_id')
+            selected_team = pick.get('selected_team')
+            home_score = pick.get('home_score')
+            away_score = pick.get('away_score')
             
-            for pick in picks:
-                game_id = pick.get('game_id')
-                selected_team = pick.get('selected_team')
-                home_score = pick.get('home_score')
-                away_score = pick.get('away_score')
-                
-                if not game_id or not selected_team:
-                    continue
-                
-                cursor.execute('''
-                    INSERT OR REPLACE INTO user_picks 
-                    (user_id, game_id, selected_team, predicted_home_score, predicted_away_score)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (session['user_id'], game_id, selected_team, home_score, away_score))
-                successful_picks += 1
+            if not game_id or not selected_team:
+                continue
             
-            conn.commit()
+            cursor.execute('''
+                INSERT OR REPLACE INTO user_picks 
+                (user_id, game_id, selected_team, predicted_home_score, predicted_away_score)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (session['user_id'], game_id, selected_team, home_score, away_score))
+            successful_picks += 1
         
-        logger.info(f"User {session['user_id']} submitted {successful_picks} picks")
-        return jsonify({'success': True, 'message': f'Successfully submitted {successful_picks} picks!'})
-        
-    except Exception as e:
-        logger.error(f"Submit picks error: {e}")
-        return jsonify({'error': 'Failed to submit picks'}), 500
+        conn.commit()
+    
+    logger.info(f"User {session['user_id']} submitted {successful_picks} picks")
+    return jsonify({'success': True, 'message': f'Successfully submitted {successful_picks} picks!'})
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -499,6 +472,33 @@ def force_create_games(week, year):
 def sync_season():
     if 'user_id' not in session or not session.get('is_admin'):
         return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        year = request.json.get('year', datetime.now().year)
+        return jsonify({
+            'success': True, 
+            'message': f'Season {year} data synchronized',
+            'games_added': 0
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logger.error(f"Unhandled exception: {e}", exc_info=True)
+    return render_template('error.html', error="An unexpected error occurred"), 500
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('error.html', error="Page not found"), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return render_template('error.html', error="Internal server error"), 500
+
+if __name__ == '__main__':
+    logger.info("🚀 Starting La Casa de Todos NFL Fantasy League...")
+    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
     
     try:
         year = request.json.get('year', datetime.now().year)
