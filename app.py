@@ -235,47 +235,45 @@ def games():
     # Auto-update live scores on page load
     update_live_scores(week, year)
     
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT * FROM nfl_games 
-        WHERE week = ? AND year = ? 
-        ORDER BY game_date
-    ''', (week, year))
-    games_raw = cursor.fetchall()
-    
-    # Convert games to proper format with AST datetime objects
-    games_data = []
-    for game in games_raw:
-        game_dict = dict(game)
-        # Convert string date to datetime object and ensure AST
-        if game_dict['game_date']:
-            try:
-                if isinstance(game_dict['game_date'], str):
-                    dt = datetime.strptime(game_dict['game_date'], '%Y-%m-%d %H:%M:%S')
-                    # Convert to AST
-                    game_dict['game_date'] = convert_to_ast(dt)
-            except (ValueError, TypeError):
-                game_dict['game_date'] = None
-        games_data.append(game_dict)
-    
-    cursor.execute('''
-        SELECT g.id, up.selected_team, up.predicted_home_score, up.predicted_away_score
-        FROM user_picks up
-        JOIN nfl_games g ON up.game_id = g.id
-        WHERE up.user_id = ? AND g.week = ? AND g.year = ?
-    ''', (session['user_id'], week, year))
-    
-    user_picks = {}
-    for row in cursor.fetchall():
-        user_picks[row[0]] = {
-            'selected_team': row[1],
-            'predicted_home_score': row[2],
-            'predicted_away_score': row[3]
-        }
-    
-    conn.close()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT * FROM nfl_games 
+            WHERE week = ? AND year = ? 
+            ORDER BY game_date
+        ''', (week, year))
+        games_raw = cursor.fetchall()
+        
+        # Convert games to proper format with AST datetime objects
+        games_data = []
+        for game in games_raw:
+            game_dict = dict(game)
+            # Convert string date to datetime object and ensure AST
+            if game_dict['game_date']:
+                try:
+                    if isinstance(game_dict['game_date'], str):
+                        dt = datetime.strptime(game_dict['game_date'], '%Y-%m-%d %H:%M:%S')
+                        # Convert to AST
+                        game_dict['game_date'] = convert_to_ast(dt)
+                except (ValueError, TypeError):
+                    game_dict['game_date'] = None
+            games_data.append(game_dict)
+        
+        cursor.execute('''
+            SELECT g.id, up.selected_team, up.predicted_home_score, up.predicted_away_score
+            FROM user_picks up
+            JOIN nfl_games g ON up.game_id = g.id
+            WHERE up.user_id = ? AND g.week = ? AND g.year = ?
+        ''', (session['user_id'], week, year))
+        
+        user_picks = {}
+        for row in cursor.fetchall():
+            user_picks[row[0]] = {
+                'selected_team': row[1],
+                'predicted_home_score': row[2],
+                'predicted_away_score': row[3]
+            }
     
     return render_template('games.html',
                           games=games_data,
@@ -294,26 +292,25 @@ def submit_picks():
     data = request.get_json()
     picks = data.get('picks', [])
     
-    conn = get_db()
-    cursor = conn.cursor()
-    successful_picks = 0
-    
-    for pick in picks:
-        game_id = pick.get('game_id')
-        selected_team = pick.get('selected_team')
-        home_score = pick.get('home_score')
-        away_score = pick.get('away_score')
+    with get_db() as conn:
+        cursor = conn.cursor()
+        successful_picks = 0
         
-        if game_id and selected_team:
-            cursor.execute('''
-                INSERT OR REPLACE INTO user_picks 
-                (user_id, game_id, selected_team, predicted_home_score, predicted_away_score)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (session['user_id'], game_id, selected_team, home_score, away_score))
-            successful_picks += 1
-    
-    conn.commit()
-    conn.close()
+        for pick in picks:
+            game_id = pick.get('game_id')
+            selected_team = pick.get('selected_team')
+            home_score = pick.get('home_score')
+            away_score = pick.get('away_score')
+            
+            if game_id and selected_team:
+                cursor.execute('''
+                    INSERT OR REPLACE INTO user_picks 
+                    (user_id, game_id, selected_team, predicted_home_score, predicted_away_score)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (session['user_id'], game_id, selected_team, home_score, away_score))
+                successful_picks += 1
+        
+        conn.commit()
     
     return jsonify({'success': True, 'message': f'Successfully submitted {successful_picks} picks!'})
 
@@ -435,19 +432,18 @@ def admin_schedule():
     week = request.args.get('week', 1, type=int)
     year = request.args.get('year', datetime.now().year, type=int)
     
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT * FROM nfl_games 
-        WHERE week = ? AND year = ? 
-        ORDER BY game_date
-    ''', (week, year))
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM nfl_games 
+            WHERE week = ? AND year = ? 
+            ORDER BY game_date
+        ''', (week, year))
+        
+        games = []
+        for row in cursor.fetchall():
+            games.append(dict(row))
     
-    games = []
-    for row in cursor.fetchall():
-        games.append(dict(row))
-    
-    conn.close()
     return jsonify(games)
 
 @app.route('/admin/create_game', methods=['POST'])
@@ -463,27 +459,26 @@ def admin_create_game():
     game_date = data.get('game_date')
     game_type = data.get('game_type', 'regular')
     
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    # Generate unique game_id
-    game_id = f"{game_type}_{year}_week_{week}_{away_team}_{home_team}"
-    
-    # Set game type flags
-    is_thursday = game_type == 'thursday'
-    is_sunday = game_type == 'sunday'
-    is_monday = game_type == 'monday'
-    
-    cursor.execute('''
-        INSERT INTO nfl_games 
-        (week, year, game_id, away_team, home_team, game_date, 
-         is_thursday_night, is_sunday_night, is_monday_night, game_status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (week, year, game_id, away_team, home_team, game_date,
-          is_thursday, is_sunday, is_monday, 'scheduled'))
-    
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Generate unique game_id
+        game_id = f"{game_type}_{year}_week_{week}_{away_team}_{home_team}"
+        
+        # Set game type flags
+        is_thursday = game_type == 'thursday'
+        is_sunday = game_type == 'sunday'
+        is_monday = game_type == 'monday'
+        
+        cursor.execute('''
+            INSERT INTO nfl_games 
+            (week, year, game_id, away_team, home_team, game_date, 
+             is_thursday_night, is_sunday_night, is_monday_night, game_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (week, year, game_id, away_team, home_team, game_date,
+              is_thursday, is_sunday, is_monday, 'scheduled'))
+        
+        conn.commit()
     
     return jsonify({'success': True, 'message': 'Game created successfully'})
 
