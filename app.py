@@ -5,6 +5,7 @@ from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from setup_database import setup_complete_database
 from database_sync import sync_season_from_api, sync_week_from_api, update_live_scores
+from utils.timezone_utils import convert_to_ast, format_ast_time
 
 app = Flask(__name__)
 app.secret_key = 'nfl-fantasy-secret-key-2024'
@@ -210,15 +211,17 @@ def games():
     ''', (week, year))
     games_raw = cursor.fetchall()
     
-    # Convert games to proper format with datetime objects
+    # Convert games to proper format with AST datetime objects
     games_data = []
     for game in games_raw:
         game_dict = dict(game)
-        # Convert string date to datetime object
+        # Convert string date to datetime object and ensure AST
         if game_dict['game_date']:
             try:
                 if isinstance(game_dict['game_date'], str):
-                    game_dict['game_date'] = datetime.strptime(game_dict['game_date'], '%Y-%m-%d %H:%M:%S')
+                    dt = datetime.strptime(game_dict['game_date'], '%Y-%m-%d %H:%M:%S')
+                    # Convert to AST
+                    game_dict['game_date'] = convert_to_ast(dt)
             except (ValueError, TypeError):
                 game_dict['game_date'] = None
         games_data.append(game_dict)

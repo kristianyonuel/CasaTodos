@@ -4,14 +4,15 @@ Database synchronization with BallDontLie NFL API
 import sqlite3
 from datetime import datetime
 from nfl_api_service import get_season_schedule, get_week_games, get_live_scores
+from utils.timezone_utils import format_ast_time
 import logging
 
 logger = logging.getLogger(__name__)
 
 def sync_season_from_api(year: int = 2025) -> int:
-    """Sync complete season from BallDontLie API"""
+    """Sync complete season from BallDontLie API with AST timezone"""
     try:
-        print(f"🔄 Syncing {year} NFL season from BallDontLie API...")
+        print(f"🔄 Syncing {year} NFL season from BallDontLie API (times in AST)...")
         
         # Ensure we're syncing the correct year
         if year < 2020:
@@ -36,6 +37,9 @@ def sync_season_from_api(year: int = 2025) -> int:
             try:
                 game_id = f"bdl_{year}_w{game['week']}_{game['away_team']}_{game['home_team']}"
                 
+                # Store game date in AST format
+                game_date_str = format_ast_time(game['game_date'], '%Y-%m-%d %H:%M:%S') if game['game_date'] else None
+                
                 cursor.execute('''
                     INSERT INTO nfl_games 
                     (week, year, game_id, away_team, home_team, game_date, 
@@ -46,7 +50,7 @@ def sync_season_from_api(year: int = 2025) -> int:
                 ''', (
                     game['week'], game['year'], game_id,
                     game['away_team'], game['home_team'],
-                    game['game_date'].strftime('%Y-%m-%d %H:%M:%S') if game['game_date'] else None,
+                    game_date_str,  # Already converted to AST
                     game['is_thursday_night'], game['is_monday_night'], game['is_sunday_night'],
                     game['away_score'], game['home_score'],
                     game['game_status'], game['is_final'],

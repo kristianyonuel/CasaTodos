@@ -6,6 +6,7 @@ import requests
 from datetime import datetime
 from typing import List, Dict
 import logging
+from utils.timezone_utils import convert_to_ast
 
 logger = logging.getLogger(__name__)
 
@@ -107,15 +108,16 @@ def get_games_by_date(date: str, year: int = 2025) -> List[Dict]:
         return []
 
 def normalize_games(games_data: List[Dict], week: int, year: int) -> List[Dict]:
-    """Normalize BallDontLie game data"""
+    """Normalize BallDontLie game data with AST timezone conversion"""
     normalized = []
     
     for game in games_data:
         try:
-            # Parse game date
+            # Parse game date and convert to AST
             game_date_str = game.get('date')
             if game_date_str:
-                game_date = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
+                game_date_utc = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
+                game_date = convert_to_ast(game_date_utc)
             else:
                 continue
             
@@ -148,7 +150,7 @@ def normalize_games(games_data: List[Dict], week: int, year: int) -> List[Dict]:
                 'year': year,
                 'away_team': away_team,
                 'home_team': home_team_abbr,
-                'game_date': game_date,
+                'game_date': game_date,  # Now in AST
                 'is_thursday_night': is_thursday,
                 'is_monday_night': is_monday,
                 'is_sunday_night': is_sunday_night,
