@@ -14,22 +14,35 @@ app.secret_key = 'nfl-fantasy-secret-key-2024'
 
 @app.route('/')
 def index():
+    print(f"Index route accessed - Session: {dict(session)}")
+    
     if 'user_id' not in session:
+        print("No user_id in session, redirecting to login")
         return redirect(url_for('login'))
     
     try:
         current_week = get_current_nfl_week()
         current_year = datetime.datetime.now().year
         
-        # Initialize default values
-        user_picks_count = 0
-        total_games = get_week_game_count(current_week, current_year)
-        user_wins = 0
-        total_players = 0
-        available_weeks = get_available_weeks(current_year)
+        print(f"Dashboard loading for user: {session.get('username')}, Week: {current_week}")
         
-        # Get database stats safely
+        # Initialize with safe defaults
+        template_data = {
+            'current_week': current_week, 
+            'current_year': current_year,
+            'username': session.get('username', 'User'),
+            'user_picks_count': 0,
+            'total_games': 0,
+            'user_wins': 0,
+            'total_players': 0,
+            'available_weeks': list(range(1, 19))
+        }
+        
+        # Try to get database stats safely
         try:
+            total_games = get_week_game_count(current_week, current_year)
+            available_weeks = get_available_weeks(current_year)
+            
             conn = sqlite3.connect('nfl_fantasy.db')
             cursor = conn.cursor()
             
@@ -57,26 +70,43 @@ def index():
             
             conn.close()
             
+            # Update template data with real values
+            template_data.update({
+                'user_picks_count': user_picks_count,
+                'total_games': total_games,
+                'user_wins': user_wins,
+                'total_players': total_players,
+                'available_weeks': available_weeks or list(range(1, 19))
+            })
+            
+            print(f"Dashboard data loaded successfully: {template_data}")
+            
         except Exception as db_error:
-            print(f"Database error: {db_error}")
-        
-        template_data = {
-            'current_week': current_week, 
-            'current_year': current_year,
-            'username': session.get('username', 'User'),
-            'user_picks_count': user_picks_count,
-            'total_games': total_games,
-            'user_wins': user_wins,
-            'total_players': total_players,
-            'available_weeks': available_weeks or list(range(1, 19))
-        }
+            print(f"Database error (using defaults): {db_error}")
+            # Continue with default values
         
         return render_template('index.html', **template_data)
         
     except Exception as e:
-        print(f"Dashboard error: {e}")
-        flash('Error loading dashboard', 'error')
-        return redirect(url_for('login'))
+        print(f"Critical dashboard error: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Return minimal safe template
+        try:
+            return render_template('index.html', 
+                                 current_week=1, 
+                                 current_year=2025,
+                                 username=session.get('username', 'User'),
+                                 user_picks_count=0,
+                                 total_games=0,
+                                 user_wins=0,
+                                 total_players=0,
+                                 available_weeks=list(range(1, 19)))
+        except Exception as template_error:
+            print(f"Template error: {template_error}")
+            flash('Dashboard temporarily unavailable', 'error')
+            return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
