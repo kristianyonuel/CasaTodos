@@ -1,3 +1,4 @@
+from asyncio.log import logger
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 import sqlite3
 import os
@@ -255,11 +256,6 @@ def internal_error(error):
 if __name__ == '__main__':
     print("🚀 Starting La Casa de Todos NFL Fantasy League...")
     app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-        except Exception as e:
-            logger.error(f"Registration error: {e}")
-            flash('Registration failed. Please try again.', 'error')
-    
-    return render_template('register.html')
 
 @app.route('/leaderboard')
 def leaderboard():
