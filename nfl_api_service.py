@@ -17,8 +17,8 @@ class NFLAPIService:
         
         # MySportsFeeds API (Free tier)
         self.msf_base = "https://api.mysportsfeeds.com/v2.1/pull/nfl"
-        self.msf_username = "YOUR_MSF_USERNAME"  # Replace with your username
-        self.msf_password = "YOUR_MSF_PASSWORD"  # Replace with your password
+        self.msf_username = "kristiany"  # Replace with your username
+        self.msf_password = "Genesis123!@#"  # Replace with your password
         
         # ESPN as backup (free)
         self.espn_base = "https://site.api.espn.com/apis/site/v2/sports/football/nfl"
