@@ -2,132 +2,132 @@ from flask import Flask, render_template, request, jsonify, session, redirect, u
 import logging
 from datetime import datetime
 import os
+import sqlite3
+from werkzeug.security import generate_password_hash, check_password_hash
 
-# Import our modular components
-from config import config, Config
-from models import DatabaseManager, UserRepository, User
-from services.game_service import GameService
-from services.nfl_service import NFLService
+# Import existing working modules
 from database import init_database
+from nfl_schedule import get_current_nfl_week
 
-# Set up logging
-logging.basicConfig(
-    level=getattr(logging, Config.LOG_LEVEL),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(Config.LOG_FILE),
-        logging.StreamHandler()
-    ]
-)
+# Remove imports that don't exist yet
+# from config import config, Config  
+# from models import DatabaseManager, UserRepository, User
+# from services.game_service import GameService
+# from services.nfl_service import NFLService
 
+# Temporary config class
+class Config:
+    SECRET_KEY = 'nfl-fantasy-secret-key-2024'
+    DEBUG = True
+    CURRENT_SEASON = datetime.now().year
+    LOG_LEVEL = 'INFO'
+    LOG_FILE = 'nfl_fantasy.log'
+
+# Set up basic logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def create_app(config_name='default'):
-    app = Flask(__name__)
-    app.config.from_object(config[config_name])
+app = Flask(__name__)
+app.secret_key = Config.SECRET_KEY
+
+# Simple database functions until models are ready
+def get_user_by_username(username):
+    conn = sqlite3.connect('nfl_fantasy.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, username, password_hash, is_admin FROM users WHERE username = ?', (username,))
+    result = cursor.fetchone()
+    conn.close()
+    return result
+
+@app.route('/')
+def index():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
     
-    # Initialize services
-    db_manager = DatabaseManager()
-    user_repo = UserRepository(db_manager)
-    game_service = GameService(db_manager)
-    nfl_service = NFLService()
-    
-    @app.before_first_request
-    def initialize_app():
-        """Initialize the application on first request"""
+    try:
+        current_week = get_current_nfl_week()
+        current_year = Config.CURRENT_SEASON
+        
+        template_data = {
+            'current_week': current_week,
+            'current_year': current_year,
+            'username': session.get('username', 'User'),
+            'user_picks_count': 0,
+            'total_games': 0,
+            'user_wins': 0,
+            'total_players': 0,
+            'available_weeks': list(range(1, 19))
+        }
+        
+        return render_template('index.html', **template_data)
+        
+    except Exception as e:
+        logger.error(f"Dashboard error: {e}")
+        flash('Error loading dashboard', 'error')
+        return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
         try:
-            logger.info("Initializing application...")
-            init_database()
-            game_service.populate_all_seasons()
-            logger.info("Application initialized successfully")
+            username = request.form.get('username', '').strip()
+            password = request.form.get('password', '').strip()
+            
+            if not username or not password:
+                flash('Please enter both username and password', 'error')
+                return render_template('login.html')
+            
+            user = get_user_by_username(username)
+            
+            if user and check_password_hash(user[2], password):
+                session['user_id'] = user[0]
+                session['username'] = user[1]
+                session['is_admin'] = bool(user[3])
+                
+                flash('Successfully logged in!', 'success')
+                return redirect(url_for('index'))
+            else:
+                flash('Invalid username or password', 'error')
+                
         except Exception as e:
-            logger.error(f"Application initialization failed: {e}")
+            logger.error(f"Login error: {e}")
+            flash('Login error occurred. Please try again.', 'error')
     
-    @app.route('/')
-    def index():
-        if 'user_id' not in session:
-            return redirect(url_for('login'))
-        
-        try:
-            current_week = nfl_service.get_current_nfl_week()
-            current_year = Config.CURRENT_SEASON
-            
-            # Get dashboard data using services
-            template_data = {
-                'current_week': current_week,
-                'current_year': current_year,
-                'username': session.get('username', 'User'),
-                'user_picks_count': 0,
-                'total_games': 0,
-                'user_wins': 0,
-                'total_players': len(user_repo.get_all_users()),
-                'available_weeks': list(range(1, 19))
-            }
-            
-            logger.info(f"Dashboard loaded for user: {session.get('username')}")
-            return render_template('index.html', **template_data)
-            
-        except Exception as e:
-            logger.error(f"Dashboard error: {e}")
-            flash('Error loading dashboard', 'error')
-            return redirect(url_for('login'))
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('You have been logged out', 'info')
+    return redirect(url_for('login'))
+
+@app.route('/games')
+def games():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
     
-    @app.route('/login', methods=['GET', 'POST'])
-    def login():
-        if request.method == 'POST':
-            try:
-                username = request.form.get('username', '').strip()
-                password = request.form.get('password', '').strip()
-                
-                if not username or not password:
-                    flash('Please enter both username and password', 'error')
-                    return render_template('login.html')
-                
-                user = user_repo.get_user_by_username(username)
-                
-                if user and user.check_password(password):
-                    session['user_id'] = user.id
-                    session['username'] = user.username
-                    session['is_admin'] = user.is_admin
-                    
-                    logger.info(f"User {username} logged in successfully")
-                    flash('Successfully logged in!', 'success')
-                    return redirect(url_for('index'))
-                else:
-                    logger.warning(f"Failed login attempt for username: {username}")
-                    flash('Invalid username or password', 'error')
-                    
-            except Exception as e:
-                logger.error(f"Login error: {e}")
-                flash('Login error occurred. Please try again.', 'error')
-        
-        return render_template('login.html')
-    
-    @app.route('/games')
-    def games():
-        if 'user_id' not in session:
-            return redirect(url_for('login'))
-        
-        week = request.args.get('week', nfl_service.get_current_nfl_week(), type=int)
-        year = request.args.get('year', Config.CURRENT_SEASON, type=int)
-        
-        try:
-            # Ensure games exist and get them with user picks
-            game_service.ensure_games_exist(week, year)
-            games_list, user_picks = game_service.get_games_with_picks(week, year, session['user_id'])
-            
-            # Convert user picks to the format expected by template
-            picks_dict = {pick.game_id: {
-                'selected_team': pick.selected_team,
-                'predicted_home_score': pick.predicted_home_score,
-                'predicted_away_score': pick.predicted_away_score
-            } for pick in user_picks.values()}
-            
-            return render_template('games.html',
-                                 games=games_list,
-                                 user_picks=picks_dict,
-                                 current_week=week,
-                                 current_year=year,
+    # Placeholder until game service is ready
+    return render_template('games.html', 
+                         games=[], 
+                         user_picks={},
+                         current_week=1,
+                         current_year=2025,
+                         available_weeks=list(range(1, 19)),
+                         current_nfl_week=1,
+                         total_games=0)
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logger.error(f"Unhandled exception: {e}")
+    return render_template('error.html', error="An unexpected error occurred"), 500
+
+if __name__ == '__main__':
+    try:
+        print("🚀 Starting La Casa de Todos NFL Fantasy League...")
+        init_database()
+        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+    except Exception as e:
+        print(f"❌ Startup failed: {e}")
                                  available_weeks=list(range(1, 19)),
                                  current_nfl_week=nfl_service.get_current_nfl_week(),
                                  total_games=len(games_list))
