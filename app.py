@@ -924,10 +924,13 @@ def games():
     print(f"Games route accessed - Session: {dict(session)}")
     
     if 'user_id' not in session:
+        print("User not logged in, redirecting to login")
         return redirect(url_for('login'))
     
     week = request.args.get('week', get_current_nfl_week(), type=int)
     year = request.args.get('year', datetime.datetime.now().year, type=int)
+    
+    print(f"Loading games for Week {week}, Year {year}")
     
     try:
         # Ensure games exist for this week
@@ -1038,7 +1041,7 @@ def games():
         
         current_nfl_week = get_current_nfl_week()
         
-        print(f"Games page loaded successfully: {len(games_list)} games for Week {week}")
+        print(f"Games page rendered successfully: {len(games_list)} games for Week {week}")
         
         return render_template('games.html', 
                              games=games_list, 
@@ -1053,16 +1056,8 @@ def games():
         print(f"Games page error for Week {week}: {e}")
         import traceback
         traceback.print_exc()
-        flash(f'Error loading games for Week {week}. Creating games now...', 'warning')
-        
-        # Emergency fallback - force create games and redirect
-        try:
-            ensure_games_exist(week, year)
-            return redirect(url_for('games', week=week, year=year))
-        except Exception as fallback_error:
-            print(f"Emergency fallback failed: {fallback_error}")
-            flash('Unable to load games. Please try a different week.', 'error')
-            return redirect(url_for('index'))
+        flash(f'Error loading games for Week {week}. Please try again.', 'error')
+        return redirect(url_for('index'))
 
 @app.route('/force_create_games/<int:week>/<int:year>')
 def force_create_games(week, year):
@@ -1260,6 +1255,11 @@ if __name__ == '__main__':
         
         # Run on all interfaces
         app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+        
+    except Exception as e:
+        print(f"❌ Application startup failed: {e}")
+        import traceback
+        traceback.print_exc()
         
     except Exception as e:
         print(f"❌ Application startup failed: {e}")

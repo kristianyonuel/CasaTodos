@@ -14,6 +14,9 @@
                 <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
                 <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
                 <a href="{{ url_for('rules') }}" class="nav-link">Rules</a>
+                {% if session.get('is_admin') %}
+                <a href="{{ url_for('admin') }}" class="nav-link admin">Admin</a>
+                {% endif %}
                 <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
             </nav>
         </header>
@@ -51,8 +54,7 @@
                         </div>
                         <div class="week-info">
                             <p><strong>Current NFL Week:</strong> {{ current_nfl_week }}</p>
-                            <p><strong>Viewing:</strong> Week {{ current_week }} ({{ current_year }})</p>
-                            <p><strong>All times shown in AST (Atlantic Standard Time)</strong></p>
+                            <p><strong>Viewing:</strong> Week {{ current_week }}</p>
                             {% if session.get('is_admin') %}
                             <p>
                                 <a href="{{ url_for('force_create_games', week=current_week, year=current_year) }}" 
@@ -101,18 +103,6 @@
                                     <span class="score">{{ game.home_score }}</span>
                                 </div>
                             </div>
-                            
-                            <!-- Show user's pick if game is final -->
-                            {% if user_picks.get(game.id) %}
-                            <div class="user-pick-final">
-                                <strong>Your pick:</strong> {{ user_picks.get(game.id).selected_team }}
-                                {% if game.is_monday_night and user_picks.get(game.id).predicted_home_score %}
-                                <br><strong>Score prediction:</strong> 
-                                {{ user_picks.get(game.id).predicted_away_score }} - {{ user_picks.get(game.id).predicted_home_score }}
-                                {% endif %}
-                            </div>
-                            {% endif %}
-                            
                             {% else %}
                             <!-- Show pick options -->
                             <div class="teams">
@@ -146,8 +136,9 @@
                                     </label>
                                 </div>
                             </div>
+                            {% endif %}
                             
-                            {% if game.is_monday_night %}
+                            {% if game.is_monday_night and not game.is_final %}
                             <div class="score-prediction">
                                 <h4>Score Prediction (Tiebreaker)</h4>
                                 <div class="score-inputs">
@@ -157,7 +148,6 @@
                                                id="away_score_{{ game.id }}" 
                                                name="away_score_{{ game.id }}"
                                                min="0" max="99"
-                                               placeholder="0"
                                                value="{{ user_picks.get(game.id, {}).get('predicted_away_score', '') }}">
                                     </div>
                                     <div class="score-separator">-</div>
@@ -167,13 +157,10 @@
                                                id="home_score_{{ game.id }}" 
                                                name="home_score_{{ game.id }}"
                                                min="0" max="99"
-                                               placeholder="0"
                                                value="{{ user_picks.get(game.id, {}).get('predicted_home_score', '') }}">
                                     </div>
                                 </div>
-                                <small>Required for Monday Night Football tiebreaker</small>
                             </div>
-                            {% endif %}
                             {% endif %}
                             
                             <input type="hidden" name="game_id" value="{{ game.id }}">
@@ -181,13 +168,10 @@
                         {% endfor %}
                     </div>
                     
-                    {% if games and not all(game.is_final for game in games) %}
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">Submit Picks</button>
                         <button type="button" class="btn btn-secondary" onclick="clearPicks()">Clear All</button>
-                        <button type="button" class="btn btn-info" onclick="validatePicks()">Validate Picks</button>
                     </div>
-                    {% endif %}
                 </form>
                 {% else %}
                 <div class="no-games">
@@ -211,10 +195,6 @@
     <script>
         document.getElementById('picks-form').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
-            if (!validatePicks()) {
-                return;
-            }
             
             const formData = new FormData(this);
             const picks = [];
@@ -241,9 +221,6 @@
             }
             
             try {
-                document.querySelector('.btn-primary').disabled = true;
-                document.querySelector('.btn-primary').textContent = 'Submitting...';
-                
                 const response = await fetch('/submit_picks', {
                     method: 'POST',
                     headers: {
@@ -256,6 +233,29 @@
                 
                 if (result.success) {
                     alert('Picks submitted successfully!');
+                    location.reload();
+                } else {
+                    alert('Error submitting picks: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error submitting picks. Please try again.');
+            }
+        });
+        
+        function clearPicks() {
+            if (confirm('Are you sure you want to clear all picks?')) {
+                document.querySelectorAll('input[type="radio"]').forEach(radio => {
+                    radio.checked = false;
+                });
+                document.querySelectorAll('input[type="number"]').forEach(input => {
+                    input.value = '';
+                });
+            }
+        }
+    </script>
+</body>
+</html>
                     location.reload();
                 } else {
                     alert('Error submitting picks: ' + result.error);
