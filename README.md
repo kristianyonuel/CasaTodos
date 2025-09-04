@@ -28,16 +28,35 @@ La Casa de Todos is a custom NFL fantasy league designed for family fun and comp
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Python 3.7 or higher
-- Internet connection (for NFL data)
+### For Externally-Managed Python Environments
 
-### Installation
+If you get "externally-managed-environment" errors, use one of these methods:
+
+#### Method 1: Use the externally-managed launcher
 ```bash
-# Clone the repository
-git clone https://github.com/kristianyonuel/CasaTodos.git
-cd CasaTodos
+python run-externally-managed.py
+```
 
+#### Method 2: Install dependencies with system override
+```bash
+python install-dependencies.py
+python app.py
+```
+
+#### Method 3: Manual installation with user flag
+```bash
+pip install --user -r requirements.txt
+python app.py
+```
+
+#### Method 4: Override system protection (advanced users)
+```bash
+pip install --break-system-packages -r requirements.txt
+python app.py
+```
+
+### Standard Installation
+```bash
 # Install dependencies
 pip install -r requirements.txt
 
@@ -116,6 +135,17 @@ The application uses SQLite database with the following tables:
 - **weekly_results**: Win/loss records and statistics
 
 ## 🔧 Configuration
+
+### Externally-Managed Environment Error
+If you see "This environment is externally managed", try:
+1. Run `python run-externally-managed.py`
+2. Use `pip install --user` flag
+3. Use `pip install --break-system-packages` (advanced users)
+
+### Common Issues
+- **Externally-managed error**: Use the provided launcher scripts
+- **Module not found**: Run the dependency installer
+- **Permission errors**: Run as administrator or use `--user` flag
 
 ### Default Admin Account
 - **Username**: `admin`
