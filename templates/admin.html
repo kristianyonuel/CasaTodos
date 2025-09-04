@@ -23,9 +23,21 @@
             <div class="admin-container">
                 <h2>League Administration</h2>
                 
+                <div class="admin-controls">
+                    <div class="week-selector">
+                        <label for="admin-week">Select Week:</label>
+                        <select id="admin-week" onchange="updateWeek()">
+                            {% for week_num in range(1, 19) %}
+                            <option value="{{ week_num }}" {% if week_num == 1 %}selected{% endif %}>Week {{ week_num }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
                 <div class="admin-actions">
                     <button onclick="loadAllPicks()" class="btn btn-primary">View All Picks</button>
                     <button onclick="syncSeason()" class="btn btn-success">Sync NFL Season</button>
+                    <button onclick="createWeekGames()" class="btn btn-secondary">Create Week Games</button>
                 </div>
                 
                 <div id="admin-content">
@@ -36,33 +48,111 @@
     </div>
 
     <script>
+        let currentWeek = 1;
+        
+        function updateWeek() {
+            currentWeek = document.getElementById('admin-week').value;
+        }
+        
         async function loadAllPicks() {
             try {
-                const response = await fetch('/admin/all_picks');
+                document.getElementById('admin-content').innerHTML = '<p>Loading picks...</p>';
+                
+                const response = await fetch(`/admin/all_picks?week=${currentWeek}`);
                 const picks = await response.json();
                 
-                let html = '<h3>All User Picks</h3>';
+                let html = `<h3>All User Picks - Week ${currentWeek}</h3>`;
                 if (picks.length > 0) {
-                    html += '<table class="leaderboard-table">';
-                    html += '<thead><tr><th>User</th><th>Game</th><th>Pick</th><th>Score Prediction</th></tr></thead><tbody>';
+                    html += '<div class="picks-management">';
+                    html += '<table class="admin-picks-table">';
+                    html += '<thead><tr><th>User</th><th>Game</th><th>Pick</th><th>Score Prediction</th><th>Actions</th></tr></thead><tbody>';
                     
                     picks.forEach(pick => {
-                        html += `<tr>
+                        html += `<tr data-pick-id="${pick.pick_id}">
                             <td>${pick.username}</td>
                             <td>${pick.away_team} @ ${pick.home_team}</td>
-                            <td>${pick.selected_team}</td>
-                            <td>${pick.is_monday_night ? `${pick.predicted_away_score || 0} - ${pick.predicted_home_score || 0}` : 'N/A'}</td>
+                            <td>
+                                <select class="pick-select" data-pick-id="${pick.pick_id}">
+                                    <option value="${pick.away_team}" ${pick.selected_team === pick.away_team ? 'selected' : ''}>${pick.away_team}</option>
+                                    <option value="${pick.home_team}" ${pick.selected_team === pick.home_team ? 'selected' : ''}>${pick.home_team}</option>
+                                </select>
+                            </td>
+                            <td>
+                                ${pick.is_monday_night ? 
+                                    `<input type="number" class="score-input" data-type="away" data-pick-id="${pick.pick_id}" value="${pick.predicted_away_score || ''}" min="0" max="99" placeholder="Away"> - 
+                                     <input type="number" class="score-input" data-type="home" data-pick-id="${pick.pick_id}" value="${pick.predicted_home_score || ''}" min="0" max="99" placeholder="Home">` 
+                                    : 'N/A'
+                                }
+                            </td>
+                            <td>
+                                <button onclick="updatePick(${pick.pick_id})" class="btn btn-sm btn-primary">Update</button>
+                                <button onclick="deletePick(${pick.pick_id})" class="btn btn-sm btn-danger">Delete</button>
+                            </td>
                         </tr>`;
                     });
                     
-                    html += '</tbody></table>';
+                    html += '</tbody></table></div>';
                 } else {
-                    html += '<p>No picks found for current week.</p>';
+                    html += '<p>No picks found for this week.</p>';
                 }
                 
                 document.getElementById('admin-content').innerHTML = html;
             } catch (error) {
                 document.getElementById('admin-content').innerHTML = '<p>Error loading picks</p>';
+                console.error('Error:', error);
+            }
+        }
+
+        async function updatePick(pickId) {
+            try {
+                const selectedTeam = document.querySelector(`.pick-select[data-pick-id="${pickId}"]`).value;
+                const awayScore = document.querySelector(`.score-input[data-type="away"][data-pick-id="${pickId}"]`)?.value || null;
+                const homeScore = document.querySelector(`.score-input[data-type="home"][data-pick-id="${pickId}"]`)?.value || null;
+                
+                const response = await fetch('/admin/modify_pick', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pick_id: pickId,
+                        selected_team: selectedTeam,
+                        home_score: homeScore,
+                        away_score: awayScore
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('Pick updated successfully!');
+                } else {
+                    alert('Error updating pick: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error updating pick');
+                console.error('Error:', error);
+            }
+        }
+        
+        async function deletePick(pickId) {
+            if (!confirm('Are you sure you want to delete this pick?')) return;
+            
+            try {
+                const response = await fetch('/admin/delete_pick', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pick_id: pickId })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    // Remove the row from the table
+                    document.querySelector(`tr[data-pick-id="${pickId}"]`).remove();
+                    alert('Pick deleted successfully!');
+                } else {
+                    alert('Error deleting pick: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error deleting pick');
+                console.error('Error:', error);
             }
         }
 
@@ -89,6 +179,19 @@
             } catch (error) {
                 document.getElementById('admin-content').innerHTML = 
                     '<h3>Sync Failed</h3><p>Network error occurred</p>';
+            }
+        }
+        
+        async function createWeekGames() {
+            const year = new Date().getFullYear();
+            const url = `/force_create_games/${currentWeek}/${year}`;
+            
+            if (!confirm(`Create games for Week ${currentWeek}?`)) return;
+            
+            try {
+                window.location.href = url;
+            } catch (error) {
+                alert('Error creating games');
             }
         }
     </script>

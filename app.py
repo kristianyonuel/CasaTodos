@@ -612,24 +612,173 @@ def ensure_games_exist(week, year):
     conn.close()
     return games_created
 
+@app.route('/admin/all_picks')
+def admin_all_picks():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    week = request.args.get('week', get_current_nfl_week(), type=int)
+    year = request.args.get('year', datetime.datetime.now().year, type=int)
+    
+    conn = sqlite3.connect('nfl_fantasy.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT u.username, g.home_team, g.away_team, g.is_monday_night,
+               up.selected_team, up.predicted_home_score, up.predicted_away_score, up.id, u.id
+        FROM user_picks up
+        JOIN users u ON up.user_id = u.id
+        JOIN nfl_games g ON up.game_id = g.id
+        WHERE g.week = ? AND g.year = ?
+        ORDER BY u.username, g.game_date
+    ''', (week, year))
+    
+    picks_data = []
+    for row in cursor.fetchall():
+        picks_data.append({
+            'username': row[0],
+            'home_team': row[1],
+            'away_team': row[2],
+            'is_monday_night': bool(row[3]),
+            'selected_team': row[4],
+            'predicted_home_score': row[5],
+            'predicted_away_score': row[6],
+            'pick_id': row[7],
+            'user_id': row[8]
+        })
+    
+    conn.close()
+    return jsonify(picks_data)
+
+@app.route('/admin/modify_pick', methods=['POST'])
+def admin_modify_pick():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        pick_id = data.get('pick_id')
+        selected_team = data.get('selected_team')
+        home_score = data.get('home_score')
+        away_score = data.get('away_score')
+        
+        conn = sqlite3.connect('nfl_fantasy.db')
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE user_picks 
+            SET selected_team = ?, predicted_home_score = ?, predicted_away_score = ?
+            WHERE id = ?
+        ''', (selected_team, home_score, away_score, pick_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'Pick updated successfully'})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/delete_pick', methods=['POST'])
+def admin_delete_pick():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        pick_id = data.get('pick_id')
+        
+        conn = sqlite3.connect('nfl_fantasy.db')
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM user_picks WHERE id = ?', (pick_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'Pick deleted successfully'})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Fix the emergency games creation for Week 1
 def create_emergency_games(week, year):
     """Create emergency minimal games when all other methods fail"""
-    teams = ['KC', 'BUF', 'DAL', 'SF', 'GB', 'NE', 'PIT', 'BAL']
-    base_date = datetime.datetime(year, 9, 1) + datetime.timedelta(weeks=week-1)
+    teams = ['KC', 'BUF', 'DAL', 'SF', 'GB', 'NE', 'PIT', 'BAL', 'DEN', 'LAC', 'MIA', 'NYJ', 'CIN', 'CLE', 'HOU', 'IND']
+    
+    # Calculate proper game dates
+    if year >= 2025:
+        season_start = datetime.datetime(2025, 9, 4)  # 2025 season starts Sept 4
+    else:
+        season_start = datetime.datetime(2024, 9, 5)  # 2024 season started Sept 5
+    
+    week_start = season_start + datetime.timedelta(weeks=week-1)
     
     games = []
-    for i in range(0, len(teams), 2):
+    
+    # Thursday Night Football (except week 1)
+    if week > 1:
+        games.append({
+            'game_id': f'emergency_tnf_{week}_{year}',
+            'week': week,
+            'year': year,
+            'home_team': teams[0],
+            'away_team': teams[1],
+            'game_date': week_start + datetime.timedelta(days=3, hours=20, minutes=15),  # Thursday 8:15 PM
+            'is_monday_night': False,
+            'is_thursday_night': True
+        })
+        used_teams = 2
+    else:
+        used_teams = 0
+    
+    # Sunday games
+    sunday = week_start + datetime.timedelta(days=(6 if week == 1 else 6))  # First Sunday
+    
+    # Early Sunday games (1:00 PM)
+    for i in range(used_teams, min(used_teams + 12, len(teams)), 2):
         if i + 1 < len(teams):
             games.append({
-                'game_id': f'emergency_{week}_{year}_{i//2}',
+                'game_id': f'emergency_sun_early_{week}_{year}_{i//2}',
                 'week': week,
                 'year': year,
                 'home_team': teams[i],
                 'away_team': teams[i + 1],
-                'game_date': base_date + datetime.timedelta(days=6, hours=13),  # Sunday 1 PM
-                'is_monday_night': i == 6,  # Last game is Monday night
-                'is_thursday_night': i == 0 and week > 1  # First game is Thursday night
+                'game_date': sunday.replace(hour=13, minute=0),  # 1:00 PM
+                'is_monday_night': False,
+                'is_thursday_night': False
             })
+    
+    # Late Sunday games (4:25 PM)
+    start_idx = used_teams + 12
+    for i in range(start_idx, min(start_idx + 4, len(teams)), 2):
+        if i + 1 < len(teams):
+            games.append({
+                'game_id': f'emergency_sun_late_{week}_{year}_{i//2}',
+                'week': week,
+                'year': year,
+                'home_team': teams[i],
+                'away_team': teams[i + 1],
+                'game_date': sunday.replace(hour=16, minute=25),  # 4:25 PM
+                'is_monday_night': False,
+                'is_thursday_night': False
+            })
+    
+    # Monday Night Football
+    monday = week_start + datetime.timedelta(days=7)  # Next Monday
+    remaining_teams = [t for t in teams if t not in [g['home_team'] for g in games] + [g['away_team'] for g in games]]
+    
+    if len(remaining_teams) >= 2:
+        games.append({
+            'game_id': f'emergency_mnf_{week}_{year}',
+            'week': week,
+            'year': year,
+            'home_team': remaining_teams[0],
+            'away_team': remaining_teams[1],
+            'game_date': monday.replace(hour=20, minute=15),  # Monday 8:15 PM
+            'is_monday_night': True,
+            'is_thursday_night': False
+        })
     
     return games
 
