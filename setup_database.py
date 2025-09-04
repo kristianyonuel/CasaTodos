@@ -27,13 +27,25 @@ def create_all_tables():
     with get_db_connection() as conn:
         cursor = conn.cursor()
         
+        # Drop existing tables if they exist to ensure clean schema
+        tables_to_drop = [
+            'audit_log', 'league_prizes', 'game_comments', 'notifications', 
+            'user_statistics', 'league_settings', 'weekly_results', 'user_picks', 
+            'nfl_games', 'nfl_seasons', 'nfl_teams', 'users'
+        ]
+        
+        for table in tables_to_drop:
+            cursor.execute(f'DROP TABLE IF EXISTS {table}')
+        
+        logger.info("Dropped existing tables for clean rebuild")
+        
         # Enable foreign keys and WAL mode for better performance
         cursor.execute('PRAGMA foreign_keys = ON')
         cursor.execute('PRAGMA journal_mode = WAL')
         
         # Users table with enhanced fields
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
@@ -54,7 +66,7 @@ def create_all_tables():
         
         # NFL Teams reference table
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS nfl_teams (
+            CREATE TABLE nfl_teams (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 abbreviation TEXT UNIQUE NOT NULL,
                 full_name TEXT NOT NULL,
@@ -70,7 +82,7 @@ def create_all_tables():
         
         # NFL Seasons table
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS nfl_seasons (
+            CREATE TABLE nfl_seasons (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 year INTEGER UNIQUE NOT NULL,
                 name TEXT,
@@ -84,9 +96,9 @@ def create_all_tables():
             )
         ''')
         
-        # Enhanced NFL Games table
+        # Enhanced NFL Games table with game_status
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS nfl_games (
+            CREATE TABLE nfl_games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 season_id INTEGER,
                 week INTEGER NOT NULL,
@@ -504,7 +516,7 @@ def create_current_season():
         conn.commit()
 
 def create_sample_games(cursor, year):
-    """Create sample NFL games for testing"""
+    """Create sample NFL games for testing with proper game_status"""
     teams = ['KC', 'BUF', 'DAL', 'SF', 'GB', 'NE', 'PIT', 'BAL', 'DEN', 'LAC', 'MIA', 'NYJ']
     
     for week in range(1, 6):  # Create first 5 weeks
@@ -516,7 +528,8 @@ def create_sample_games(cursor, year):
             cursor.execute('''
                 INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_thursday_night, game_status)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (week, year, f'tnf_{week}_{year}', teams[0], teams[1], thursday_date.replace(hour=20, minute=15), True, 'scheduled'))
+            ''', (week, year, f'tnf_{week}_{year}', teams[0], teams[1], 
+                  thursday_date.replace(hour=20, minute=15), True, 'scheduled'))
         
         # Sunday games
         sunday = base_date + timedelta(days=6)
@@ -525,21 +538,29 @@ def create_sample_games(cursor, year):
                 cursor.execute('''
                     INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, game_status)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (week, year, f'sun_{week}_{year}_{i//2}', teams[i], teams[i+1], sunday.replace(hour=13), 'scheduled'))
+                ''', (week, year, f'sun_{week}_{year}_{i//2}', teams[i], teams[i+1], 
+                      sunday.replace(hour=13), 'scheduled'))
         
         # Monday Night Football
         monday = base_date + timedelta(days=7)
         cursor.execute('''
             INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_monday_night, game_status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (week, year, f'mnf_{week}_{year}', teams[-2], teams[-1], monday.replace(hour=20, minute=15), True, 'scheduled'))
+        ''', (week, year, f'mnf_{week}_{year}', teams[-2], teams[-1], 
+              monday.replace(hour=20, minute=15), True, 'scheduled'))
 
 def setup_complete_database():
-    """Main function to setup complete database"""
-    logger.info("🚀 Starting complete database setup...")
+    """Main function to setup complete database with clean rebuild"""
+    logger.info("🚀 Starting complete database rebuild...")
     
     try:
-        # Create all tables
+        # Remove existing database file for clean start
+        import os
+        if os.path.exists(DATABASE_PATH):
+            os.remove(DATABASE_PATH)
+            logger.info("Removed existing database for clean rebuild")
+        
+        # Create all tables with proper schema
         create_all_tables()
         
         # Create performance indexes
@@ -557,11 +578,19 @@ def setup_complete_database():
         # Create current season
         create_current_season()
         
-        logger.info("✅ Complete database setup finished successfully!")
+        # Create sample games
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            create_sample_games(cursor, datetime.now().year)
+            conn.commit()
+        
+        logger.info("✅ Complete database rebuild finished successfully!")
         return True
         
     except Exception as e:
         logger.error(f"❌ Database setup failed: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 if __name__ == "__main__":
