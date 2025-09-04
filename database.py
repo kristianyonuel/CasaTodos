@@ -5,6 +5,7 @@ Database operations for NFL Fantasy League
 import sqlite3
 import datetime
 from werkzeug.security import generate_password_hash
+from datetime import datetime, timedelta
 
 def init_database():
     """Initialize the NFL Fantasy League database with enhanced features"""
