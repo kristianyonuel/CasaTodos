@@ -512,67 +512,77 @@ def admin_all_picks():
         return jsonify({'error': 'Admin access required'}), 403
     
     week = request.args.get('week', 1, type=int)
-    year = request.args.get('year', datetime.now().year, type=int)
-    
-    logger.info(f"Admin {session.get('username', 'Unknown')} requesting all picks for Week {week}, Year {year}")
+    year = request.args.get('year', 2025, type=int)
     
     try:
         with get_db() as conn:
             cursor = conn.cursor()
             
-            # First test if the query works with simpler version
-            logger.info(f"Executing query for week={week}, year={year}")
+            # First, let's try a simpler approach - get all picks and then get game info separately
+            # This helps us debug which part is failing
+            
+            # Get picks for the week/year
             cursor.execute('''
-                SELECT 
-                    p.id as pick_id,
-                    u.username,
-                    g.away_team,
-                    g.home_team,
-                    g.game_time,
-                    COALESCE(g.is_monday_night, 0) as is_monday_night,
-                    p.selected_team,
-                    p.predicted_home_score,
-                    p.predicted_away_score,
-                    p.pick_time
+                SELECT p.id as pick_id, p.user_id, p.game_id, p.selected_team, 
+                       p.predicted_home_score, p.predicted_away_score, p.pick_time
                 FROM user_picks p
-                JOIN users u ON p.user_id = u.id
                 JOIN nfl_games g ON p.game_id = g.id
                 WHERE g.week = ? AND g.year = ?
-                ORDER BY u.username, g.game_time
             ''', (week, year))
             
-            rows = cursor.fetchall()
-            logger.info(f"Query returned {len(rows)} rows")
+            picks_data = cursor.fetchall()
             
+            if not picks_data:
+                return jsonify([])
+            
+            # Get user info
+            user_ids = list(set(row['user_id'] for row in picks_data))
+            if user_ids:
+                placeholders = ','.join('?' * len(user_ids))
+                cursor.execute(f'SELECT id, username FROM users WHERE id IN ({placeholders})', user_ids)
+                users = {row['id']: row['username'] for row in cursor.fetchall()}
+            else:
+                users = {}
+            
+            # Get game info
+            game_ids = list(set(row['game_id'] for row in picks_data))
+            if game_ids:
+                placeholders = ','.join('?' * len(game_ids))
+                cursor.execute(f'''
+                    SELECT id, away_team, home_team, game_time, 
+                           COALESCE(is_monday_night, 0) as is_monday_night
+                    FROM nfl_games WHERE id IN ({placeholders})
+                ''', game_ids)
+                games = {row['id']: row for row in cursor.fetchall()}
+            else:
+                games = {}
+            
+            # Combine the data
             picks = []
-            for row in rows:
-                try:
-                    pick_data = {
-                        'pick_id': row['pick_id'],
-                        'username': row['username'],
-                        'away_team': row['away_team'],
-                        'home_team': row['home_team'],
-                        'game_time': row['game_time'],
-                        'is_monday_night': bool(row['is_monday_night']),
-                        'selected_team': row['selected_team'],
-                        'predicted_home_score': row['predicted_home_score'],
-                        'predicted_away_score': row['predicted_away_score'],
-                        'pick_time': row['pick_time']
-                    }
-                    picks.append(pick_data)
-                except Exception as row_error:
-                    logger.error(f"Error processing row {row}: {row_error}")
-                    continue
+            for pick in picks_data:
+                user_id = pick['user_id']
+                game_id = pick['game_id']
+                
+                if user_id in users and game_id in games:
+                    game = games[game_id]
+                    picks.append({
+                        'pick_id': pick['pick_id'],
+                        'username': users[user_id],
+                        'away_team': game['away_team'],
+                        'home_team': game['home_team'],
+                        'game_time': game['game_time'],
+                        'is_monday_night': bool(game['is_monday_night']),
+                        'selected_team': pick['selected_team'],
+                        'predicted_home_score': pick['predicted_home_score'],
+                        'predicted_away_score': pick['predicted_away_score'],
+                        'pick_time': pick['pick_time']
+                    })
             
-            logger.info(f"Successfully processed {len(picks)} picks for Week {week}, Year {year}")
             return jsonify(picks)
             
     except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        logger.error(f"Error loading all picks for Week {week}, Year {year}: {e}")
-        logger.error(f"Full traceback: {error_details}")
-        return jsonify({'error': f'Failed to load picks: {str(e)}'}), 500
+        # Simple error response without complex logging that might fail
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
 
 @app.route('/admin/update_pick', methods=['POST'])
 def admin_update_pick():
@@ -1544,6 +1554,42 @@ def admin_import_picks_csv():
     except Exception as e:
         logger.error(f"Error importing picks CSV: {e}")
         return jsonify({'error': str(e)}, 500)
+
+@app.route('/admin/simple_picks')
+def admin_simple_picks():
+    """Simple picks view - shows basic pick data without complex joins"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Get all picks with minimal joins
+            cursor.execute('''
+                SELECT p.id, p.user_id, p.game_id, p.selected_team, p.pick_time,
+                       u.username
+                FROM user_picks p
+                JOIN users u ON p.user_id = u.id
+                ORDER BY p.id DESC
+                LIMIT 50
+            ''')
+            
+            picks = []
+            for row in cursor.fetchall():
+                picks.append({
+                    'pick_id': row['id'],
+                    'user_id': row['user_id'],
+                    'username': row['username'],
+                    'game_id': row['game_id'],
+                    'selected_team': row['selected_team'],
+                    'pick_time': row['pick_time']
+                })
+            
+            return jsonify(picks)
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     # Initialize the database on startup

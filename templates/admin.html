@@ -41,6 +41,7 @@
                 
                 <div class="admin-actions">
                     <button onclick="loadAllPicks()" class="btn btn-primary">View All Picks</button>
+                    <button onclick="loadSimplePicks()" class="btn btn-secondary">View Simple Picks</button>
                     <button onclick="loadUsers()" class="btn btn-info">Manage Users</button>
                     <button onclick="loadUserPicks()" class="btn btn-warning">Set User Picks</button>
                     <button onclick="loadSchedule()" class="btn btn-success">Manage Schedule</button>
@@ -78,12 +79,22 @@
                 console.log(`Fetching picks for Week ${currentWeek}, Year ${currentYear}`);
                 const response = await fetch(`/admin/all_picks?week=${currentWeek}&year=${currentYear}`);
                 
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorText = await response.text();
+                    console.log('Error response:', errorText);
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
                 }
                 
                 const picks = await response.json();
                 console.log('Received picks:', picks);
+                
+                // Check if response has an error field
+                if (picks.error) {
+                    throw new Error(picks.error);
+                }
                 
                 let html = `<h3>All User Picks - Week ${currentWeek}, ${currentYear}</h3>`;
                 html += `<p><em>Found ${picks.length} picks</em></p>`;
@@ -121,14 +132,20 @@
                 } else {
                     html += '<p>No picks found for Week ' + currentWeek + ', Year ' + currentYear + '.</p>';
                     html += '<p><em>Try selecting a different week or year from the dropdowns above.</em></p>';
+                    html += '<p><em>Or click "View Simple Picks" to see if there are any picks in the database.</em></p>';
                 }
                 
                 document.getElementById('admin-content').innerHTML = html;
             } catch (error) {
                 console.error('Error loading picks:', error);
                 document.getElementById('admin-content').innerHTML = 
-                    `<p class="error">Error loading picks: ${error.message}</p>
-                     <p>Check the browser console for more details.</p>`;
+                    `<div class="error">
+                        <h4>Error loading picks</h4>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                        <p><strong>Week:</strong> ${currentWeek}, <strong>Year:</strong> ${currentYear}</p>
+                        <p>Check the browser console for more details.</p>
+                        <p><em>Try "View Simple Picks" to test basic database connectivity.</em></p>
+                    </div>`;
             }
         }
 
@@ -1453,6 +1470,50 @@
             } catch (error) {
                 console.error('Error deleting pick:', error);
                 alert('❌ Error deleting pick');
+            }
+        }
+
+        async function loadSimplePicks() {
+            try {
+                document.getElementById('admin-content').innerHTML = '<p>Loading simple picks...</p>';
+                
+                const response = await fetch('/admin/simple_picks');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const picks = await response.json();
+                console.log('Simple picks received:', picks);
+                
+                let html = `<h3>Simple Picks View</h3>`;
+                html += `<p><em>Showing last ${picks.length} picks (simplified view)</em></p>`;
+                
+                if (picks.length > 0) {
+                    html += '<table class="admin-picks-table">';
+                    html += '<thead><tr><th>Pick ID</th><th>Username</th><th>Game ID</th><th>Selected Team</th><th>Pick Time</th></tr></thead><tbody>';
+                    
+                    picks.forEach(pick => {
+                        html += `<tr>
+                            <td>${pick.pick_id}</td>
+                            <td>${pick.username}</td>
+                            <td>${pick.game_id}</td>
+                            <td>${pick.selected_team}</td>
+                            <td>${pick.pick_time || 'N/A'}</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                } else {
+                    html += '<p>No picks found in database.</p>';
+                }
+                
+                document.getElementById('admin-content').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading simple picks:', error);
+                document.getElementById('admin-content').innerHTML = 
+                    `<p class="error">Error loading simple picks: ${error.message}</p>
+                     <p>This helps us diagnose if the issue is with the database or the complex query.</p>`;
             }
         }
     </script>
