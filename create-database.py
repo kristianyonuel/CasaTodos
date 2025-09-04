@@ -140,16 +140,25 @@ def create_full_database():
         ''', (setting_name, setting_value, description))
     print(f"✓ Created {len(settings)} league settings")
     
-    # Import NFL schedule and create games
+    # Import and create schedule data in database
     try:
-        from nfl_schedule_2025 import get_2025_schedule
+        from app import create_default_schedule_in_db
+        
+        print("Creating NFL schedules in database...")
+        
+        # Create schedules for multiple years
+        for year in [2024, 2025, 2026]:
+            create_default_schedule_in_db(year)
+            print(f"✓ Created schedule for {year}")
+        
+        # Create games from database schedule
         from app import create_nfl_games_from_schedule
         
         current_year = datetime.datetime.now().year
-        if current_year >= 2025:
-            current_year = 2025  # Use 2025 schedule
+        if current_year < 2025:
+            current_year = 2025  # Use 2025 as default
         
-        print(f"Creating NFL games for {current_year} season...")
+        print(f"Creating NFL games from database schedule for {current_year}...")
         
         # Create games for all 18 weeks
         total_games = 0
@@ -160,13 +169,14 @@ def create_full_database():
                     INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_monday_night, is_thursday_night)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (game['week'], game['year'], game['game_id'], game['home_team'], 
-                      game['away_team'], game['game_date'], game['is_monday_night'], game['is_thursday_night']))
+                      game['away_team'], game['game_date'].strftime('%Y-%m-%d %H:%M:%S'), 
+                      game['is_monday_night'], game['is_thursday_night']))
                 total_games += 1
         
-        print(f"✓ Created {total_games} NFL games")
+        print(f"✓ Created {total_games} NFL games from database schedule")
         
     except Exception as e:
-        print(f"Error creating NFL games: {e}")
+        print(f"Error creating NFL schedule/games: {e}")
         # Fall back to sample games for week 1
         from app import create_sample_games
         sample_games = create_sample_games(1, current_year)
@@ -175,8 +185,9 @@ def create_full_database():
                 INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_monday_night, is_thursday_night)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (game['week'], game['year'], game['game_id'], game['home_team'], 
-                  game['away_team'], game['game_date'], game['is_monday_night'], game['is_thursday_night']))
-        print(f"✓ Created sample games for week 1")
+                  game['away_team'], game['game_date'].strftime('%Y-%m-%d %H:%M:%S'), 
+                  game['is_monday_night'], game['is_thursday_night']))
+        print(f"✓ Created fallback sample games")
     
     conn.commit()
     conn.close()

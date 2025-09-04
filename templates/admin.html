@@ -42,6 +42,7 @@
                 <div class="admin-actions">
                     <button onclick="loadAllPicks()" class="btn btn-primary">View All Picks</button>
                     <button onclick="loadUsers()" class="btn btn-info">Manage Users</button>
+                    <button onclick="loadSchedule()" class="btn btn-warning">Manage Schedule</button>
                     <button onclick="syncSeason()" class="btn btn-success">Sync NFL Season</button>
                     <button onclick="createWeekGames()" class="btn btn-secondary">Create Week Games</button>
                 </div>
@@ -303,6 +304,71 @@
                 window.location.href = url;
             } catch (error) {
                 alert('Error creating games');
+            }
+        }
+
+        async function loadSchedule() {
+            try {
+                document.getElementById('admin-content').innerHTML = '<p>Loading schedule data...</p>';
+                
+                const response = await fetch(`/admin/schedule?year=${currentYear}`);
+                const schedule = await response.json();
+                
+                let html = `<h3>NFL Schedule Management - ${currentYear}</h3>`;
+                html += '<p>Schedule data is stored in the database. Use this panel to view and modify the schedule.</p>';
+                html += '<button onclick="createScheduleForYear()" class="btn btn-success">Create Schedule for Year</button>';
+                
+                if (schedule.length > 0) {
+                    html += '<div class="schedule-management">';
+                    html += '<table class="admin-picks-table">';
+                    html += '<thead><tr><th>Week</th><th>Game</th><th>Date/Time</th><th>Type</th><th>Actions</th></tr></thead><tbody>';
+                    
+                    schedule.forEach(game => {
+                        const gameType = game.is_thursday_night ? 'TNF' : game.is_monday_night ? 'MNF' : 'Regular';
+                        html += `<tr>
+                            <td>Week ${game.week}</td>
+                            <td>${game.away_team} @ ${game.home_team}</td>
+                            <td>${new Date(game.game_time).toLocaleString()}</td>
+                            <td>${gameType}</td>
+                            <td>
+                                <button onclick="editScheduleGame(${game.id})" class="btn btn-sm btn-primary">Edit</button>
+                                <button onclick="deleteScheduleGame(${game.id})" class="btn btn-sm btn-danger">Delete</button>
+                            </td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table></div>';
+                } else {
+                    html += '<p>No schedule data found for this year.</p>';
+                }
+                
+                document.getElementById('admin-content').innerHTML = html;
+            } catch (error) {
+                document.getElementById('admin-content').innerHTML = '<p>Error loading schedule</p>';
+                console.error('Error:', error);
+            }
+        }
+        
+        async function createScheduleForYear() {
+            if (!confirm(`Create default schedule for ${currentYear}?`)) return;
+            
+            try {
+                const response = await fetch('/admin/create_schedule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ year: parseInt(currentYear) })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('Schedule created successfully!');
+                    loadSchedule();
+                } else {
+                    alert('Error creating schedule: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error creating schedule');
+                console.error('Error:', error);
             }
         }
     </script>
