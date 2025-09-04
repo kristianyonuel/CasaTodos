@@ -289,3 +289,49 @@ For family league support or technical issues:
 **¡Que gane el mejor! (May the best win!)** 🏆
 
 *La Casa de Todos - Where family competition meets NFL excitement!*
+
+## 🐍 Python 3.13 Compatibility
+
+La Casa de Todos has been updated for full Python 3.13 compatibility! The application now uses modern Python features and improved performance.
+
+### ✅ Compatibility Check
+
+Before running the application, check your environment:
+
+```bash
+python check_python_compatibility.py
+```
+
+This script will verify:
+- Python version (3.11+ required, 3.13 recommended)
+- All required package versions
+- SQLite compatibility
+
+### 🔧 System Requirements
+
+- **Python**: 3.11 or higher (3.13 recommended)
+- **Operating System**: Windows, macOS, or Linux
+- **Memory**: 512MB RAM minimum
+- **Storage**: 100MB free space
+
+### 📦 Dependencies
+
+All dependencies have been updated for Python 3.13 compatibility:
+
+- Flask 3.0.3+
+- Werkzeug 3.0.3+
+- Jinja2 3.1.4+
+- SQLite 3.35+
+
+Install with:
+```bash
+pip install -r requirements.txt
+```
+
+### 🚀 New Features in Python 3.13 Version
+
+- **Improved Type Hints**: Full typing support with `from __future__ import annotations`
+- **Better Error Handling**: Enhanced logging and exception management
+- **Resource Management**: Context managers for database connections
+- **Performance**: Optimized database operations
+- **Security**: Updated password hashing and session management

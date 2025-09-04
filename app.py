@@ -1,18 +1,45 @@
+from __future__ import annotations
+
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 import sqlite3
 import os
+import logging
 from datetime import datetime
+from typing import Dict, Any, Optional
 from werkzeug.security import generate_password_hash, check_password_hash
 from setup_database import setup_complete_database
 from database_sync import sync_season_from_api, sync_week_from_api, update_live_scores
 from utils.timezone_utils import convert_to_ast, format_ast_time
+from contextlib import contextmanager
+
+# Configure logging for better debugging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('app.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = 'nfl-fantasy-secret-key-2024'
 
 DATABASE_PATH = 'nfl_fantasy.db'
 
+@contextmanager
 def get_db():
+    """Database connection context manager for better resource management"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+def get_db_legacy():
+    """Legacy database connection function - kept for compatibility"""
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -24,43 +51,41 @@ def initialize_app():
     else:
         print("Database exists, ready to run")
 
-def get_dashboard_data(user_id, week, year):
+def get_dashboard_data(user_id: int, week: int, year: int) -> Dict[str, int]:
     """Get dashboard data with accurate game counts"""
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    # Get actual games count for the week
-    cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, year))
-    total_games = cursor.fetchone()[0]
-    
-    # If no games in DB, get expected count from schedule
-    if total_games == 0 and year == 2025:
-        from nfl_2025_schedule import get_week_game_count
-        total_games = get_week_game_count(week)
-    
-    # Get user's picks for this week
-    cursor.execute('''
-        SELECT COUNT(*) FROM user_picks up
-        JOIN nfl_games g ON up.game_id = g.id
-        WHERE up.user_id = ? AND g.week = ? AND g.year = ?
-    ''', (user_id, week, year))
-    user_picks_count = cursor.fetchone()[0]
-    
-    # Get other stats
-    cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = 0')
-    total_players = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM weekly_results WHERE user_id = ? AND is_winner = 1', (user_id,))
-    user_wins = cursor.fetchone()[0]
-    
-    conn.close()
-    
-    return {
-        'total_games': total_games,
-        'user_picks_count': user_picks_count,
-        'total_players': total_players,
-        'user_wins': user_wins
-    }
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Get actual games count for the week
+        cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, year))
+        total_games = cursor.fetchone()[0]
+        
+        # If no games in DB, get expected count from schedule
+        if total_games == 0 and year == 2025:
+            from nfl_2025_schedule import get_week_game_count
+            total_games = get_week_game_count(week)
+        
+        # Get user's picks for this week
+        cursor.execute('''
+            SELECT COUNT(*) FROM user_picks up
+            JOIN nfl_games g ON up.game_id = g.id
+            WHERE up.user_id = ? AND g.week = ? AND g.year = ?
+        ''', (user_id, week, year))
+        user_picks_count = cursor.fetchone()[0]
+        
+        # Get other stats
+        cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = 0')
+        total_players = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT COUNT(*) FROM weekly_results WHERE user_id = ? AND is_winner = 1', (user_id,))
+        user_wins = cursor.fetchone()[0]
+        
+        return {
+            'total_games': total_games,
+            'user_picks_count': user_picks_count,
+            'total_players': total_players,
+            'user_wins': user_wins
+        }
 
 @app.route('/')
 def index():
@@ -73,16 +98,16 @@ def index():
     current_year = 2025  # Use 2025 for NFL schedule
     
     # Get actual game count from database
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (current_week, current_year))
-    total_games = cursor.fetchone()[0]
-    
-    # If no games exist, get expected count and suggest creation
-    if total_games == 0:
-        from nfl_2025_schedule import get_week_game_count
-        expected_games = get_week_game_count(current_week)
-        total_games = expected_games
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (current_week, current_year))
+        total_games = cursor.fetchone()[0]
+        
+        # If no games exist, get expected count and suggest creation
+        if total_games == 0:
+            from nfl_2025_schedule import get_week_game_count
+            expected_games = get_week_game_count(current_week)
+            total_games = expected_games
     
     dashboard_data = get_dashboard_data(session['user_id'], current_week, current_year)
     
@@ -97,33 +122,42 @@ def index():
         'available_weeks': list(range(1, 19))
     }
     
-    conn.close()
     return render_template('index.html', **data)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '').strip()
+        username: str = request.form.get('username', '').strip()
+        password: str = request.form.get('password', '').strip()
         
         if not username or not password:
+            logger.warning(f"Login attempt with missing credentials from IP: {request.remote_addr}")
             flash('Please enter both username and password', 'error')
             return render_template('login.html')
         
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
-        user = cursor.fetchone()
-        conn.close()
-        
-        if user and check_password_hash(user[1], password):
-            session['user_id'] = user[0]
-            session['username'] = username
-            session['is_admin'] = bool(user[2])
-            flash('Successfully logged in!', 'success')
-            return redirect(url_for('index'))
-        else:
-            flash('Invalid username or password', 'error')
+        try:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
+                user = cursor.fetchone()
+            
+            if user and check_password_hash(user[1], password):
+                session['user_id'] = user[0]
+                session['username'] = username
+                session['is_admin'] = bool(user[2])
+                logger.info(f"Successful login for user: {username}")
+                flash('Successfully logged in!', 'success')
+                return redirect(url_for('index'))
+            else:
+                logger.warning(f"Failed login attempt for username: {username} from IP: {request.remote_addr}")
+                flash('Invalid username or password', 'error')
+                
+        except sqlite3.Error as e:
+            logger.error(f"Database error during login: {e}")
+            flash('A system error occurred. Please try again later.', 'error')
+        except Exception as e:
+            logger.error(f"Unexpected error during login: {e}")
+            flash('An unexpected error occurred. Please try again.', 'error')
     
     return render_template('login.html')
 
@@ -316,7 +350,7 @@ def register():
             return redirect(url_for('login'))
             
         except Exception as e:
-            print(f"Registration error: {e}")
+            logger.error(f"Registration error: {e}")
             flash('Registration failed. Please try again.', 'error')
     
     return render_template('register.html')
@@ -586,7 +620,7 @@ def admin_users():
         return jsonify(users)
         
     except Exception as e:
-        print(f"Admin users error: {e}")
+        logger.error(f"Admin users error: {e}")
         return jsonify({'error': f'Failed to load users: {str(e)}'}), 500
 
 @app.route('/admin/modify_user', methods=['POST'])
@@ -621,7 +655,7 @@ def admin_modify_user():
         return jsonify({'success': True, 'message': 'User updated successfully'})
         
     except Exception as e:
-        print(f"Admin modify user error: {e}")
+        logger.error(f"Admin modify user error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/admin/delete_user', methods=['POST'])
@@ -654,7 +688,7 @@ def admin_delete_user():
         return jsonify({'success': True, 'message': 'User deleted successfully'})
         
     except Exception as e:
-        print(f"Admin delete user error: {e}")
+        logger.error(f"Admin delete user error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.errorhandler(404)

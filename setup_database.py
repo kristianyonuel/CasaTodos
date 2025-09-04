@@ -1,9 +1,12 @@
 """
 Complete database setup and initialization for La Casa de Todos NFL Fantasy League
 """
+from __future__ import annotations
+
 import sqlite3
 import logging
 from datetime import datetime, timedelta
+from typing import Generator
 from werkzeug.security import generate_password_hash
 from contextlib import contextmanager
 
@@ -13,7 +16,7 @@ logger = logging.getLogger(__name__)
 DATABASE_PATH = 'nfl_fantasy.db'
 
 @contextmanager
-def get_db_connection():
+def get_db_connection() -> Generator[sqlite3.Connection, None, None]:
     """Database connection context manager"""
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row

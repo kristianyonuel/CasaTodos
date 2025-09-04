@@ -35,37 +35,15 @@
                 <button type="submit" class="btn btn-primary">Login</button>
             </form>
             
-            <p>Don't have an account? <a href="{{ url_for('register') }}">Register here</a></p>
-        </div>
-    </div>
-</body>
-</html>
-    </div>
-</body>
-</html>
-                {% endwith %}
-
-                <form method="POST">
-                    <div class="form-group">
-                        <label for="username">Username</label>
-                        <input type="text" id="username" name="username" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="password">Password</label>
-                        <input type="password" id="password" name="password" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Login</button>
-                </form>
-
-                <div class="sample-users">
-                    <strong>Sample Family Accounts:</strong><br>
-                    Username: dad, mom, son, daughter<br>
-                    Password: family123<br>
-                    <small>(Admin access available with separate credentials)</small>
-                </div>
-
-                <p><a href="{{ url_for('register') }}">Don't have an account? Register here</a></p>
+            
+            <div class="sample-users">
+                <strong>Sample Family Accounts:</strong><br>
+                Username: dad, mom, son, daughter<br>
+                Password: family123<br>
+                <small>(Admin access available with separate credentials)</small>
             </div>
+            
+            <p>Don't have an account? <a href="{{ url_for('register') }}">Register here</a></p>
         </div>
     </div>
 </body>

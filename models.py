@@ -1,10 +1,12 @@
 """
 Database models for NFL Fantasy League
 """
+from __future__ import annotations
+
 import sqlite3
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import Config
 
@@ -14,13 +16,15 @@ class User:
     username: str = ""
     email: str = ""
     is_admin: bool = False
-    created_at: Optional[datetime] = None
-    password_hash: str = ""
+    created_at: Optional[datetime] = field(default=None)
+    password_hash: str = field(default="", repr=False)  # Don't show password hash in repr
     
     def check_password(self, password: str) -> bool:
+        """Check if provided password matches the stored hash."""
         return check_password_hash(self.password_hash, password)
     
-    def set_password(self, password: str):
+    def set_password(self, password: str) -> None:
+        """Set password by generating a hash."""
         self.password_hash = generate_password_hash(password)
 
 @dataclass
@@ -31,12 +35,17 @@ class NFLGame:
     game_id: str = ""
     home_team: str = ""
     away_team: str = ""
-    game_date: Optional[datetime] = None
+    game_date: Optional[datetime] = field(default=None)
     is_monday_night: bool = False
     is_thursday_night: bool = False
     home_score: Optional[int] = None
     away_score: Optional[int] = None
     is_final: bool = False
+    
+    @property
+    def is_special_game(self) -> bool:
+        """Check if this is a Monday Night or Thursday Night game."""
+        return self.is_monday_night or self.is_thursday_night
 
 @dataclass
 class UserPick:
@@ -46,7 +55,12 @@ class UserPick:
     selected_team: str = ""
     predicted_home_score: Optional[int] = None
     predicted_away_score: Optional[int] = None
-    created_at: Optional[datetime] = None
+    created_at: Optional[datetime] = field(default=None)
+    
+    def __post_init__(self) -> None:
+        """Set created_at if not provided."""
+        if self.created_at is None:
+            self.created_at = datetime.now()
 
 @dataclass
 class WeeklyResult:
