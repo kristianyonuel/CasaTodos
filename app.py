@@ -15,7 +15,6 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
-@app.before_first_request
 def initialize_app():
     if not os.path.exists(DATABASE_PATH):
         print("Database not found, running setup...")
@@ -27,6 +26,9 @@ def initialize_app():
 def index():
     if 'user_id' not in session:
         return redirect(url_for('login'))
+    
+    # Initialize app on first access
+    initialize_app()
     
     conn = get_db()
     cursor = conn.cursor()
