@@ -171,10 +171,10 @@ The application uses SQLite database with the following tables:
 - ⚠️ **Change this password after first login!**
 
 ### NFL Data Source
-- **Primary API**: MySportsFeeds (Free tier for personal use)
-- **Secondary API**: BallDontLie NFL API (Free with rate limits)
-- **Backup API**: ESPN NFL API (Free, unlimited)
+- **API**: BallDontLie NFL API (Free with API key)
 - **Coverage**: Live scores, schedules, team information
+- **Update**: Real-time during games
+- **Backup**: Local database storage
 
 ## 🎨 Customization
 

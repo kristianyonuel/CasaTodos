@@ -29,7 +29,7 @@ def sync_season_from_api(year: int = 2025) -> int:
         
         for game in games_data:
             try:
-                game_id = f"api_{year}_w{game['week']}_{game['away_team']}_{game['home_team']}"
+                game_id = f"bdl_{year}_w{game['week']}_{game['away_team']}_{game['home_team']}"
                 
                 cursor.execute('''
                     INSERT INTO nfl_games 
@@ -84,7 +84,7 @@ def sync_week_from_api(week: int, year: int = 2025) -> int:
         
         for game in games_data:
             try:
-                game_id = f"api_{year}_w{week}_{game['away_team']}_{game['home_team']}"
+                game_id = f"bdl_{year}_w{week}_{game['away_team']}_{game['home_team']}"
                 
                 # Check if game exists
                 cursor.execute('SELECT id FROM nfl_games WHERE game_id = ?', (game_id,))

@@ -244,9 +244,9 @@
         }
 
         async function syncSeason() {
-            if (!confirm('This will sync the complete 2025 NFL schedule from ESPN API (free). Continue?')) return;
+            if (!confirm('This will sync the complete 2025 NFL schedule from BallDontLie API. Continue?')) return;
             
-            document.getElementById('admin-content').innerHTML = '<p>Syncing 2025 NFL season from ESPN API...</p>';
+            document.getElementById('admin-content').innerHTML = '<p>Syncing 2025 NFL season from BallDontLie API...</p>';
             
             try {
                 const response = await fetch('/sync_season', {
@@ -259,10 +259,10 @@
                 if (result.success) {
                     document.getElementById('admin-content').innerHTML = 
                         `<div class="alert alert-success">
-                            <h3>Free API Sync Complete!</h3>
+                            <h3>BallDontLie API Sync Complete!</h3>
                             <p>${result.message}</p>
                             <p><strong>Games imported:</strong> ${result.games_added}</p>
-                            <p><strong>Data Source:</strong> ESPN API (Free)</p>
+                            <p><strong>Data Source:</strong> BallDontLie NFL API</p>
                             <button onclick="loadSchedule()" class="btn btn-primary">View Schedule</button>
                         </div>`;
                 } else {
@@ -270,7 +270,7 @@
                         `<div class="alert alert-error">
                             <h3>Sync Failed</h3>
                             <p>Error: ${result.error}</p>
-                            <p><strong>Note:</strong> ESPN API may be temporarily unavailable.</p>
+                            <p><strong>Note:</strong> BallDontLie API may be temporarily unavailable.</p>
                             <button onclick="syncSeason()" class="btn btn-warning">Retry</button>
                         </div>`;
                 }
@@ -280,14 +280,14 @@
                     `<div class="alert alert-error">
                         <h3>Sync Failed</h3>
                         <p>Network error: ${error.message}</p>
-                        <p>ESPN API may be temporarily unavailable.</p>
+                        <p>BallDontLie API may be temporarily unavailable.</p>
                         <button onclick="syncSeason()" class="btn btn-warning">Retry</button>
                     </div>`;
             }
         }
 
         async function generateWeekGames() {
-            if (!confirm(`Sync official NFL games for Week ${currentWeek}, 2025 from ESPN API?`)) return;
+            if (!confirm(`Sync official NFL games for Week ${currentWeek}, 2025 from BallDontLie API?`)) return;
             
             try {
                 const response = await fetch('/admin/generate_week', {
@@ -298,7 +298,7 @@
                 
                 const result = await response.json();
                 if (result.success) {
-                    alert(`Successfully synced ${result.games_created} games for Week ${currentWeek} from ESPN API`);
+                    alert(`Successfully synced ${result.games_created} games for Week ${currentWeek} from BallDontLie API`);
                     loadSchedule();
                 } else {
                     alert('Error syncing games: ' + result.error);
