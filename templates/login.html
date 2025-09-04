@@ -21,6 +21,13 @@
             color: #155724; 
             border: 1px solid #c3e6cb; 
         }
+        .sample-users {
+            margin-top: 20px; 
+            padding: 15px; 
+            background: #f8f9fa; 
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
@@ -50,10 +57,11 @@
                     <button type="submit" class="btn btn-primary">Login</button>
                 </form>
 
-                <div style="margin-top: 20px; padding: 10px; background: #e9ecef; border-radius: 4px;">
-                    <strong>Default Admin:</strong><br>
-                    Username: admin<br>
-                    Password: admin123
+                <div class="sample-users">
+                    <strong>Sample Family Accounts:</strong><br>
+                    Username: dad, mom, son, daughter<br>
+                    Password: family123<br>
+                    <small>(Admin access available with separate credentials)</small>
                 </div>
 
                 <p><a href="{{ url_for('register') }}">Don't have an account? Register here</a></p>
