@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - La Casa de Todos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>⚙️ Admin Panel</h1>
+            <nav class="nav">
+                <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('games') }}" class="nav-link">Make Picks</a>
+                <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
+                <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <div class="admin-container">
+                <h2>League Administration</h2>
+                
+                <div class="admin-actions">
+                    <button onclick="loadAllPicks()" class="btn btn-primary">View All Picks</button>
+                    <button onclick="loadUsers()" class="btn btn-secondary">Manage Users</button>
+                </div>
+                
+                <div id="admin-content">
+                    <p>Select an action above to manage the league.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        async function loadAllPicks() {
+            try {
+                const response = await fetch('/admin/all_picks');
+                const picks = await response.json();
+                
+                let html = '<h3>All User Picks</h3><table class="leaderboard-table">';
+                html += '<thead><tr><th>User</th><th>Game</th><th>Pick</th><th>Score Prediction</th></tr></thead><tbody>';
+                
+                picks.forEach(pick => {
+                    html += `<tr>
+                        <td>${pick.username}</td>
+                        <td>${pick.away_team} @ ${pick.home_team}</td>
+                        <td>${pick.selected_team}</td>
+                        <td>${pick.is_monday_night ? `${pick.predicted_away_score || 0} - ${pick.predicted_home_score || 0}` : 'N/A'}</td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                document.getElementById('admin-content').innerHTML = html;
+            } catch (error) {
+                document.getElementById('admin-content').innerHTML = '<p>Error loading picks</p>';
+            }
+        }
+    </script>
+</body>
+</html>

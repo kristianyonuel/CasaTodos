@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rules - La Casa de Todos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>📋 Official Rules</h1>
+            <nav class="nav">
+                <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('games') }}" class="nav-link">Make Picks</a>
+                <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
+                <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <div class="rules-container">
+                <h2>🏈 La Casa de Todos NFL Fantasy League Rules</h2>
+                
+                <div class="rule-item">
+                    <h3>1. Weekly Competition</h3>
+                    <p>We compete each week by selecting your picks for every game of the week.</p>
+                </div>
+                
+                <div class="rule-item">
+                    <h3>2. Submission Deadlines</h3>
+                    <p>You have until <strong>Thursday</strong> to select your team for Thursday Night Football, and then until before the <strong>first Sunday game</strong> to choose the rest of your teams for that week.</p>
+                </div>
+                
+                <div class="rule-item">
+                    <h3>3. Tiebreaker</h3>
+                    <p>The <strong>score prediction for the Monday Night game</strong> is used as a tiebreaker. The closest prediction (high or low) wins that week.</p>
+                </div>
+                
+                <div class="rule-item">
+                    <h3>4. Rule Changes</h3>
+                    <p>Any rule changes or additions are voted on by all participants.</p>
+                </div>
+                
+                <div class="rule-item">
+                    <h3>5. Format</h3>
+                    <p>Standard weekly rules format is used based on each participant's selections. An elimination format is used when playing the weekly pool.</p>
+                </div>
+                
+                <div class="rule-item">
+                    <h3>6. Entry Fees</h3>
+                    <ul>
+                        <li><strong>$5</strong> is paid per week by each participant if using only the weekly pool.</li>
+                        <li><strong>$10</strong> is paid per week if using the full-season pool.</li>
+                    </ul>
+                </div>
+                
+                <div class="rule-item">
+                    <h3>7. Game Formats</h3>
+                    <p>All formats are played, including:</p>
+                    <ul>
+                        <li><strong>Elimination:</strong> Picks must be submitted 7 days before Saturday (to start the week)</li>
+                        <li><strong>Weekly Pool:</strong> Standard weekly competition</li>
+                        <li><strong>Full team selection for the week:</strong> Pick all games</li>
+                    </ul>
+                </div>
+                
+                <div class="rule-item">
+                    <h3>8. Elimination Rules</h3>
+                    <p>Elimination format is used during elimination weeks. Before the weekly games begin, team selections must be submitted to participate. <strong>If no selection is submitted, the participant is eliminated.</strong></p>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
