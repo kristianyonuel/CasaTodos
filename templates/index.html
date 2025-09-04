@@ -14,7 +14,8 @@
             <p class="subtitle">NFL Fantasy League - Family Edition</p>
             <nav class="nav">
                 <a href="{{ url_for('games') }}" class="nav-link">Make Picks</a>
-                <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
+                <a href="{{ url_for('leaderboard') }}" class="nav-link">Season Leaderboard</a>
+                <a href="{{ url_for('weekly_leaderboard') }}" class="nav-link">Weekly Leaderboard</a>
                 <a href="{{ url_for('rules') }}" class="nav-link">Rules</a>
                 {% if session.get('is_admin') %}
                 <a href="{{ url_for('admin') }}" class="nav-link admin">Admin</a>

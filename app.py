@@ -1587,6 +1587,82 @@ def admin_simple_picks():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/weekly_leaderboard')
+@app.route('/weekly_leaderboard/<int:week>')
+@app.route('/weekly_leaderboard/<int:week>/<int:year>')
+def weekly_leaderboard(week=None, year=None):
+    """Weekly leaderboard with Monday Night tiebreaker logic"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Default to current week if not specified
+    if week is None:
+        # Calculate current NFL week based on date
+        from datetime import datetime
+        current_date = datetime.now()
+        # NFL season typically starts first week of September
+        season_start = datetime(2025, 9, 4)  # 2025 season start
+        days_since_start = (current_date - season_start).days
+        week = max(1, min(18, (days_since_start // 7) + 1))
+    if year is None:
+        year = 2025
+    
+    try:
+        # Import the scoring manager
+        from scoring_manager import scoring_manager
+        
+        # Get weekly rankings with Monday Night tiebreakers
+        weekly_results = scoring_manager.determine_week_winner(week, year)
+        
+        # Prepare data for template
+        leaderboard_data = []
+        for i, user_data in enumerate(weekly_results, 1):
+            monday_data = user_data.get('monday_tiebreaker', {})
+            
+            leaderboard_data.append({
+                'rank': i,
+                'username': user_data['username'],
+                'total_score': user_data['total_score'],
+                'breakdown': user_data.get('breakdown', {}),
+                'monday_tiebreaker': {
+                    'has_pick': monday_data.get('has_monday_pick', False),
+                    'home_diff': monday_data.get('home_difference', 0),
+                    'away_diff': monday_data.get('away_difference', 0),
+                    'total_diff': monday_data.get('total_difference', 0),
+                    'home_team': monday_data.get('home_team', ''),
+                    'away_team': monday_data.get('away_team', ''),
+                    'predicted_home': monday_data.get('predicted_home', 0),
+                    'predicted_away': monday_data.get('predicted_away', 0),
+                    'actual_home': monday_data.get('actual_home', 0),
+                    'actual_away': monday_data.get('actual_away', 0)
+                },
+                'is_winner': i == 1
+            })
+        
+        # Get available weeks for navigation
+        conn = get_db_legacy()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT DISTINCT week, year 
+            FROM nfl_games 
+            WHERE is_final = 1
+            ORDER BY year DESC, week DESC
+            LIMIT 10
+        ''')
+        available_weeks = cursor.fetchall()
+        conn.close()
+        
+        return render_template('weekly_leaderboard.html', 
+                             leaderboard=leaderboard_data,
+                             current_week=week,
+                             current_year=year,
+                             available_weeks=available_weeks)
+    
+    except Exception as e:
+        logger.error(f"Error in weekly leaderboard: {e}")
+        flash('Error loading weekly leaderboard', 'error')
+        return redirect(url_for('leaderboard'))
+
 if __name__ == '__main__':
     import os
     import ssl
