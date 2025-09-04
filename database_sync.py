@@ -13,11 +13,16 @@ def sync_season_from_api(year: int = 2025) -> int:
     try:
         print(f"🔄 Syncing {year} NFL season from BallDontLie API...")
         
+        # Ensure we're syncing the correct year
+        if year < 2020:
+            print(f"❌ Year {year} not supported. Using 2025 instead.")
+            year = 2025
+        
         # Get season schedule from API
         games_data = get_season_schedule(year)
         
         if not games_data:
-            print("❌ No games data received from BallDontLie API")
+            print(f"❌ No games data received from BallDontLie API for {year}")
             return 0
         
         # Clear existing games for the year
@@ -61,14 +66,19 @@ def sync_season_from_api(year: int = 2025) -> int:
         return games_added
         
     except Exception as e:
-        logger.error(f"Season sync error: {e}")
-        print(f"❌ Season sync failed: {e}")
+        logger.error(f"Season sync error for {year}: {e}")
+        print(f"❌ Season sync failed for {year}: {e}")
         return 0
 
 def sync_week_from_api(week: int, year: int = 2025) -> int:
     """Sync specific week from BallDontLie API"""
     try:
         print(f"🔄 Syncing Week {week}, {year} from BallDontLie API...")
+        
+        # Ensure we're syncing the correct year  
+        if year < 2020:
+            print(f"❌ Year {year} not supported. Using 2025 instead.")
+            year = 2025
         
         # Get week games from API
         games_data = get_week_games(week, year)
@@ -133,12 +143,12 @@ def sync_week_from_api(week: int, year: int = 2025) -> int:
         conn.commit()
         conn.close()
         
-        print(f"✅ Updated {games_updated} games for Week {week}")
+        print(f"✅ Updated {games_updated} games for Week {week}, {year}")
         return games_updated
         
     except Exception as e:
-        logger.error(f"Week sync error: {e}")
-        print(f"❌ Week sync failed: {e}")
+        logger.error(f"Week sync error for {week}, {year}: {e}")
+        print(f"❌ Week sync failed for Week {week}, {year}: {e}")
         return 0
 
 def update_live_scores(week: int, year: int = 2025) -> int:

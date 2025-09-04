@@ -22,6 +22,7 @@ def get_season_schedule(year: int = 2025) -> List[Dict]:
     try:
         all_games = []
         
+        # BallDontLie NFL API uses specific season parameter
         for week in range(1, 19):
             week_games = get_week_games(week, year)
             all_games.extend(week_games)
@@ -31,15 +32,18 @@ def get_season_schedule(year: int = 2025) -> List[Dict]:
         return all_games
         
     except Exception as e:
-        logger.error(f"Error fetching season schedule: {e}")
+        logger.error(f"Error fetching season schedule for {year}: {e}")
         return []
 
 def get_week_games(week: int, year: int = 2025) -> List[Dict]:
     """Get games for specific week from BallDontLie"""
     try:
         url = f"{BALLDONTLIE_BASE}/games"
+        
+        # Ensure we're requesting the correct year
         params = {
-            'season': year,
+            'season': year,          # Explicitly set the season year
+            'season_type': 'regular', # Regular season games
             'week': week,
             'per_page': 100
         }
@@ -48,10 +52,14 @@ def get_week_games(week: int, year: int = 2025) -> List[Dict]:
         response.raise_for_status()
         
         data = response.json()
-        return normalize_games(data.get('data', []), week, year)
+        games = data.get('data', [])
+        
+        logger.info(f"BallDontLie API returned {len(games)} games for Week {week}, {year}")
+        
+        return normalize_games(games, week, year)
         
     except Exception as e:
-        logger.error(f"Error fetching week {week} games: {e}")
+        logger.error(f"Error fetching week {week} games for {year}: {e}")
         return []
 
 def get_live_scores(week: int, year: int = 2025) -> List[Dict]:

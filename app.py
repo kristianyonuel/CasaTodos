@@ -140,17 +140,21 @@ def sync_season():
     data = request.json or {}
     year = data.get('year', 2025)
     
+    # Ensure we're using 2025 or later for BallDontLie API
+    if year < 2025:
+        year = 2025
+    
     games_added = sync_season_from_api(year)
     
     if games_added > 0:
         return jsonify({
             'success': True,
-            'message': f'Successfully synced {games_added} games from NFL API for {year} season',
+            'message': f'Successfully synced {games_added} games from BallDontLie API for {year} season',
             'games_added': games_added
         })
     else:
         return jsonify({
-            'error': 'Failed to sync season data from NFL API. Check API configuration.'
+            'error': f'Failed to sync season data from BallDontLie API for {year}. Check API configuration.'
         }), 500
 
 @app.route('/admin/generate_week', methods=['POST'])
