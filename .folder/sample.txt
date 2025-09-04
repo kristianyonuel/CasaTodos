@@ -1,0 +1,2 @@
+This is a sample file in the .folder directory.
+You can put any files here that need to be accessed via /.folder/ URLs.

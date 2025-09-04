@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, send_from_directory, send_from_directory
 import sqlite3
 import os
 import logging
@@ -1587,6 +1587,67 @@ def admin_simple_picks():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/.well-known/<path:filename>')
+def serve_well_known(filename):
+    """Serve files from .well-known directory (for SSL certificates, etc.)"""
+    try:
+        # Serve files from a .well-known directory
+        return send_from_directory('.well-known', filename)
+    except FileNotFoundError:
+        return "File not found", 404
+
+@app.route('/.folder/<path:filename>')
+def serve_hidden_folder(filename):
+    """Serve files from .folder directory"""
+    try:
+        # Serve files from a .folder directory
+        return send_from_directory('.folder', filename)
+    except FileNotFoundError:
+        return "File not found", 404
+
+@app.route('/.config/<path:filename>')
+def serve_config_folder(filename):
+    """Serve files from .config directory"""
+    try:
+        # Serve files from a .config directory
+        return send_from_directory('.config', filename)
+    except FileNotFoundError:
+        return "File not found", 404
+
+# Alternative approach: Serve specific files with custom logic
+@app.route('/.env')
+def serve_env_file():
+    """Serve .env file (be careful with security!)"""
+    # SECURITY WARNING: Only serve this in development
+    if app.debug:
+        try:
+            return send_from_directory('.', '.env')
+        except FileNotFoundError:
+            return "Environment file not found", 404
+    else:
+        return "Not available in production", 403
+
+@app.route('/.htaccess')
+def serve_htaccess():
+    """Serve .htaccess file"""
+    try:
+        return send_from_directory('.', '.htaccess')
+    except FileNotFoundError:
+        return "File not found", 404
+
+@app.route('/robots.txt')
+def serve_robots():
+    """Serve robots.txt file"""
+    try:
+        return send_from_directory('.', 'robots.txt')
+    except FileNotFoundError:
+        # Return a default robots.txt if file doesn't exist
+        return """User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /.well-known/
+Sitemap: https://yourdomain.com/sitemap.xml""", 200, {'Content-Type': 'text/plain'}
+
 if __name__ == '__main__':
     import threading
     import ssl
@@ -1747,40 +1808,6 @@ if __name__ == '__main__':
                 print("💡 Try running with 'dev' mode: python app.py dev")
         except Exception as e:
             logger.error(f"❌ Unexpected error starting HTTP server: {e}")
-            print("💡 Try running with 'dev' mode: python app.py dev")
-    
-    def run_https_server():
-        """Run HTTPS server on port 443"""
-        try:
-            ssl_context = create_ssl_context()
-            if ssl_context:
-                logger.info("Starting HTTPS server on port 443...")
-                https_server = make_server('0.0.0.0', 443, app, ssl_context=ssl_context)
-                logger.info("✅ HTTPS server successfully started on port 443")
-                https_server.serve_forever()
-            else:
-                logger.error("Could not create SSL context. HTTPS server not started.")
-        except PermissionError:
-            logger.warning("❌ Permission denied for port 443. Trying port 8443...")
-            try:
-                ssl_context = create_ssl_context()
-                if ssl_context:
-                    https_server = make_server('0.0.0.0', 8443, app, ssl_context=ssl_context)
-                    logger.info("✅ HTTPS server successfully started on port 8443")
-                    print(f"🔒 HTTPS server running on https://localhost:8443")
-                    https_server.serve_forever()
-                else:
-                    logger.error("Could not create SSL context for port 8443")
-            except Exception as e:
-                logger.error(f"❌ Failed to start HTTPS server on port 8443: {e}")
-                print("💡 Try running with 'dev' mode: python app.py dev")
-        except OSError as e:
-            if "Address already in use" in str(e):
-                logger.error("❌ Port 443 is already in use. Trying port 8443...")
-                try:
-                    ssl_context = create_ssl_context()
-                    if ssl_context:
-                        https_server = make_server('0.0.0.0', 8443, app, ssl_context=ssl_context)
                         logger.info("✅ HTTPS server successfully started on port 8443")
                         print(f"🔒 HTTPS server running on https://localhost:8443")
                         https_server.serve_forever()
