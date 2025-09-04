@@ -140,29 +140,43 @@ def create_full_database():
         ''', (setting_name, setting_value, description))
     print(f"✓ Created {len(settings)} league settings")
     
-    # Insert sample NFL games for current week
-    current_year = datetime.datetime.now().year
-    current_week = 1  # Start with week 1
-    
-    sample_games = [
-        (current_week, current_year, f'game_tnf_{current_week}', 'KC', 'BUF', 
-         datetime.datetime(current_year, 9, 7, 20, 15), False, True),
-        (current_week, current_year, f'game_sun1_{current_week}', 'DAL', 'NYG', 
-         datetime.datetime(current_year, 9, 10, 13, 0), False, False),
-        (current_week, current_year, f'game_sun2_{current_week}', 'SF', 'LAR', 
-         datetime.datetime(current_year, 9, 10, 13, 0), False, False),
-        (current_week, current_year, f'game_sun3_{current_week}', 'NE', 'MIA', 
-         datetime.datetime(current_year, 9, 10, 16, 25), False, False),
-        (current_week, current_year, f'game_mnf_{current_week}', 'GB', 'CHI', 
-         datetime.datetime(current_year, 9, 11, 20, 15), True, False)
-    ]
-    
-    for week, year, game_id, home, away, game_date, is_monday, is_thursday in sample_games:
-        cursor.execute('''
-            INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_monday_night, is_thursday_night)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (week, year, game_id, home, away, game_date, is_monday, is_thursday))
-    print(f"✓ Created {len(sample_games)} sample games")
+    # Import NFL schedule and create games
+    try:
+        from nfl_schedule_2025 import get_2025_schedule
+        from app import create_nfl_games_from_schedule
+        
+        current_year = datetime.datetime.now().year
+        if current_year >= 2025:
+            current_year = 2025  # Use 2025 schedule
+        
+        print(f"Creating NFL games for {current_year} season...")
+        
+        # Create games for all 18 weeks
+        total_games = 0
+        for week in range(1, 19):
+            games = create_nfl_games_from_schedule(week, current_year)
+            for game in games:
+                cursor.execute('''
+                    INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_monday_night, is_thursday_night)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (game['week'], game['year'], game['game_id'], game['home_team'], 
+                      game['away_team'], game['game_date'], game['is_monday_night'], game['is_thursday_night']))
+                total_games += 1
+        
+        print(f"✓ Created {total_games} NFL games")
+        
+    except Exception as e:
+        print(f"Error creating NFL games: {e}")
+        # Fall back to sample games for week 1
+        from app import create_sample_games
+        sample_games = create_sample_games(1, current_year)
+        for game in sample_games:
+            cursor.execute('''
+                INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_monday_night, is_thursday_night)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (game['week'], game['year'], game['game_id'], game['home_team'], 
+                  game['away_team'], game['game_date'], game['is_monday_night'], game['is_thursday_night']))
+        print(f"✓ Created sample games for week 1")
     
     conn.commit()
     conn.close()
@@ -173,7 +187,7 @@ def create_full_database():
     print(f"Database file: nfl_fantasy.db")
     print(f"Admin user: admin / admin123")
     print(f"Family users: dad, mom, son, daughter, uncle, aunt / family123")
-    print(f"Sample games created for week {current_week}")
+    print(f"NFL games created for {current_year} season")
     print("="*50)
 
 if __name__ == "__main__":
