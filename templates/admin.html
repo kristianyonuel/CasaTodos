@@ -42,7 +42,9 @@
                 <div class="admin-actions">
                     <button onclick="loadAllPicks()" class="btn btn-primary">View All Picks</button>
                     <button onclick="loadUsers()" class="btn btn-info">Manage Users</button>
-                    <button onclick="syncSeason()" class="btn btn-success">Sync NFL Season</button>
+                    <button onclick="loadSchedule()" class="btn btn-success">Manage Schedule</button>
+                    <button onclick="loadGameResults()" class="btn btn-warning">Update Game Results</button>
+                    <button onclick="syncSeason()" class="btn btn-secondary">Sync NFL Season</button>
                 </div>
                 
                 <div id="admin-content">
@@ -226,151 +228,402 @@
 
         async function loadSchedule() {
             try {
-                document.getElementById('admin-content').innerHTML = '<p>Loading schedule data...</p>';
+                document.getElementById('admin-content').innerHTML = '<p>Loading schedule...</p>';
                 
-                const response = await fetch(`/admin/schedule?year=${currentYear}`);
-                const schedule = await response.json();
+                const response = await fetch(`/admin/schedule?week=${currentWeek}&year=${currentYear}`);
+                const games = await response.json();
                 
-                let html = `<h3>NFL Schedule Management - ${currentYear}</h3>`;
-                html += '<p>Schedule data is stored in the database. Use this panel to view and modify the schedule.</p>';
-                html += '<button onclick="createScheduleForYear()" class="btn btn-success">Create Schedule for Year</button>';
+                let html = `<h3>Schedule Management - Week ${currentWeek}, ${currentYear}</h3>`;
+                html += '<div class="schedule-actions">';
+                html += '<button onclick="showAddGameForm()" class="btn btn-sm btn-success">Add New Game</button>';
+                html += '<button onclick="generateWeekGames()" class="btn btn-sm btn-info">Generate Week Games</button>';
+                html += '</div>';
                 
-                if (schedule.length > 0) {
+                if (games.length > 0) {
                     html += '<div class="schedule-management">';
                     html += '<table class="admin-picks-table">';
-                    html += '<thead><tr><th>Week</th><th>Game</th><th>Date/Time</th><th>Type</th><th>Actions</th></tr></thead><tbody>';
+                    html += '<thead><tr><th>Game ID</th><th>Teams</th><th>Date/Time</th><th>Type</th><th>Status</th><th>Score</th><th>Actions</th></tr></thead><tbody>';
                     
-                    schedule.forEach(game => {
-                        const gameType = game.is_thursday_night ? 'TNF' : game.is_monday_night ? 'MNF' : 'Regular';
-                        html += `<tr>
-                            <td>Week ${game.week}</td>
-                            <td>${game.away_team} @ ${game.home_team}</td>
-                            <td>${new Date(game.game_time).toLocaleString()}</td>
-                            <td>${gameType}</td>
+                    games.forEach(game => {
+                        const gameType = game.is_thursday_night ? 'TNF' : game.is_monday_night ? 'MNF' : game.is_sunday_night ? 'SNF' : 'Regular';
+                        const gameDate = new Date(game.game_date).toLocaleString();
+                        const score = game.is_final ? `${game.away_score}-${game.home_score}` : 'TBD';
+                        
+                        html += `<tr data-game-id="${game.id}">
+                            <td>${game.game_id}</td>
                             <td>
-                                <button onclick="editScheduleGame(${game.id})" class="btn btn-sm btn-primary">Edit</button>
-                                <button onclick="deleteScheduleGame(${game.id})" class="btn btn-sm btn-danger">Delete</button>
+                                <input type="text" class="game-away-team" value="${game.away_team}" data-game-id="${game.id}" style="width:60px">
+                                @
+                                <input type="text" class="game-home-team" value="${game.home_team}" data-game-id="${game.id}" style="width:60px">
+                            </td>
+                            <td>
+                                <input type="datetime-local" class="game-date" value="${game.game_date ? game.game_date.slice(0,16) : ''}" data-game-id="${game.id}">
+                            </td>
+                            <td>
+                                <select class="game-type" data-game-id="${game.id}">
+                                    <option value="regular" ${gameType === 'Regular' ? 'selected' : ''}>Regular</option>
+                                    <option value="thursday" ${gameType === 'TNF' ? 'selected' : ''}>Thursday Night</option>
+                                    <option value="sunday" ${gameType === 'SNF' ? 'selected' : ''}>Sunday Night</option>
+                                    <option value="monday" ${gameType === 'MNF' ? 'selected' : ''}>Monday Night</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select class="game-status" data-game-id="${game.id}">
+                                    <option value="scheduled" ${game.game_status === 'scheduled' ? 'selected' : ''}>Scheduled</option>
+                                    <option value="in_progress" ${game.game_status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+                                    <option value="final" ${game.game_status === 'final' ? 'selected' : ''}>Final</option>
+                                    <option value="postponed" ${game.game_status === 'postponed' ? 'selected' : ''}>Postponed</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="number" class="away-score" value="${game.away_score || ''}" placeholder="Away" data-game-id="${game.id}" style="width:50px" min="0" max="99">
+                                -
+                                <input type="number" class="home-score" value="${game.home_score || ''}" placeholder="Home" data-game-id="${game.id}" style="width:50px" min="0" max="99">
+                            </td>
+                            <td>
+                                <button onclick="updateGame(${game.id})" class="btn btn-sm btn-primary">Update</button>
+                                <button onclick="deleteGame(${game.id})" class="btn btn-sm btn-danger">Delete</button>
                             </td>
                         </tr>`;
                     });
                     
                     html += '</tbody></table></div>';
                 } else {
-                    html += '<p>No schedule data found for this year.</p>';
+                    html += '<p>No games found for this week.</p>';
                 }
                 
                 document.getElementById('admin-content').innerHTML = html;
             } catch (error) {
                 document.getElementById('admin-content').innerHTML = '<p>Error loading schedule</p>';
                 console.error('Error:', error);
-            }
-        }
-        
-        async function createScheduleForYear() {
-            if (!confirm(`Create default schedule for ${currentYear}?`)) return;
-            
-            try {
-                const response = await fetch('/admin/create_schedule', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ year: parseInt(currentYear) })
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    alert('Schedule created successfully!');
-                    loadSchedule();
-                } else {
-                    alert('Error creating schedule: ' + result.error);
-                }
-            } catch (error) {
-                alert('Error creating schedule');
-                console.error('Error:', error);
-            }
-        }
-    </script>
-</body>
-</html>
-            }
-        }
-        
-        async function createWeekGames() {
-            const year = new Date().getFullYear();
-            const url = `/force_create_games/${currentWeek}/${year}`;
-            
-            if (!confirm(`Create games for Week ${currentWeek}?`)) return;
-            
-            try {
-                window.location.href = url;
-            } catch (error) {
-                alert('Error creating games');
             }
         }
 
-        async function loadSchedule() {
+        async function loadGameResults() {
             try {
-                document.getElementById('admin-content').innerHTML = '<p>Loading schedule data...</p>';
+                document.getElementById('admin-content').innerHTML = '<p>Loading game results...</p>';
                 
-                const response = await fetch(`/admin/schedule?year=${currentYear}`);
-                const schedule = await response.json();
+                const response = await fetch(`/admin/results?week=${currentWeek}&year=${currentYear}`);
+                const games = await response.json();
                 
-                let html = `<h3>NFL Schedule Management - ${currentYear}</h3>`;
-                html += '<p>Schedule data is stored in the database. Use this panel to view and modify the schedule.</p>';
-                html += '<button onclick="createScheduleForYear()" class="btn btn-success">Create Schedule for Year</button>';
+                let html = `<h3>Game Results - Week ${currentWeek}, ${currentYear}</h3>`;
+                html += '<div class="results-actions">';
+                html += '<button onclick="calculateWeeklyResults()" class="btn btn-success">Calculate Weekly Results</button>';
+                html += '<button onclick="markWeekComplete()" class="btn btn-warning">Mark Week Complete</button>';
+                html += '</div>';
                 
-                if (schedule.length > 0) {
-                    html += '<div class="schedule-management">';
+                if (games.length > 0) {
+                    html += '<div class="results-management">';
                     html += '<table class="admin-picks-table">';
-                    html += '<thead><tr><th>Week</th><th>Game</th><th>Date/Time</th><th>Type</th><th>Actions</th></tr></thead><tbody>';
+                    html += '<thead><tr><th>Game</th><th>Final Score</th><th>Winning Team</th><th>Total Picks</th><th>Correct Picks</th><th>Actions</th></tr></thead><tbody>';
                     
-                    schedule.forEach(game => {
-                        const gameType = game.is_thursday_night ? 'TNF' : game.is_monday_night ? 'MNF' : 'Regular';
+                    games.forEach(game => {
+                        const winner = game.home_score > game.away_score ? game.home_team : 
+                                     game.away_score > game.home_score ? game.away_team : 'TIE';
+                        
                         html += `<tr>
-                            <td>Week ${game.week}</td>
                             <td>${game.away_team} @ ${game.home_team}</td>
-                            <td>${new Date(game.game_time).toLocaleString()}</td>
-                            <td>${gameType}</td>
+                            <td>${game.away_score || 0} - ${game.home_score || 0}</td>
+                            <td><strong>${winner}</strong></td>
+                            <td>${game.total_picks || 0}</td>
+                            <td>${game.correct_picks || 0}</td>
                             <td>
-                                <button onclick="editScheduleGame(${game.id})" class="btn btn-sm btn-primary">Edit</button>
-                                <button onclick="deleteScheduleGame(${game.id})" class="btn btn-sm btn-danger">Delete</button>
+                                <button onclick="viewGamePicks(${game.id})" class="btn btn-sm btn-info">View Picks</button>
+                                <button onclick="recalculateGame(${game.id})" class="btn btn-sm btn-warning">Recalculate</button>
                             </td>
                         </tr>`;
                     });
                     
                     html += '</tbody></table></div>';
                 } else {
-                    html += '<p>No schedule data found for this year.</p>';
+                    html += '<p>No completed games found for this week.</p>';
                 }
                 
                 document.getElementById('admin-content').innerHTML = html;
             } catch (error) {
-                document.getElementById('admin-content').innerHTML = '<p>Error loading schedule</p>';
+                document.getElementById('admin-content').innerHTML = '<p>Error loading results</p>';
                 console.error('Error:', error);
             }
         }
-        
-        async function createScheduleForYear() {
-            if (!confirm(`Create default schedule for ${currentYear}?`)) return;
+
+        function showAddGameForm() {
+            const html = `
+                <div class="add-game-form">
+                    <h4>Add New Game</h4>
+                    <div class="form-row">
+                        <input type="text" id="new-away-team" placeholder="Away Team" required>
+                        <span>@</span>
+                        <input type="text" id="new-home-team" placeholder="Home Team" required>
+                    </div>
+                    <div class="form-row">
+                        <input type="datetime-local" id="new-game-date" required>
+                        <select id="new-game-type">
+                            <option value="regular">Regular</option>
+                            <option value="thursday">Thursday Night</option>
+                            <option value="sunday">Sunday Night</option>
+                            <option value="monday">Monday Night</option>
+                        </select>
+                    </div>
+                    <div class="form-actions">
+                        <button onclick="createNewGame()" class="btn btn-success">Create Game</button>
+                        <button onclick="loadSchedule()" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('admin-content').innerHTML = html;
+        }
+
+        async function createNewGame() {
+            const awayTeam = document.getElementById('new-away-team').value;
+            const homeTeam = document.getElementById('new-home-team').value;
+            const gameDate = document.getElementById('new-game-date').value;
+            const gameType = document.getElementById('new-game-type').value;
+            
+            if (!awayTeam || !homeTeam || !gameDate) {
+                alert('Please fill in all required fields');
+                return;
+            }
             
             try {
-                const response = await fetch('/admin/create_schedule', {
+                const response = await fetch('/admin/create_game', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ year: parseInt(currentYear) })
+                    body: JSON.stringify({
+                        week: currentWeek,
+                        year: currentYear,
+                        away_team: awayTeam,
+                        home_team: homeTeam,
+                        game_date: gameDate,
+                        game_type: gameType
+                    })
                 });
                 
                 const result = await response.json();
                 if (result.success) {
-                    alert('Schedule created successfully!');
+                    alert('Game created successfully!');
                     loadSchedule();
                 } else {
-                    alert('Error creating schedule: ' + result.error);
+                    alert('Error creating game: ' + result.error);
                 }
             } catch (error) {
-                alert('Error creating schedule');
+                alert('Error creating game');
                 console.error('Error:', error);
             }
         }
+
+        async function updateGame(gameId) {
+            const awayTeam = document.querySelector(`.game-away-team[data-game-id="${gameId}"]`).value;
+            const homeTeam = document.querySelector(`.game-home-team[data-game-id="${gameId}"]`).value;
+            const gameDate = document.querySelector(`.game-date[data-game-id="${gameId}"]`).value;
+            const gameType = document.querySelector(`.game-type[data-game-id="${gameId}"]`).value;
+            const gameStatus = document.querySelector(`.game-status[data-game-id="${gameId}"]`).value;
+            const awayScore = document.querySelector(`.away-score[data-game-id="${gameId}"]`).value;
+            const homeScore = document.querySelector(`.home-score[data-game-id="${gameId}"]`).value;
+            
+            try {
+                const response = await fetch('/admin/update_game', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        game_id: gameId,
+                        away_team: awayTeam,
+                        home_team: homeTeam,
+                        game_date: gameDate,
+                        game_type: gameType,
+                        game_status: gameStatus,
+                        away_score: awayScore || null,
+                        home_score: homeScore || null
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('Game updated successfully!');
+                } else {
+                    alert('Error updating game: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error updating game');
+                console.error('Error:', error);
+            }
+        }
+
+        async function deleteGame(gameId) {
+            if (!confirm('Are you sure you want to delete this game? This will also delete all picks for this game.')) return;
+            
+            try {
+                const response = await fetch('/admin/delete_game', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ game_id: gameId })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    document.querySelector(`tr[data-game-id="${gameId}"]`).remove();
+                    alert('Game deleted successfully!');
+                } else {
+                    alert('Error deleting game: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error deleting game');
+                console.error('Error:', error);
+            }
+        }
+
+        async function generateWeekGames() {
+            if (!confirm(`Generate default games for Week ${currentWeek}? This will create standard NFL games.`)) return;
+            
+            try {
+                const response = await fetch('/admin/generate_week', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ week: currentWeek, year: currentYear })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert(`Generated ${result.games_created} games for Week ${currentWeek}`);
+                    loadSchedule();
+                } else {
+                    alert('Error generating games: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error generating games');
+                console.error('Error:', error);
+            }
+        }
+
+        async function calculateWeeklyResults() {
+            if (!confirm(`Calculate results for Week ${currentWeek}? This will determine winners based on final scores.`)) return;
+            
+            try {
+                const response = await fetch('/admin/calculate_results', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ week: currentWeek, year: currentYear })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert(`Results calculated! Week winner: ${result.winner || 'TBD'}`);
+                    loadGameResults();
+                } else {
+                    alert('Error calculating results: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error calculating results');
+                console.error('Error:', error);
+            }
+        }
+
+        // Enhanced user management with more options
+        async function loadUsers() {
+            try {
+                const response = await fetch('/admin/users');
+                const users = await response.json();
+                
+                let html = '<h3>User Management</h3>';
+                html += '<div class="user-actions">';
+                html += '<button onclick="showAddUserForm()" class="btn btn-success">Add New User</button>';
+                html += '<button onclick="exportUserData()" class="btn btn-info">Export User Data</button>';
+                html += '</div>';
+                html += '<table class="admin-picks-table">';
+                html += '<thead><tr><th>Username</th><th>Email</th><th>Admin</th><th>Active</th><th>Created</th><th>Last Login</th><th>Actions</th></tr></thead><tbody>';
+                
+                users.forEach(user => {
+                    html += `<tr data-user-id="${user.id}">
+                        <td><input type="text" value="${user.username}" id="username-${user.id}"></td>
+                        <td><input type="email" value="${user.email || ''}" id="email-${user.id}"></td>
+                        <td><input type="checkbox" ${user.is_admin ? 'checked' : ''} id="admin-${user.id}"></td>
+                        <td><input type="checkbox" ${user.is_active !== false ? 'checked' : ''} id="active-${user.id}"></td>
+                        <td>${new Date(user.created_at).toLocaleDateString()}</td>
+                        <td>${user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}</td>
+                        <td>
+                            <button onclick="updateUser(${user.id})" class="btn btn-sm btn-primary">Update</button>
+                            <button onclick="resetPassword(${user.id})" class="btn btn-sm btn-warning">Reset Password</button>
+                            <button onclick="viewUserStats(${user.id})" class="btn btn-sm btn-info">Stats</button>
+                            <button onclick="deleteUser(${user.id})" class="btn btn-sm btn-danger">Delete</button>
+                        </td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                document.getElementById('admin-content').innerHTML = html;
+            } catch (error) {
+                document.getElementById('admin-content').innerHTML = '<p>Error loading users</p>';
+            }
+        }
+
+        function showAddUserForm() {
+            const html = `
+                <div class="add-user-form">
+                    <h4>Add New User</h4>
+                    <div class="form-group">
+                        <label>Username:</label>
+                        <input type="text" id="new-username" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email:</label>
+                        <input type="email" id="new-email">
+                    </div>
+                    <div class="form-group">
+                        <label>Password:</label>
+                        <input type="password" id="new-password" required>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="new-admin"> Admin User
+                        </label>
+                    </div>
+                    <div class="form-actions">
+                        <button onclick="createNewUser()" class="btn btn-success">Create User</button>
+                        <button onclick="loadUsers()" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('admin-content').innerHTML = html;
+        }
+
+        async function createNewUser() {
+            const username = document.getElementById('new-username').value;
+            const email = document.getElementById('new-email').value;
+            const password = document.getElementById('new-password').value;
+            const isAdmin = document.getElementById('new-admin').checked;
+            
+            if (!username || !password) {
+                alert('Username and password are required');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/admin/create_user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        email: email,
+                        password: password,
+                        is_admin: isAdmin
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('User created successfully!');
+                    loadUsers();
+                } else {
+                    alert('Error creating user: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error creating user');
+                console.error('Error:', error);
+            }
+        }
+
+        // ...existing code...
     </script>
 </body>
 </html>

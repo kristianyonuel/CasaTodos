@@ -243,6 +243,202 @@ def admin():
     
     return render_template('admin.html')
 
+@app.route('/admin/schedule')
+def admin_schedule():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    week = request.args.get('week', 1, type=int)
+    year = request.args.get('year', datetime.now().year, type=int)
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM nfl_games 
+        WHERE week = ? AND year = ? 
+        ORDER BY game_date
+    ''', (week, year))
+    
+    games = []
+    for row in cursor.fetchall():
+        games.append(dict(row))
+    
+    conn.close()
+    return jsonify(games)
+
+@app.route('/admin/create_game', methods=['POST'])
+def admin_create_game():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    data = request.get_json()
+    week = data.get('week')
+    year = data.get('year')
+    away_team = data.get('away_team')
+    home_team = data.get('home_team')
+    game_date = data.get('game_date')
+    game_type = data.get('game_type', 'regular')
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Generate unique game_id
+    game_id = f"{game_type}_{year}_week_{week}_{away_team}_{home_team}"
+    
+    # Set game type flags
+    is_thursday = game_type == 'thursday'
+    is_sunday = game_type == 'sunday'
+    is_monday = game_type == 'monday'
+    
+    cursor.execute('''
+        INSERT INTO nfl_games 
+        (week, year, game_id, away_team, home_team, game_date, 
+         is_thursday_night, is_sunday_night, is_monday_night, game_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (week, year, game_id, away_team, home_team, game_date,
+          is_thursday, is_sunday, is_monday, 'scheduled'))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'Game created successfully'})
+
+@app.route('/admin/update_game', methods=['POST'])
+def admin_update_game():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    data = request.get_json()
+    game_id = data.get('game_id')
+    away_team = data.get('away_team')
+    home_team = data.get('home_team')
+    game_date = data.get('game_date')
+    game_type = data.get('game_type')
+    game_status = data.get('game_status')
+    away_score = data.get('away_score')
+    home_score = data.get('home_score')
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Set game type flags
+    is_thursday = game_type == 'thursday'
+    is_sunday = game_type == 'sunday'
+    is_monday = game_type == 'monday'
+    is_final = game_status == 'final'
+    
+    cursor.execute('''
+        UPDATE nfl_games SET 
+        away_team = ?, home_team = ?, game_date = ?, 
+        is_thursday_night = ?, is_sunday_night = ?, is_monday_night = ?,
+        game_status = ?, away_score = ?, home_score = ?, is_final = ?
+        WHERE id = ?
+    ''', (away_team, home_team, game_date, is_thursday, is_sunday, is_monday,
+          game_status, away_score, home_score, is_final, game_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'Game updated successfully'})
+
+@app.route('/admin/delete_game', methods=['POST'])
+def admin_delete_game():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    data = request.get_json()
+    game_id = data.get('game_id')
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Delete user picks first
+    cursor.execute('DELETE FROM user_picks WHERE game_id = ?', (game_id,))
+    
+    # Delete the game
+    cursor.execute('DELETE FROM nfl_games WHERE id = ?', (game_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'Game deleted successfully'})
+
+@app.route('/admin/create_user', methods=['POST'])
+def admin_create_user():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    data = request.get_json()
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    is_admin = data.get('is_admin', False)
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Check if username exists
+    cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'Username already exists'}), 400
+    
+    password_hash = generate_password_hash(password)
+    cursor.execute('''
+        INSERT INTO users (username, password_hash, email, is_admin)
+        VALUES (?, ?, ?, ?)
+    ''', (username, password_hash, email, is_admin))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'User created successfully'})
+
+@app.route('/admin/results')
+def admin_results():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    week = request.args.get('week', 1, type=int)
+    year = request.args.get('year', datetime.now().year, type=int)
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT g.*, 
+               COUNT(up.id) as total_picks,
+               COUNT(CASE WHEN up.selected_team = 
+                   CASE WHEN g.home_score > g.away_score THEN g.home_team
+                        WHEN g.away_score > g.home_score THEN g.away_team
+                        ELSE NULL END THEN 1 END) as correct_picks
+        FROM nfl_games g
+        LEFT JOIN user_picks up ON g.id = up.game_id
+        WHERE g.week = ? AND g.year = ?
+        GROUP BY g.id
+        ORDER BY g.game_date
+    ''', (week, year))
+    
+    results = []
+    for row in cursor.fetchall():
+        results.append(dict(row))
+    
+    conn.close()
+    return jsonify(results)
+
+@app.route('/admin/calculate_results', methods=['POST'])
+def admin_calculate_results():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    data = request.get_json()
+    week = data.get('week')
+    year = data.get('year')
+    
+    # Calculate weekly results logic here
+    # This would determine winners based on picks vs actual results
+    
+    return jsonify({'success': True, 'message': 'Results calculated', 'winner': 'TBD'})
+
 @app.errorhandler(404)
 def not_found_error(error):
     return render_template('error.html', error="Page not found"), 404
