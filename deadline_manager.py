@@ -9,7 +9,6 @@ import pytz
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from utils.timezone_utils import convert_to_ast
-from deadline_override_manager import DeadlineOverrideManager
 
 class DeadlineManager:
     """Manages game submission deadlines based on NFL schedule"""
@@ -310,6 +309,9 @@ class DeadlineManager:
         try:
             # Get base deadlines
             base_summary = self.get_deadline_summary(week, year)
+            
+            # Import locally to avoid circular imports
+            from deadline_override_manager import DeadlineOverrideManager
             override_manager = DeadlineOverrideManager()
             
             # Check for user-specific or global overrides

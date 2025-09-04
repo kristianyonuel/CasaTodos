@@ -1424,3 +1424,10 @@ def admin_import_picks_csv():
     except Exception as e:
         logger.error(f"Error importing picks CSV: {e}")
         return jsonify({'error': str(e)}, 500)
+
+if __name__ == '__main__':
+    # Initialize the database on startup
+    initialize_app()
+    
+    # Run the Flask app
+    app.run(debug=True, host='0.0.0.0', port=5000)
