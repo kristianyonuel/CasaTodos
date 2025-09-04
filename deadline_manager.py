@@ -7,8 +7,9 @@ from __future__ import annotations
 import sqlite3
 import pytz
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from utils.timezone_utils import convert_to_ast
+from deadline_override_manager import DeadlineOverrideManager
 
 class DeadlineManager:
     """Manages game submission deadlines based on NFL schedule"""
@@ -234,6 +235,105 @@ class DeadlineManager:
         except Exception as e:
             print(f"Error checking pick availability: {e}")
             return True  # Default to allowing picks if error occurs
+    
+    def get_deadline_summary(self, week: int, year: int) -> Dict[str, Any]:
+        """Get a user-friendly summary of deadlines with hours remaining"""
+        try:
+            deadlines = self.get_week_deadlines(week, year)
+            now = datetime.now(self.ast_tz)
+            
+            summary = {
+                'thursday': None,
+                'sunday': None,
+                'monday': None,
+                'next_deadline': None,
+                'all_deadlines_passed': True
+            }
+            
+            for key, deadline_info in deadlines.items():
+                if deadline_info and deadline_info.get('deadline'):
+                    deadline = deadline_info['deadline']
+                    hours_remaining = (deadline - now).total_seconds() / 3600
+                    
+                    deadline_summary = {
+                        'deadline': deadline,
+                        'hours_remaining': hours_remaining,
+                        'passed': hours_remaining <= 0,
+                        'matchup': deadline_info.get('matchup', ''),
+                        'formatted_time': deadline.strftime('%A %-I:%M %p AST'),
+                        'urgency': 'critical' if 0 < hours_remaining <= 2 else 'warning' if 0 < hours_remaining <= 24 else 'normal'
+                    }
+                    
+                    if key == 'thursday_night':
+                        summary['thursday'] = deadline_summary
+                    elif key == 'sunday_games':
+                        summary['sunday'] = deadline_summary
+                    elif key == 'monday_night':
+                        summary['monday'] = deadline_summary
+                    
+                    if hours_remaining > 0:
+                        summary['all_deadlines_passed'] = False
+                        if not summary['next_deadline'] or hours_remaining < summary['next_deadline']['hours_remaining']:
+                            summary['next_deadline'] = deadline_summary.copy()
+                            summary['next_deadline']['type'] = key
+            
+            return summary
+            
+        except Exception as e:
+            print(f"Error getting deadline summary: {e}")
+            return {
+                'thursday': None,
+                'sunday': None, 
+                'monday': None,
+                'next_deadline': None,
+                'all_deadlines_passed': False
+            }
+    
+    def get_user_deadline_summary(self, week: int, year: int, user_id: int) -> Dict[str, Any]:
+        """Get deadline summary for a specific user, considering overrides"""
+        try:
+            # Get base deadlines
+            base_summary = self.get_deadline_summary(week, year)
+            override_manager = DeadlineOverrideManager()
+            
+            # Check for user-specific or global overrides
+            for deadline_type in ['thursday', 'sunday', 'monday']:
+                if base_summary[deadline_type]:
+                    original_deadline = base_summary[deadline_type]['deadline']
+                    
+                    # Map deadline types to database format
+                    db_type = deadline_type
+                    if deadline_type == 'thursday':
+                        db_type = 'thursday'
+                    elif deadline_type == 'sunday':
+                        db_type = 'sunday'
+                    elif deadline_type == 'monday':
+                        db_type = 'monday'
+                    
+                    # Get effective deadline (considering overrides)
+                    effective_deadline = override_manager.get_user_deadline(
+                        week, year, db_type, user_id, original_deadline
+                    )
+                    
+                    if effective_deadline != original_deadline:
+                        # Update with override deadline
+                        now = datetime.now(self.ast_tz)
+                        hours_remaining = (effective_deadline - now).total_seconds() / 3600
+                        
+                        base_summary[deadline_type].update({
+                            'deadline': effective_deadline,
+                            'hours_remaining': hours_remaining,
+                            'passed': hours_remaining <= 0,
+                            'formatted_time': effective_deadline.strftime('%A %-I:%M %p AST'),
+                            'urgency': 'critical' if 0 < hours_remaining <= 2 else 'warning' if 0 < hours_remaining <= 24 else 'normal',
+                            'is_override': True
+                        })
+            
+            return base_summary
+            
+        except Exception as e:
+            print(f"Error getting user deadline summary: {e}")
+            return self.get_deadline_summary(week, year)
 
 # Global instance
 deadline_manager = DeadlineManager()

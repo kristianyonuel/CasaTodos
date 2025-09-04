@@ -45,6 +45,7 @@
                     <button onclick="loadUserPicks()" class="btn btn-warning">Set User Picks</button>
                     <button onclick="loadSchedule()" class="btn btn-success">Manage Schedule</button>
                     <button onclick="loadGameResults()" class="btn btn-warning">Update Game Results</button>
+                    <button onclick="loadDeadlineOverrides()" class="btn btn-danger">Deadline Overrides</button>
                     <button onclick="syncSeason()" class="btn btn-secondary">Sync NFL Season</button>
                 </div>
                 
@@ -966,6 +967,162 @@
                 }
             } catch (error) {
                 alert('Error creating user');
+                console.error('Error:', error);
+            }
+        }
+
+        async function loadDeadlineOverrides() {
+            try {
+                const week = document.getElementById('admin-week').value;
+                const year = document.getElementById('admin-year').value;
+                
+                document.getElementById('admin-content').innerHTML = '<p>Loading deadline overrides...</p>';
+                
+                const response = await fetch(`/admin/deadline_overrides?week=${week}&year=${year}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    let html = `
+                        <div class="deadline-override-section">
+                            <h3>Deadline Overrides - Week ${week}, ${year}</h3>
+                            
+                            <div class="override-form">
+                                <h4>Create New Override</h4>
+                                <form onsubmit="createDeadlineOverride(event)">
+                                    <select id="deadline-type" required>
+                                        <option value="">Select Deadline Type</option>
+                                        <option value="thursday">Thursday Night</option>
+                                        <option value="sunday">Sunday Games</option>
+                                        <option value="monday">Monday Night</option>
+                                    </select>
+                                    
+                                    <select id="override-user">
+                                        <option value="">Global Override (All Users)</option>`;
+                    
+                    // Add user options
+                    if (data.users) {
+                        data.users.forEach(user => {
+                            html += `<option value="${user.id}">${user.username}</option>`;
+                        });
+                    }
+                    
+                    html += `
+                                    </select>
+                                    
+                                    <input type="datetime-local" id="new-deadline" required 
+                                           title="New deadline time">
+                                    
+                                    <input type="text" id="override-reason" 
+                                           placeholder="Reason for override" maxlength="200">
+                                    
+                                    <button type="submit" class="btn btn-primary">Create Override</button>
+                                </form>
+                            </div>
+                            
+                            <div class="override-list">
+                                <h4>Active Overrides</h4>`;
+                    
+                    if (data.overrides && data.overrides.length > 0) {
+                        data.overrides.forEach(override => {
+                            const deadline = new Date(override.new_deadline);
+                            const userText = override.affected_user || 'All Users';
+                            
+                            html += `
+                                <div class="override-item">
+                                    <div class="override-info">
+                                        <strong>${override.deadline_type.charAt(0).toUpperCase() + override.deadline_type.slice(1)} Deadline</strong><br>
+                                        <span>User: ${userText}</span><br>
+                                        <span>New Time: ${deadline.toLocaleString()}</span><br>
+                                        ${override.reason ? `<span>Reason: ${override.reason}</span><br>` : ''}
+                                        <small>Created by ${override.created_by_user} on ${new Date(override.created_at).toLocaleString()}</small>
+                                    </div>
+                                    <div class="override-actions">
+                                        <button onclick="removeDeadlineOverride(${override.id})" 
+                                                class="remove-override-btn">Remove</button>
+                                    </div>
+                                </div>`;
+                        });
+                    } else {
+                        html += '<p>No active overrides for this week.</p>';
+                    }
+                    
+                    html += `
+                            </div>
+                        </div>`;
+                    
+                    document.getElementById('admin-content').innerHTML = html;
+                } else {
+                    document.getElementById('admin-content').innerHTML = '<p>Error loading deadline overrides</p>';
+                }
+            } catch (error) {
+                console.error('Error loading deadline overrides:', error);
+                document.getElementById('admin-content').innerHTML = '<p>Error loading deadline overrides</p>';
+            }
+        }
+        
+        async function createDeadlineOverride(event) {
+            event.preventDefault();
+            
+            try {
+                const week = document.getElementById('admin-week').value;
+                const year = document.getElementById('admin-year').value;
+                const deadlineType = document.getElementById('deadline-type').value;
+                const userId = document.getElementById('override-user').value || null;
+                const newDeadline = document.getElementById('new-deadline').value;
+                const reason = document.getElementById('override-reason').value;
+                
+                if (!deadlineType || !newDeadline) {
+                    alert('Please fill in all required fields');
+                    return;
+                }
+                
+                const response = await fetch('/admin/create_deadline_override', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        week: parseInt(week),
+                        year: parseInt(year),
+                        deadline_type: deadlineType,
+                        user_id: userId ? parseInt(userId) : null,
+                        new_deadline: newDeadline,
+                        reason: reason
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('Deadline override created successfully!');
+                    loadDeadlineOverrides(); // Reload the page
+                } else {
+                    alert('Error creating override: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error creating deadline override');
+                console.error('Error:', error);
+            }
+        }
+        
+        async function removeDeadlineOverride(overrideId) {
+            if (!confirm('Are you sure you want to remove this deadline override?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/admin/remove_deadline_override', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ override_id: overrideId })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('Deadline override removed successfully!');
+                    loadDeadlineOverrides(); // Reload the page
+                } else {
+                    alert('Error removing override: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error removing deadline override');
                 console.error('Error:', error);
             }
         }

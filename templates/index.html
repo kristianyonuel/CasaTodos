@@ -93,44 +93,81 @@
                 </div>
 
                 <div class="game-status">
-                    <h3>This Week's Status (AST)</h3>
+                    <h3>This Week's Deadlines (AST)</h3>
                     <div class="status-cards">
-                        {% if deadlines and deadlines.thursday %}
-                        <div class="status-card {% if deadline_status.thursday.passed %}deadline-passed{% endif %}">
+                        {% if deadline_summary.thursday %}
+                        <div class="status-card {% if deadline_summary.thursday.passed %}deadline-passed{% elif deadline_summary.thursday.urgency == 'critical' %}deadline-critical{% elif deadline_summary.thursday.urgency == 'warning' %}deadline-warning{% endif %}">
                             <h4>Thursday Night</h4>
-                            <p>Picks due {{ deadlines.thursday.strftime('%A %-I:%M %p AST') }}</p>
-                            {% if deadline_status.thursday.passed %}
+                            <p>{{ deadline_summary.thursday.formatted_time }}</p>
+                            {% if deadline_summary.thursday.passed %}
                                 <span class="status-indicator">Deadline Passed</span>
-                            {% elif deadline_status.thursday.hours_until < 2 %}
-                                <span class="status-indicator urgent">{{ deadline_status.thursday.hours_until|round(1) }} hours left</span>
+                            {% elif deadline_summary.thursday.hours_remaining <= 24 %}
+                                <span class="status-indicator {% if deadline_summary.thursday.urgency == 'critical' %}critical{% else %}warning{% endif %}">
+                                    {{ deadline_summary.thursday.hours_remaining|round(1) }} hours left
+                                </span>
+                            {% endif %}
+                            {% if deadline_summary.thursday.matchup %}
+                                <p class="matchup">{{ deadline_summary.thursday.matchup }}</p>
+                            {% endif %}
+                            {% if deadline_summary.thursday.is_override %}
+                                <span class="override-indicator">⚠️ Modified by Admin</span>
                             {% endif %}
                         </div>
                         {% endif %}
                         
-                        {% if deadlines and deadlines.sunday %}
-                        <div class="status-card {% if deadline_status.sunday.passed %}deadline-passed{% endif %}">
+                        {% if deadline_summary.sunday %}
+                        <div class="status-card {% if deadline_summary.sunday.passed %}deadline-passed{% elif deadline_summary.sunday.urgency == 'critical' %}deadline-critical{% elif deadline_summary.sunday.urgency == 'warning' %}deadline-warning{% endif %}">
                             <h4>Sunday Games</h4>
-                            <p>Picks due {{ deadlines.sunday.strftime('%A %-I:%M %p AST') }}</p>
-                            {% if deadline_status.sunday.passed %}
+                            <p>{{ deadline_summary.sunday.formatted_time }}</p>
+                            {% if deadline_summary.sunday.passed %}
                                 <span class="status-indicator">Deadline Passed</span>
-                            {% elif deadline_status.sunday.hours_until < 2 %}
-                                <span class="status-indicator urgent">{{ deadline_status.sunday.hours_until|round(1) }} hours left</span>
+                            {% elif deadline_summary.sunday.hours_remaining <= 24 %}
+                                <span class="status-indicator {% if deadline_summary.sunday.urgency == 'critical' %}critical{% else %}warning{% endif %}">
+                                    {{ deadline_summary.sunday.hours_remaining|round(1) }} hours left
+                                </span>
+                            {% endif %}
+                            {% if deadline_summary.sunday.matchup %}
+                                <p class="matchup">{{ deadline_summary.sunday.matchup }}</p>
+                            {% endif %}
+                            {% if deadline_summary.sunday.is_override %}
+                                <span class="override-indicator">⚠️ Modified by Admin</span>
                             {% endif %}
                         </div>
                         {% endif %}
                         
-                        {% if deadlines and deadlines.monday %}
-                        <div class="status-card">
+                        {% if deadline_summary.monday %}
+                        <div class="status-card {% if deadline_summary.monday.passed %}deadline-passed{% elif deadline_summary.monday.urgency == 'critical' %}deadline-critical{% elif deadline_summary.monday.urgency == 'warning' %}deadline-warning{% endif %}">
                             <h4>Monday Night</h4>
+                            <p>{{ deadline_summary.monday.formatted_time }}</p>
                             <p>Score prediction required</p>
-                            <p>Picks due {{ deadlines.monday.strftime('%A %-I:%M %p AST') }}</p>
+                            {% if deadline_summary.monday.passed %}
+                                <span class="status-indicator">Deadline Passed</span>
+                            {% elif deadline_summary.monday.hours_remaining <= 24 %}
+                                <span class="status-indicator {% if deadline_summary.monday.urgency == 'critical' %}critical{% else %}warning{% endif %}">
+                                    {{ deadline_summary.monday.hours_remaining|round(1) }} hours left
+                                </span>
+                            {% endif %}
+                            {% if deadline_summary.monday.matchup %}
+                                <p class="matchup">{{ deadline_summary.monday.matchup }}</p>
+                            {% endif %}
+                            {% if deadline_summary.monday.is_override %}
+                                <span class="override-indicator">⚠️ Modified by Admin</span>
+                            {% endif %}
                         </div>
                         {% endif %}
                         
-                        {% if not deadlines or (not deadlines.thursday and not deadlines.sunday and not deadlines.monday) %}
+                        {% if not deadline_summary.thursday and not deadline_summary.sunday and not deadline_summary.monday %}
                         <div class="status-card">
                             <h4>No Games</h4>
                             <p>No games scheduled this week</p>
+                        </div>
+                        {% endif %}
+                        
+                        {% if deadline_summary.next_deadline %}
+                        <div class="next-deadline-card">
+                            <h4>⏰ Next Deadline</h4>
+                            <p><strong>{{ deadline_summary.next_deadline.hours_remaining|round(1) }} hours</strong> until {{ deadline_summary.next_deadline.type.replace('_', ' ').title() }}</p>
+                            <p>{{ deadline_summary.next_deadline.formatted_time }}</p>
                         </div>
                         {% endif %}
                     </div>

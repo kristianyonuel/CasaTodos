@@ -12,6 +12,7 @@ from database_sync import sync_season_from_api, sync_week_from_api, update_live_
 from utils.timezone_utils import convert_to_ast, format_ast_time
 from contextlib import contextmanager
 from deadline_manager import DeadlineManager
+from deadline_override_manager import DeadlineOverrideManager
 
 # Configure logging for better debugging
 logging.basicConfig(
@@ -115,37 +116,17 @@ def index():
     # Get deadline information using deadline manager
     try:
         deadline_manager = DeadlineManager()
-        deadline_data = deadline_manager.get_week_deadlines(current_week, current_year)
-        
-        # Convert to simple dict for template usage
-        deadlines = {}
-        deadline_status = {}
-        
-        for key, value in deadline_data.items():
-            if value and isinstance(value, dict) and 'deadline' in value:
-                deadlines[key] = value['deadline']
-                deadline_status[key] = {
-                    'passed': value['status']['is_closed'],
-                    'hours_until': value['status']['hours_until_deadline']
-                }
-        
-        # Simplify the key names for template
-        simple_deadlines = {
-            'thursday': deadlines.get('thursday_night'),
-            'sunday': deadlines.get('sunday_games'),  
-            'monday': deadlines.get('monday_night')
-        }
-        
-        simple_status = {
-            'thursday': deadline_status.get('thursday_night'),
-            'sunday': deadline_status.get('sunday_games'),
-            'monday': deadline_status.get('monday_night')
-        }
+        deadline_summary = deadline_manager.get_user_deadline_summary(current_week, current_year, session['user_id'])
         
     except Exception as e:
         logger.error(f"Error getting deadlines: {e}")
-        simple_deadlines = {}
-        simple_status = {}
+        deadline_summary = {
+            'thursday': None,
+            'sunday': None,
+            'monday': None,
+            'next_deadline': None,
+            'all_deadlines_passed': False
+        }
     
     data = {
         'current_week': current_week,
@@ -156,8 +137,7 @@ def index():
         'user_wins': dashboard_data['user_wins'],
         'total_players': dashboard_data['total_players'],
         'available_weeks': list(range(1, 19)),
-        'deadlines': simple_deadlines,
-        'deadline_status': simple_status
+        'deadline_summary': deadline_summary
     }
     
     return render_template('index.html', **data)
@@ -1001,6 +981,103 @@ def admin_clear_user_picks():
     except Exception as e:
         logger.error(f"Admin clear user picks error: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/deadline_overrides', methods=['GET'])
+def admin_deadline_overrides():
+    """Get deadline overrides for admin panel"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        week = request.args.get('week', 1, type=int)
+        year = request.args.get('year', 2025, type=int)
+        
+        override_manager = DeadlineOverrideManager()
+        overrides = override_manager.get_active_overrides(week, year)
+        
+        # Get all users for the dropdown
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, username FROM users ORDER BY username')
+            users = [{'id': row[0], 'username': row[1]} for row in cursor.fetchall()]
+        
+        return jsonify({
+            'success': True,
+            'overrides': overrides,
+            'users': users
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting deadline overrides: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/admin/create_deadline_override', methods=['POST'])
+def admin_create_deadline_override():
+    """Create a new deadline override"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        week = data.get('week')
+        year = data.get('year')
+        deadline_type = data.get('deadline_type')
+        user_id = data.get('user_id')
+        new_deadline_str = data.get('new_deadline')
+        reason = data.get('reason', '')
+        
+        if not all([week, year, deadline_type, new_deadline_str]):
+            return jsonify({'success': False, 'error': 'Missing required fields'})
+        
+        # Convert deadline string to datetime
+        new_deadline = datetime.fromisoformat(new_deadline_str.replace('T', ' '))
+        
+        override_manager = DeadlineOverrideManager()
+        success = override_manager.create_override(
+            week=week,
+            year=year,
+            deadline_type=deadline_type,
+            new_deadline=new_deadline,
+            admin_id=session['user_id'],
+            user_id=user_id,
+            reason=reason
+        )
+        
+        if success:
+            logger.info(f"Admin {session['username']} created deadline override for week {week}, {year}")
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to create override'})
+            
+    except Exception as e:
+        logger.error(f"Error creating deadline override: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/admin/remove_deadline_override', methods=['POST'])
+def admin_remove_deadline_override():
+    """Remove a deadline override"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        override_id = data.get('override_id')
+        
+        if not override_id:
+            return jsonify({'success': False, 'error': 'Override ID required'})
+        
+        override_manager = DeadlineOverrideManager()
+        success = override_manager.remove_override(override_id, session['user_id'])
+        
+        if success:
+            logger.info(f"Admin {session['username']} removed deadline override {override_id}")
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to remove override'})
+            
+    except Exception as e:
+        logger.error(f"Error removing deadline override: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
     print("🚀 Starting La Casa de Todos NFL Fantasy League...")

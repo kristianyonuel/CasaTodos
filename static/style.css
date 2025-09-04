@@ -1444,22 +1444,137 @@ body {
     color: #dc2626;
 }
 
-/* Game deadline warnings */
-.game-card.deadline-passed {
-    opacity: 0.6;
-    background-color: #f9fafb;
+/* Enhanced deadline status styling */
+.status-card.deadline-critical {
+    background-color: #fef2f2;
+    border-left: 4px solid #dc2626;
+    animation: pulse 2s infinite;
 }
 
-.game-card.deadline-passed .team-option {
-    pointer-events: none;
+.status-card.deadline-warning {
+    background-color: #fefbf3;
+    border-left: 4px solid #f59e0b;
 }
 
-.deadline-warning {
+.status-indicator.critical {
+    background-color: #fee2e2;
+    color: #dc2626;
+    font-weight: 600;
+    animation: pulse 1.5s infinite;
+}
+
+.status-indicator.warning {
     background-color: #fef3c7;
     color: #d97706;
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    margin-bottom: 12px;
+    font-weight: 500;
+}
+
+.matchup {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 4px;
+    font-style: italic;
+}
+
+.next-deadline-card {
+    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+    border: 2px solid #d1d5db;
+    border-radius: 8px;
+    padding: 16px;
     text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.next-deadline-card h4 {
+    margin: 0 0 8px 0;
+    color: #374151;
+    font-size: 1rem;
+}
+
+.next-deadline-card p {
+    margin: 4px 0;
+    color: #6b7280;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Admin deadline override styles */
+.deadline-override-section {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.override-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.override-form select,
+.override-form input,
+.override-form textarea {
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.override-list {
+    margin-top: 20px;
+}
+
+.override-item {
+    background-color: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: between;
+    align-items: center;
+}
+
+.override-info {
+    flex-grow: 1;
+}
+
+.override-actions {
+    margin-left: 10px;
+}
+
+.remove-override-btn {
+    background-color: #ef4444;
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.remove-override-btn:hover {
+    background-color: #dc2626;
+}
+
+.override-indicator {
+    display: inline-block;
+    background-color: #fbbf24;
+    color: #92400e;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    margin-top: 4px;
+    border: 1px solid #f59e0b;
 }
