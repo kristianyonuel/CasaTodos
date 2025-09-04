@@ -214,86 +214,9 @@ class NFLAPIService:
 
 # Global API service instance
 nfl_api = NFLAPIService()
-        return normalized
-    
-    def _normalize_espn_status(self, status: str) -> str:
-        """Normalize ESPN game status"""
-        status_map = {
-            'STATUS_SCHEDULED': 'scheduled',
-            'STATUS_IN_PROGRESS': 'in_progress', 
-            'STATUS_HALFTIME': 'in_progress',
-            'STATUS_FINAL': 'final',
-            'STATUS_FINAL_OVERTIME': 'final',
-            'STATUS_POSTPONED': 'postponed',
-            'STATUS_DELAYED': 'delayed',
-            'STATUS_SUSPENDED': 'suspended'
-        }
-        return status_map.get(status, 'scheduled')
-
-# Global API service instance
-nfl_api = NFLAPIService()
-
-    # The following methods were incorrectly indented; fix by unindenting them to be inside the class.
 
 class NFLAPIService:
-    # ... previous methods ...
-
-    def _normalize_balldontlie_games(self, games_data: List[Dict], week: int, year: int) -> List[Dict]:
-        """Normalize BallDontLie game data"""
-        normalized = []
-        
-        for game in games_data:
-            try:
-                # Parse game date
-                game_date_str = game.get('date')
-                if game_date_str:
-                    game_date = datetime.fromisoformat(game_date_str)
-                else:
-                    continue
-                
-                # Teams
-                away_team = game.get('visitor_team', {}).get('abbreviation')
-                home_team = game.get('home_team', {}).get('abbreviation')
-                
-                # Scores
-                away_score = game.get('visitor_team_score')
-                home_score = game.get('home_team_score')
-                
-                # Game status
-                game_status = self._normalize_balldontlie_status(game.get('status'))
-                is_final = game.get('status') == 'Final'
-                
-                # Determine game type
-                weekday = game_date.weekday()
-                hour = game_date.hour
-                
-                normalized_game = {
-                    'api_game_id': game.get('id'),
-                    'week': week,
-                    'year': year,
-                    'away_team': away_team,
-                    'home_team': home_team,
-                    'game_date': game_date,
-                    'is_thursday_night': weekday == 3 and hour >= 18,
-                    'is_monday_night': weekday == 0 and hour >= 18,
-                    'is_sunday_night': weekday == 6 and hour >= 18,
-                    'away_score': away_score,
-                    'home_score': home_score,
-                    'game_status': game_status,
-                    'is_final': is_final,
-                    'quarter': game.get('period'),
-                    'time_remaining': game.get('time'),
-                    'tv_network': None,
-                    'stadium': None
-                }
-                
-                normalized.append(normalized_game)
-                
-            except Exception as e:
-                logger.error(f"Error normalizing BallDontLie game: {e}")
-                continue
-        
-        return normalized
+    # ... (existing methods above)
 
     def _normalize_espn_games(self, games_data: List[Dict], week: int, year: int) -> List[Dict]:
         """Normalize ESPN game data"""
