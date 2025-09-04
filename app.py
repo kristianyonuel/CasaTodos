@@ -1754,7 +1754,7 @@ def debug_leaderboard():
     
     if not session.get('is_admin'):
         flash('Admin access required', 'error')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('index'))
     
     try:
         debug_info = []
