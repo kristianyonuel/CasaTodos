@@ -25,6 +25,7 @@
                 <div class="admin-actions">
                     <button onclick="loadAllPicks()" class="btn btn-primary">View All Picks</button>
                     <button onclick="loadUsers()" class="btn btn-secondary">Manage Users</button>
+                    <button onclick="syncSeason()" class="btn btn-success">Sync NFL Season</button>
                 </div>
                 
                 <div id="admin-content">
@@ -56,6 +57,33 @@
                 document.getElementById('admin-content').innerHTML = html;
             } catch (error) {
                 document.getElementById('admin-content').innerHTML = '<p>Error loading picks</p>';
+            }
+        }
+
+        async function syncSeason() {
+            if (!confirm('This will sync all 18 weeks of NFL games. Continue?')) return;
+            
+            const year = new Date().getFullYear();
+            document.getElementById('admin-content').innerHTML = '<p>Syncing NFL season data...</p>';
+            
+            try {
+                const response = await fetch('/sync_season', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ year: year })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById('admin-content').innerHTML = 
+                        `<h3>Season Sync Complete</h3><p>${result.message}</p>`;
+                } else {
+                    document.getElementById('admin-content').innerHTML = 
+                        `<h3>Sync Failed</h3><p>Error: ${result.error}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('admin-content').innerHTML = 
+                    '<h3>Sync Failed</h3><p>Network error occurred</p>';
             }
         }
     </script>

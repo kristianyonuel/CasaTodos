@@ -23,21 +23,58 @@
                 <div class="picks-header">
                     <h2>Make Your Picks</h2>
                     <p>Select the winning team for each game. Monday Night Football requires score prediction.</p>
+                    
+                    <!-- Week Navigation -->
+                    <div class="week-navigation">
+                        <h3>Select Week:</h3>
+                        <div class="week-buttons">
+                            {% for week_num in available_weeks %}
+                            <a href="{{ url_for('games', week=week_num, year=current_year) }}" 
+                               class="week-btn {% if week_num == current_week %}current{% endif %} {% if week_num == current_nfl_week %}active-week{% endif %}">
+                                Week {{ week_num }}
+                                {% if week_num == current_nfl_week %}<span class="live-indicator">LIVE</span>{% endif %}
+                            </a>
+                            {% endfor %}
+                        </div>
+                        <div class="week-info">
+                            <p><strong>Current NFL Week:</strong> {{ current_nfl_week }}</p>
+                            <p><strong>Viewing:</strong> Week {{ current_week }}</p>
+                        </div>
+                    </div>
                 </div>
 
+                {% if games %}
                 <form id="picks-form" class="picks-form">
                     <div class="games-grid">
                         {% for game in games %}
-                        <div class="game-card {% if game.is_monday_night %}monday-night{% endif %} {% if game.is_thursday_night %}thursday-night{% endif %}">
+                        <div class="game-card {% if game.is_monday_night %}monday-night{% endif %} {% if game.is_thursday_night %}thursday-night{% endif %} {% if game.is_final %}final{% endif %}">
                             <div class="game-header">
-                                <span class="game-time">{{ game.game_date }}</span>
+                                <span class="game-time">{{ game.game_date.strftime('%a %m/%d %I:%M %p') if game.game_date else 'TBD' }}</span>
                                 {% if game.is_monday_night %}
                                 <span class="mnf-badge">Monday Night Football</span>
                                 {% elif game.is_thursday_night %}
                                 <span class="tnf-badge">Thursday Night Football</span>
                                 {% endif %}
+                                {% if game.is_final %}
+                                <span class="final-badge">FINAL</span>
+                                {% endif %}
                             </div>
                             
+                            {% if game.is_final and game.home_score is not none %}
+                            <!-- Show final score -->
+                            <div class="final-score">
+                                <div class="team-score">
+                                    <span class="team-name">{{ game.away_team }}</span>
+                                    <span class="score">{{ game.away_score }}</span>
+                                </div>
+                                <div class="vs">@</div>
+                                <div class="team-score">
+                                    <span class="team-name">{{ game.home_team }}</span>
+                                    <span class="score">{{ game.home_score }}</span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <!-- Show pick options -->
                             <div class="teams">
                                 <div class="team away-team">
                                     <input type="radio" 
@@ -69,8 +106,9 @@
                                     </label>
                                 </div>
                             </div>
+                            {% endif %}
                             
-                            {% if game.is_monday_night %}
+                            {% if game.is_monday_night and not game.is_final %}
                             <div class="score-prediction">
                                 <h4>Score Prediction (Tiebreaker)</h4>
                                 <div class="score-inputs">
@@ -105,6 +143,13 @@
                         <button type="button" class="btn btn-secondary" onclick="clearPicks()">Clear All</button>
                     </div>
                 </form>
+                {% else %}
+                <div class="no-games">
+                    <h3>No games available for Week {{ current_week }}</h3>
+                    <p>Games may not have been scheduled yet or there was an error loading them.</p>
+                    <a href="{{ url_for('games', week=current_nfl_week) }}" class="btn btn-primary">Go to Current Week</a>
+                </div>
+                {% endif %}
             </div>
         </main>
     </div>

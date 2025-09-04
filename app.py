@@ -158,66 +158,161 @@ def init_db():
 
 # NFL API functions
 def get_current_nfl_week():
-    """Get current NFL week - simplified version"""
+    """Get current NFL week based on actual NFL calendar"""
     try:
         now = datetime.datetime.now()
-        # Simple calculation - can be enhanced later
-        if now.month >= 9:  # September or later
-            week = ((now.day - 1) // 7) + 1
-        elif now.month <= 2:  # January or February
-            week = 18 + ((now.day - 1) // 7)
-        else:
-            week = 1  # Off-season
         
-        return max(1, min(18, week))
+        # NFL season dates (approximate)
+        if now.year <= 2024:
+            season_start = datetime.datetime(2024, 9, 5)  # Week 1 typically starts first Thursday of September
+            season_end = datetime.datetime(2025, 1, 8)    # Week 18 ends first week of January
+        else:
+            season_start = datetime.datetime(now.year, 9, 7)
+            season_end = datetime.datetime(now.year + 1, 1, 7)
+        
+        if now < season_start:
+            # Pre-season or last year
+            return 1
+        elif now > season_end:
+            # Post-season
+            return 18
+        else:
+            # Calculate week based on days since season start
+            days_since_start = (now - season_start).days
+            week = min(18, max(1, (days_since_start // 7) + 1))
+            return week
+            
     except Exception as e:
         print(f"Error calculating NFL week: {e}")
-        return 1  # Default to week 1
+        return 1
 
-def fetch_nfl_games(week=None, year=None):
-    """Fetch NFL games from ESPN API"""
+def fetch_all_nfl_weeks(year=None):
+    """Fetch all 18 weeks of NFL games for the season"""
     if not year:
         year = datetime.datetime.now().year
-    if not week:
-        week = get_current_nfl_week()
     
-    try:
-        url = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-        params = {'seasontype': 2, 'week': week, 'year': year}
+    print(f"Fetching all NFL weeks for {year} season...")
+    
+    conn = sqlite3.connect('nfl_fantasy.db')
+    cursor = conn.cursor()
+    
+    total_games_added = 0
+    
+    for week in range(1, 19):  # Weeks 1-18
+        print(f"Processing week {week}...")
         
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+        # Check if we already have games for this week
+        cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, year))
+        existing_games = cursor.fetchone()[0]
         
-        games = []
-        for event in data.get('events', []):
-            game_date = datetime.datetime.fromisoformat(event['date'].replace('Z', '+00:00'))
-            
-            game = {
-                'id': event['id'],
-                'week': week,
-                'year': year,
-                'home_team': event['competitions'][0]['competitors'][0]['team']['abbreviation'],
-                'away_team': event['competitions'][0]['competitors'][1]['team']['abbreviation'],
-                'home_team_name': event['competitions'][0]['competitors'][0]['team']['displayName'],
-                'away_team_name': event['competitions'][0]['competitors'][1]['team']['displayName'],
-                'game_date': game_date,
-                'is_monday_night': game_date.weekday() == 0,
-                'is_thursday_night': game_date.weekday() == 3,
-                'is_final': event['status']['type']['completed']
-            }
-            
-            if game['is_final']:
-                competitors = event['competitions'][0]['competitors']
-                game['home_score'] = int(competitors[0].get('score', 0))
-                game['away_score'] = int(competitors[1].get('score', 0))
-            
-            games.append(game)
+        if existing_games > 0:
+            print(f"Week {week} already has {existing_games} games, skipping...")
+            continue
         
-        return games
-    except Exception as e:
-        print(f"Error fetching NFL games: {e}")
-        return []
+        try:
+            # Fetch from ESPN API
+            url = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+            params = {'seasontype': 2, 'week': week, 'year': year}
+            
+            response = requests.get(url, params=params, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+            
+            week_games = 0
+            for event in data.get('events', []):
+                try:
+                    game_date = datetime.datetime.fromisoformat(event['date'].replace('Z', '+00:00'))
+                    
+                    # Determine game type
+                    is_monday_night = game_date.weekday() == 0 and game_date.hour >= 20
+                    is_thursday_night = game_date.weekday() == 3 and game_date.hour >= 20
+                    
+                    game_data = {
+                        'game_id': event['id'],
+                        'week': week,
+                        'year': year,
+                        'home_team': event['competitions'][0]['competitors'][0]['team']['abbreviation'],
+                        'away_team': event['competitions'][0]['competitors'][1]['team']['abbreviation'],
+                        'home_team_name': event['competitions'][0]['competitors'][0]['team']['displayName'],
+                        'away_team_name': event['competitions'][0]['competitors'][1]['team']['displayName'],
+                        'game_date': game_date,
+                        'is_monday_night': is_monday_night,
+                        'is_thursday_night': is_thursday_night,
+                        'is_final': event['status']['type']['completed']
+                    }
+                    
+                    # Add scores if game is final
+                    if game_data['is_final']:
+                        competitors = event['competitions'][0]['competitors']
+                        game_data['home_score'] = int(competitors[0].get('score', 0))
+                        game_data['away_score'] = int(competitors[1].get('score', 0))
+                    
+                    # Insert into database
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO nfl_games 
+                        (game_id, week, year, home_team, away_team, game_date, 
+                         is_monday_night, is_thursday_night, home_score, away_score, is_final)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (game_data['game_id'], game_data['week'], game_data['year'], 
+                          game_data['home_team'], game_data['away_team'], game_data['game_date'],
+                          game_data['is_monday_night'], game_data['is_thursday_night'], 
+                          game_data.get('home_score'), game_data.get('away_score'), game_data['is_final']))
+                    
+                    week_games += 1
+                    total_games_added += 1
+                    
+                except Exception as game_error:
+                    print(f"Error processing game in week {week}: {game_error}")
+                    continue
+            
+            print(f"Added {week_games} games for week {week}")
+            
+            # Small delay to be respectful to the API
+            if week < 18:
+                import time
+                time.sleep(0.5)
+                
+        except requests.exceptions.RequestException as e:
+            print(f"API error for week {week}: {e}")
+            # Create sample games if API fails
+            sample_games = create_sample_games(week, year)
+            for game in sample_games:
+                cursor.execute('''
+                    INSERT OR REPLACE INTO nfl_games 
+                    (game_id, week, year, home_team, away_team, game_date, is_monday_night, is_thursday_night)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (game['game_id'], game['week'], game['year'], game['home_team'], 
+                      game['away_team'], game['game_date'], game['is_monday_night'], game['is_thursday_night']))
+                total_games_added += len(sample_games)
+            
+        except Exception as e:
+            print(f"Unexpected error for week {week}: {e}")
+            continue
+    
+    conn.commit()
+    conn.close()
+    
+    print(f"Season sync complete! Added {total_games_added} total games.")
+    return total_games_added
+
+def get_available_weeks(year=None):
+    """Get list of weeks that have games in the database"""
+    if not year:
+        year = datetime.datetime.now().year
+    
+    conn = sqlite3.connect('nfl_fantasy.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT DISTINCT week FROM nfl_games 
+        WHERE year = ? 
+        ORDER BY week
+    ''', (year,))
+    
+    weeks = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    
+    return weeks
 
 @app.route('/')
 def index():
@@ -230,6 +325,13 @@ def index():
     try:
         current_week = get_current_nfl_week()
         current_year = datetime.datetime.now().year
+        
+        # Auto-sync NFL games if not already done
+        available_weeks = get_available_weeks(current_year)
+        if len(available_weeks) < 5:  # If we have fewer than 5 weeks, sync all
+            print("Auto-syncing NFL season data...")
+            fetch_all_nfl_weeks(current_year)
+            available_weeks = get_available_weeks(current_year)
         
         # Get user stats
         conn = sqlite3.connect('nfl_fantasy.db')
@@ -270,7 +372,8 @@ def index():
             'user_picks_count': user_picks_count,
             'total_games': total_games,
             'user_wins': user_wins,
-            'total_players': total_players
+            'total_players': total_players,
+            'available_weeks': available_weeks
         }
         
         print(f"Dashboard loaded successfully: {template_data}")
@@ -403,27 +506,49 @@ def games():
         
         db_games = cursor.fetchall()
         
-        # If no games in database, create sample games
+        # If no games found, try to fetch them
         if not db_games:
-            print(f"No games found for week {week}, creating sample games...")
-            sample_games = create_sample_games(week, year)
-            
-            for game in sample_games:
+            print(f"No games found for week {week}, fetching from API...")
+            try:
+                api_games = fetch_nfl_games(week, year)
+                if api_games:
+                    for game in api_games:
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO nfl_games 
+                            (game_id, week, year, home_team, away_team, game_date, 
+                             is_monday_night, is_thursday_night, home_score, away_score, is_final)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (game['id'], game['week'], game['year'], game['home_team'], 
+                              game['away_team'], game['game_date'], game['is_monday_night'],
+                              game['is_thursday_night'], game.get('home_score'), 
+                              game.get('away_score'), game['is_final']))
+                    conn.commit()
+                    
+                    # Fetch again
+                    cursor.execute('''
+                        SELECT id, week, year, game_id, home_team, away_team, game_date, 
+                               is_monday_night, is_thursday_night, home_score, away_score, is_final
+                        FROM nfl_games WHERE week = ? AND year = ? ORDER BY game_date
+                    ''', (week, year))
+                    db_games = cursor.fetchall()
+            except Exception as fetch_error:
+                print(f"Failed to fetch games from API: {fetch_error}")
+                # Fall back to sample games
+                sample_games = create_sample_games(week, year)
+                for game in sample_games:
+                    cursor.execute('''
+                        INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_monday_night, is_thursday_night)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (game['week'], game['year'], game['game_id'], game['home_team'], 
+                          game['away_team'], game['game_date'], game['is_monday_night'], game['is_thursday_night']))
+                conn.commit()
+                
                 cursor.execute('''
-                    INSERT INTO nfl_games (week, year, game_id, home_team, away_team, game_date, is_monday_night, is_thursday_night)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (game['week'], game['year'], game['game_id'], game['home_team'], 
-                      game['away_team'], game['game_date'], game['is_monday_night'], game['is_thursday_night']))
-            
-            conn.commit()
-            
-            # Fetch again
-            cursor.execute('''
-                SELECT id, week, year, game_id, home_team, away_team, game_date, 
-                       is_monday_night, is_thursday_night, home_score, away_score, is_final
-                FROM nfl_games WHERE week = ? AND year = ? ORDER BY game_date
-            ''', (week, year))
-            db_games = cursor.fetchall()
+                    SELECT id, week, year, game_id, home_team, away_team, game_date, 
+                           is_monday_night, is_thursday_night, home_score, away_score, is_final
+                    FROM nfl_games WHERE week = ? AND year = ? ORDER BY game_date
+                ''', (week, year))
+                db_games = cursor.fetchall()
         
         # Get user's existing picks
         cursor.execute('''
@@ -459,13 +584,19 @@ def games():
                 'is_final': bool(game[11])
             })
         
+        # Get available weeks for navigation
+        available_weeks = get_available_weeks(year)
+        current_nfl_week = get_current_nfl_week()
+        
         print(f"Games page loaded: {len(games_list)} games, {len(user_picks)} user picks")
         
         return render_template('games.html', 
                              games=games_list, 
                              user_picks=user_picks,
                              current_week=week,
-                             current_year=year)
+                             current_year=year,
+                             available_weeks=available_weeks,
+                             current_nfl_week=current_nfl_week)
                              
     except Exception as e:
         print(f"Games page error: {e}")
@@ -473,85 +604,6 @@ def games():
         traceback.print_exc()
         flash('Error loading games. Please try again.', 'error')
         return redirect(url_for('index'))
-
-def create_sample_games(week, year):
-    """Create sample NFL games for testing"""
-    import random
-    
-    nfl_teams = [
-        'KC', 'BUF', 'DAL', 'NYG', 'SF', 'LAR', 'NE', 'MIA', 'GB', 'CHI',
-        'DEN', 'LV', 'LAC', 'PIT', 'BAL', 'CIN', 'CLE', 'HOU', 'IND', 'JAX',
-        'TEN', 'NO', 'ATL', 'CAR', 'TB', 'MIN', 'DET', 'PHI', 'WAS', 'NYJ',
-        'ARI', 'SEA'
-    ]
-    
-    base_date = datetime.datetime(year, 9, 7)  # Start of NFL season
-    week_start = base_date + datetime.timedelta(weeks=week-1)
-    
-    games = []
-    
-    # Thursday Night Football
-    home_team = random.choice(nfl_teams)
-    away_team = random.choice([t for t in nfl_teams if t != home_team])
-    games.append({
-        'week': week,
-        'year': year,
-        'game_id': f'tnf_week_{week}',
-        'home_team': home_team,
-        'away_team': away_team,
-        'game_date': week_start + datetime.timedelta(days=3, hours=20, minutes=15),  # Thursday 8:15 PM
-        'is_monday_night': False,
-        'is_thursday_night': True
-    })
-    
-    # Sunday games
-    used_teams = {home_team, away_team}
-    sunday_games = 14  # Typical number of Sunday games
-    
-    for i in range(sunday_games):
-        available_teams = [t for t in nfl_teams if t not in used_teams]
-        if len(available_teams) < 2:
-            break
-            
-        home_team = random.choice(available_teams)
-        away_team = random.choice([t for t in available_teams if t != home_team])
-        used_teams.update({home_team, away_team})
-        
-        # Distribute games across Sunday
-        if i < 8:  # 1 PM games
-            game_time = week_start + datetime.timedelta(days=6, hours=13)  # Sunday 1 PM
-        else:  # 4:25 PM games
-            game_time = week_start + datetime.timedelta(days=6, hours=16, minutes=25)  # Sunday 4:25 PM
-        
-        games.append({
-            'week': week,
-            'year': year,
-            'game_id': f'sun_week_{week}_game_{i+1}',
-            'home_team': home_team,
-            'away_team': away_team,
-            'game_date': game_time,
-            'is_monday_night': False,
-            'is_thursday_night': False
-        })
-    
-    # Monday Night Football
-    available_teams = [t for t in nfl_teams if t not in used_teams]
-    if len(available_teams) >= 2:
-        home_team = random.choice(available_teams)
-        away_team = random.choice([t for t in available_teams if t != home_team])
-        
-        games.append({
-            'week': week,
-            'year': year,
-            'game_id': f'mnf_week_{week}',
-            'home_team': home_team,
-            'away_team': away_team,
-            'game_date': week_start + datetime.timedelta(days=7, hours=20, minutes=15),  # Monday 8:15 PM
-            'is_monday_night': True,
-            'is_thursday_night': False
-        })
-    
-    return games
 
 @app.route('/submit_picks', methods=['POST'])
 def submit_picks():
@@ -613,6 +665,23 @@ def internal_error(error):
     import traceback
     traceback.print_exc()
     return render_template('error.html', error="Internal server error"), 500
+
+@app.route('/sync_season', methods=['POST'])
+def sync_season():
+    """Manual sync of entire NFL season"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        year = request.json.get('year', datetime.datetime.now().year)
+        games_added = fetch_all_nfl_weeks(year)
+        return jsonify({
+            'success': True, 
+            'message': f'Synced {games_added} games for {year} season',
+            'games_added': games_added
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     print("Creating database and starting application...")
