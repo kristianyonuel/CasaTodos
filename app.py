@@ -439,6 +439,70 @@ def admin_calculate_results():
     
     return jsonify({'success': True, 'message': 'Results calculated', 'winner': 'TBD'})
 
+@app.route('/admin/users')
+def admin_users():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, username, email, is_admin, created_at FROM users ORDER BY username')
+        
+        users = []
+        for row in cursor.fetchall():
+            users.append({
+                'id': row[0],
+                'username': row[1],
+                'email': row[2] or '',
+                'is_admin': bool(row[3]),
+                'created_at': row[4],
+                'is_active': True,  # Add default value
+                'last_login': None  # Add default value
+            })
+        
+        conn.close()
+        return jsonify(users)
+        
+    except Exception as e:
+        print(f"Admin users error: {e}")
+        return jsonify({'error': f'Failed to load users: {str(e)}'}), 500
+
+@app.route('/admin/modify_user', methods=['POST'])
+def admin_modify_user():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        username = data.get('username')
+        email = data.get('email')
+        is_admin = data.get('is_admin', False)
+        new_password = data.get('new_password')
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        if new_password:
+            password_hash = generate_password_hash(new_password)
+            cursor.execute('''
+                UPDATE users SET username = ?, email = ?, is_admin = ?, password_hash = ? WHERE id = ?
+            ''', (username, email, is_admin, password_hash, user_id))
+        else:
+            cursor.execute('''
+                UPDATE users SET username = ?, email = ?, is_admin = ? WHERE id = ?
+            ''', (username, email, is_admin, user_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'User updated successfully'})
+        
+    except Exception as e:
+        print(f"Admin modify user error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.errorhandler(404)
 def not_found_error(error):
     return render_template('error.html', error="Page not found"), 404
