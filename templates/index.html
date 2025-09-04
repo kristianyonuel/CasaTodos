@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>La Casa de Todos - NFL Fantasy League</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🏠 La Casa de Todos</h1>
+            <p class="subtitle">NFL Fantasy League - Family Edition</p>
+            <nav class="nav">
+                <a href="{{ url_for('games') }}" class="nav-link">Make Picks</a>
+                <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
+                <a href="{{ url_for('rules') }}" class="nav-link">Rules</a>
+                {% if session.is_admin %}
+                <a href="{{ url_for('admin') }}" class="nav-link admin">Admin</a>
+                {% endif %}
+                <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <div class="dashboard">
+                <div class="welcome-card">
+                    <h2>Welcome back, {{ username }}! 🏈</h2>
+                    <p>Ready to make your picks for Week {{ current_week }}?</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Current Week</h3>
+                        <div class="stat-value">{{ current_week }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Season</h3>
+                        <div class="stat-value">{{ current_year }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Weekly Fee</h3>
+                        <div class="stat-value">$5</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Season Fee</h3>
+                        <div class="stat-value">$10</div>
+                    </div>
+                </div>
+
+                <div class="quick-actions">
+                    <h3>Quick Actions</h3>
+                    <div class="action-buttons">
+                        <a href="{{ url_for('games') }}" class="action-btn primary">
+                            🎯 Make Your Picks
+                        </a>
+                        <a href="{{ url_for('leaderboard') }}" class="action-btn secondary">
+                            🏆 View Leaderboard
+                        </a>
+                        <a href="{{ url_for('rules') }}" class="action-btn secondary">
+                            📋 Read Rules
+                        </a>
+                    </div>
+                </div>
+
+                <div class="rules-summary">
+                    <h3>Game Rules Summary</h3>
+                    <div class="rule-cards">
+                        <div class="rule-card">
+                            <h4>Weekly Picks</h4>
+                            <p>Select winning team for every NFL game each week</p>
+                        </div>
+                        <div class="rule-card">
+                            <h4>Monday Night Tiebreaker</h4>
+                            <p>Predict exact score for Monday Night Football</p>
+                        </div>
+                        <div class="rule-card">
+                            <h4>Deadlines</h4>
+                            <p>Thursday for TNF, Sunday for weekend games</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
+                    <h3>Important Deadlines</h3>
+                    <div class="deadline-list">
+                        <div class="deadline-item">
+                            <span class="deadline-day">Thursday</span>
+                            <span class="deadline-desc">Deadline for Thursday Night Football picks</span>
+                        </div>
+                        <div class="deadline-item">
+                            <span class="deadline-day">Sunday</span>
+                            <span class="deadline-desc">Deadline for all weekend game picks</span>
+                        </div>
+                        <div class="deadline-item">
+                            <span class="deadline-day">Monday</span>
+                            <span class="deadline-desc">Score prediction for Monday Night Football</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Load dashboard stats
+        async function loadDashboardStats() {
+            try {
+                // This would typically fetch from your API
+                document.getElementById('current-week').textContent = 'Week 1';
+                document.getElementById('games-count').textContent = '16';
+                document.getElementById('your-picks').textContent = '0/16';
+            } catch (error) {
+                console.error('Error loading dashboard stats:', error);
+            }
+        }
+
+        // Load stats on page load
+        document.addEventListener('DOMContentLoaded', loadDashboardStats);
+    </script>
+</body>
+</html>
