@@ -1,23 +1,23 @@
 """
-Database synchronization with live NFL API data
+Database synchronization with BallDontLie NFL API
 """
 import sqlite3
 from datetime import datetime
-from nfl_api_service import nfl_api
+from nfl_api_service import get_season_schedule, get_week_games, get_live_scores
 import logging
 
 logger = logging.getLogger(__name__)
 
 def sync_season_from_api(year: int = 2025) -> int:
-    """Sync complete season from API"""
+    """Sync complete season from BallDontLie API"""
     try:
-        print(f"🔄 Syncing {year} NFL season from API...")
+        print(f"🔄 Syncing {year} NFL season from BallDontLie API...")
         
         # Get season schedule from API
-        games_data = nfl_api.get_season_schedule(year)
+        games_data = get_season_schedule(year)
         
         if not games_data:
-            print("❌ No games data received from API")
+            print("❌ No games data received from BallDontLie API")
             return 0
         
         # Clear existing games for the year
@@ -66,12 +66,12 @@ def sync_season_from_api(year: int = 2025) -> int:
         return 0
 
 def sync_week_from_api(week: int, year: int = 2025) -> int:
-    """Sync specific week from API"""
+    """Sync specific week from BallDontLie API"""
     try:
-        print(f"🔄 Syncing Week {week}, {year} from API...")
+        print(f"🔄 Syncing Week {week}, {year} from BallDontLie API...")
         
         # Get week games from API
-        games_data = nfl_api.get_week_games(week, year)
+        games_data = get_week_games(week, year)
         
         if not games_data:
             print(f"❌ No games data for Week {week}")
@@ -142,10 +142,10 @@ def sync_week_from_api(week: int, year: int = 2025) -> int:
         return 0
 
 def update_live_scores(week: int, year: int = 2025) -> int:
-    """Update live scores for current week"""
+    """Update live scores from BallDontLie API"""
     try:
         # Get live scores from API
-        scores_data = nfl_api.get_live_scores(week, year)
+        scores_data = get_live_scores(week, year)
         
         if not scores_data:
             return 0

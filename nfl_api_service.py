@@ -1,146 +1,146 @@
 """
-NFL API Service using BallDontLie NFL API (Free)
+BallDontLie NFL API Service
 Real-time NFL data fetching and game updates
 """
 import requests
-import json
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from datetime import datetime
+from typing import List, Dict
 import logging
 
 logger = logging.getLogger(__name__)
 
-class NFLAPIService:
-    def __init__(self):
-        # BallDontLie NFL API (Free with API key)
-        self.balldontlie_base = "https://api.balldontlie.io/nfl/v1"
-        self.api_key = "900cc1d2-bf47-4ff8-a88c-92000ddeaa5e"
+# BallDontLie NFL API configuration
+BALLDONTLIE_BASE = "https://api.balldontlie.io/nfl/v1"
+API_KEY = "900cc1d2-bf47-4ff8-a88c-92000ddeaa5e"
+HEADERS = {
+    "Authorization": f"Bearer {API_KEY}",
+    "Content-Type": "application/json"
+}
+
+def get_season_schedule(year: int = 2025) -> List[Dict]:
+    """Get complete season schedule from BallDontLie"""
+    try:
+        all_games = []
         
-        self.current_season = 2025
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+        for week in range(1, 19):
+            week_games = get_week_games(week, year)
+            all_games.extend(week_games)
+            import time
+            time.sleep(0.1)  # Respect API limits
+            
+        return all_games
+        
+    except Exception as e:
+        logger.error(f"Error fetching season schedule: {e}")
+        return []
+
+def get_week_games(week: int, year: int = 2025) -> List[Dict]:
+    """Get games for specific week from BallDontLie"""
+    try:
+        url = f"{BALLDONTLIE_BASE}/games"
+        params = {
+            'season': year,
+            'week': week,
+            'per_page': 100
         }
         
-    def get_season_schedule(self, year: int = 2025) -> List[Dict]:
-        """Get complete season schedule"""
-        try:
-            schedule = self._get_balldontlie_schedule(year)
-            if schedule:
-                return schedule
-            
-            return []
-            
-        except Exception as e:
-            logger.error(f"Error fetching season schedule: {e}")
-            return []
-    
-    def get_week_games(self, week: int, year: int = 2025) -> List[Dict]:
-        """Get games for specific week"""
-        try:
-            games = self._get_balldontlie_week(week, year)
-            if games:
-                return games
-            
-            return []
-            
-        except Exception as e:
-            logger.error(f"Error fetching week {week} games: {e}")
-            return []
-    
-    def get_live_scores(self, week: int, year: int = 2025) -> List[Dict]:
-        """Get live scores and game updates"""
-        try:
-            scores = self._get_balldontlie_scores(week, year)
-            if scores:
-                return scores
-            
-            return []
-            
-        except Exception as e:
-            logger.error(f"Error fetching live scores: {e}")
-            return []
-    
-    def _get_balldontlie_schedule(self, year: int) -> List[Dict]:
-        """Get full season schedule from BallDontLie NFL API"""
-        try:
-            all_games = []
-            
-            # Get all 18 weeks
-            for week in range(1, 19):
-                week_games = self._get_balldontlie_week(week, year)
-                all_games.extend(week_games)
-                # Small delay to respect API limits
-                import time
-                time.sleep(0.1)
-                
-            return all_games
-            
-        except Exception as e:
-            logger.error(f"BallDontLie schedule error: {e}")
-            return []
-    
-    def _get_balldontlie_week(self, week: int, year: int) -> List[Dict]:
-        """Get week games from BallDontLie NFL API"""
-        try:
-            url = f"{self.balldontlie_base}/games"
-            params = {
-                'season': year,
-                'week': week,
-                'per_page': 100  # Get all games for the week
-            }
-            
-            response = requests.get(url, headers=self.headers, params=params, timeout=15)
-            response.raise_for_status()
-            
-            data = response.json()
-            return self._normalize_balldontlie_games(data.get('data', []), week, year)
-            
-        except Exception as e:
-            logger.error(f"BallDontLie week error: {e}")
-            return []
-    
-    def _get_balldontlie_scores(self, week: int, year: int) -> List[Dict]:
-        """Get live scores from BallDontLie NFL API"""
-        try:
-            # Use the same games endpoint but focus on scores
-            url = f"{self.balldontlie_base}/games"
-            params = {
-                'season': year,
-                'week': week,
-                'per_page': 100
-            }
-            
-            response = requests.get(url, headers=self.headers, params=params, timeout=15)
-            response.raise_for_status()
-            
-            data = response.json()
-            return self._normalize_balldontlie_games(data.get('data', []), week, year)
-            
-        except Exception as e:
-            logger.error(f"BallDontLie scores error: {e}")
-            return []
-    
-    def _normalize_balldontlie_games(self, games_data: List[Dict], week: int, year: int) -> List[Dict]:
-        """Normalize BallDontLie NFL game data"""
-        normalized = []
+        response = requests.get(url, headers=HEADERS, params=params, timeout=15)
+        response.raise_for_status()
         
-        for game in games_data:
-            try:
-                # Parse game date
-                game_date_str = game.get('date')
-                if game_date_str:
-                    game_date = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
-                else:
-                    continue
-                
-                # Teams - BallDontLie NFL API structure
-                visitor_team = game.get('visitor_team', {})
-                home_team = game.get('home_team', {})
-                
-                away_team = visitor_team.get('abbreviation')
-                home_team_abbr = home_team.get('abbreviation')
-                
+        data = response.json()
+        return normalize_games(data.get('data', []), week, year)
+        
+    except Exception as e:
+        logger.error(f"Error fetching week {week} games: {e}")
+        return []
+
+def get_live_scores(week: int, year: int = 2025) -> List[Dict]:
+    """Get live scores from BallDontLie"""
+    return get_week_games(week, year)
+
+def normalize_games(games_data: List[Dict], week: int, year: int) -> List[Dict]:
+    """Normalize BallDontLie game data"""
+    normalized = []
+    
+    for game in games_data:
+        try:
+            # Parse game date
+            game_date_str = game.get('date')
+            if game_date_str:
+                game_date = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
+            else:
+                continue
+            
+            # Teams
+            visitor_team = game.get('visitor_team', {})
+            home_team = game.get('home_team', {})
+            
+            away_team = visitor_team.get('abbreviation')
+            home_team_abbr = home_team.get('abbreviation')
+            
+            # Scores
+            away_score = game.get('visitor_team_score')
+            home_score = game.get('home_team_score')
+            
+            # Game status
+            status = game.get('status', '')
+            game_status = normalize_status(status)
+            is_final = status.lower() in ['final', 'final/ot']
+            
+            # Determine game type
+            weekday = game_date.weekday()
+            hour = game_date.hour
+            is_thursday = weekday == 3
+            is_monday = weekday == 0
+            is_sunday_night = weekday == 6 and hour >= 19
+            
+            normalized_game = {
+                'api_game_id': game.get('id'),
+                'week': week,
+                'year': year,
+                'away_team': away_team,
+                'home_team': home_team_abbr,
+                'game_date': game_date,
+                'is_thursday_night': is_thursday,
+                'is_monday_night': is_monday,
+                'is_sunday_night': is_sunday_night,
+                'away_score': int(away_score) if away_score is not None else None,
+                'home_score': int(home_score) if home_score is not None else None,
+                'game_status': game_status,
+                'is_final': is_final,
+                'quarter': game.get('period'),
+                'time_remaining': game.get('time'),
+                'tv_network': None,
+                'stadium': None,
+                'weather': None
+            }
+            
+            normalized.append(normalized_game)
+            
+        except Exception as e:
+            logger.error(f"Error normalizing game: {e}")
+            continue
+    
+    return normalized
+
+def normalize_status(status: str) -> str:
+    """Normalize game status"""
+    status_lower = status.lower()
+    
+    status_map = {
+        'scheduled': 'scheduled',
+        'pregame': 'scheduled',
+        'in progress': 'in_progress',
+        'inprogress': 'in_progress',
+        'halftime': 'in_progress',
+        'final': 'final',
+        'final/ot': 'final',
+        'postponed': 'postponed',
+        'delayed': 'delayed',
+        'suspended': 'suspended'
+    }
+    
+    return status_map.get(status_lower, 'scheduled')
                 # Scores
                 away_score = game.get('visitor_team_score')
                 home_score = game.get('home_team_score')
