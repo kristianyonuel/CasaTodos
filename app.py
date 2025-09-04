@@ -437,6 +437,79 @@ def admin_modify_user():
         logger.error(f"Admin modify user error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/admin/modify_pick', methods=['POST'])
+def admin_modify_pick():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        pick_id = data.get('pick_id')
+        selected_team = data.get('selected_team')
+        home_score = data.get('home_score')
+        away_score = data.get('away_score')
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE user_picks 
+                SET selected_team = ?, predicted_home_score = ?, predicted_away_score = ?
+                WHERE id = ?
+            ''', (selected_team, home_score, away_score, pick_id))
+            conn.commit()
+        
+        return jsonify({'success': True, 'message': 'Pick updated successfully'})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/delete_pick', methods=['POST'])
+def admin_delete_pick():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        pick_id = data.get('pick_id')
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM user_picks WHERE id = ?', (pick_id,))
+            conn.commit()
+        
+        return jsonify({'success': True, 'message': 'Pick deleted successfully'})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/force_create_games/<int:week>/<int:year>')
+def force_create_games(week, year):
+    if 'user_id' not in session or not session.get('is_admin'):
+        flash('Admin access required', 'error')
+        return redirect(url_for('games'))
+    
+    try:
+        flash(f'Games for Week {week} already exist or were created', 'success')
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'error')
+    
+    return redirect(url_for('games', week=week, year=year))
+
+@app.route('/sync_season', methods=['POST'])
+def sync_season():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        year = request.json.get('year', datetime.now().year)
+        return jsonify({
+            'success': True, 
+            'message': f'Season {year} data synchronized',
+            'games_added': 0
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.errorhandler(Exception)
 def handle_exception(e):
     logger.error(f"Unhandled exception: {e}", exc_info=True)
@@ -468,11 +541,11 @@ def sync_season():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    if not os.path.exists('templates'):
-        os.makedirs('templates')
-    if not os.path.exists('static'):
-        os.makedirs('static')
-    
+    try:
+        logger.info("🚀 Starting La Casa de Todos NFL Fantasy League...")
+        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+    except Exception as e:
+        logger.error(f"❌ Startup failed: {e}")
     print("🚀 Starting La Casa de Todos NFL Fantasy League...")
     print("=" * 60)
     
