@@ -487,60 +487,73 @@ def admin_update_game():
     if 'user_id' not in session or not session.get('is_admin'):
         return jsonify({'error': 'Admin access required'}), 403
     
-    data = request.get_json()
-    game_id = data.get('game_id')
-    away_team = data.get('away_team')
-    home_team = data.get('home_team')
-    game_date = data.get('game_date')
-    game_type = data.get('game_type')
-    game_status = data.get('game_status')
-    away_score = data.get('away_score')
-    home_score = data.get('home_score')
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    # Set game type flags
-    is_thursday = game_type == 'thursday'
-    is_sunday = game_type == 'sunday'
-    is_monday = game_type == 'monday'
-    is_final = game_status == 'final'
-    
-    cursor.execute('''
-        UPDATE nfl_games SET 
-        away_team = ?, home_team = ?, game_date = ?, 
-        is_thursday_night = ?, is_sunday_night = ?, is_monday_night = ?,
-        game_status = ?, away_score = ?, home_score = ?, is_final = ?
-        WHERE id = ?
-    ''', (away_team, home_team, game_date, is_thursday, is_sunday, is_monday,
-          game_status, away_score, home_score, is_final, game_id))
-    
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True, 'message': 'Game updated successfully'})
+    try:
+        data = request.get_json()
+        game_id = data.get('game_id')
+        away_team = data.get('away_team')
+        home_team = data.get('home_team')
+        game_date = data.get('game_date')
+        game_type = data.get('game_type')
+        game_status = data.get('game_status')
+        away_score = data.get('away_score')
+        home_score = data.get('home_score')
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Set game type flags
+            is_thursday = game_type == 'thursday'
+            is_sunday = game_type == 'sunday'
+            is_monday = game_type == 'monday'
+            is_final = game_status == 'final'
+            
+            cursor.execute('''
+                UPDATE nfl_games SET 
+                away_team = ?, home_team = ?, game_date = ?, 
+                is_thursday_night = ?, is_sunday_night = ?, is_monday_night = ?,
+                game_status = ?, away_score = ?, home_score = ?, is_final = ?
+                WHERE id = ?
+            ''', (away_team, home_team, game_date, is_thursday, is_sunday, is_monday,
+                  game_status, away_score, home_score, is_final, game_id))
+            
+            conn.commit()
+        
+        return jsonify({'success': True, 'message': 'Game updated successfully'})
+        
+    except Exception as e:
+        logger.error(f"Admin update game error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/admin/delete_game', methods=['POST'])
 def admin_delete_game():
     if 'user_id' not in session or not session.get('is_admin'):
         return jsonify({'error': 'Admin access required'}), 403
     
-    data = request.get_json()
-    game_id = data.get('game_id')
+@app.route('/admin/delete_game', methods=['POST'])
+def admin_delete_game():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
     
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    # Delete user picks first
-    cursor.execute('DELETE FROM user_picks WHERE game_id = ?', (game_id,))
-    
-    # Delete the game
-    cursor.execute('DELETE FROM nfl_games WHERE id = ?', (game_id,))
-    
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True, 'message': 'Game deleted successfully'})
+    try:
+        data = request.get_json()
+        game_id = data.get('game_id')
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Delete user picks first (foreign key constraint)
+            cursor.execute('DELETE FROM user_picks WHERE game_id = ?', (game_id,))
+            
+            # Delete the game
+            cursor.execute('DELETE FROM nfl_games WHERE id = ?', (game_id,))
+            
+            conn.commit()
+        
+        return jsonify({'success': True, 'message': 'Game deleted successfully'})
+        
+    except Exception as e:
+        logger.error(f"Admin delete game error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/admin/create_user', methods=['POST'])
 def admin_create_user():
@@ -553,25 +566,28 @@ def admin_create_user():
     password = data.get('password')
     is_admin = data.get('is_admin', False)
     
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    # Check if username exists
-    cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
-    if cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'Username already exists'}), 400
-    
-    password_hash = generate_password_hash(password)
-    cursor.execute('''
-        INSERT INTO users (username, password_hash, email, is_admin)
-        VALUES (?, ?, ?, ?)
-    ''', (username, password_hash, email, is_admin))
-    
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True, 'message': 'User created successfully'})
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Check if username exists
+            cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+            if cursor.fetchone():
+                return jsonify({'error': 'Username already exists'}), 400
+            
+            password_hash = generate_password_hash(password)
+            cursor.execute('''
+                INSERT INTO users (username, password_hash, email, is_admin, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (username, password_hash, email, is_admin, datetime.now()))
+            
+            conn.commit()
+        
+        return jsonify({'success': True, 'message': 'User created successfully'})
+        
+    except Exception as e:
+        logger.error(f"Admin create user error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/admin/results')
 def admin_results():
@@ -581,28 +597,32 @@ def admin_results():
     week = request.args.get('week', 1, type=int)
     year = request.args.get('year', datetime.now().year, type=int)
     
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT g.*, 
-               COUNT(up.id) as total_picks,
-               COUNT(CASE WHEN up.selected_team = 
-                   CASE WHEN g.home_score > g.away_score THEN g.home_team
-                        WHEN g.away_score > g.home_score THEN g.away_team
-                        ELSE NULL END THEN 1 END) as correct_picks
-        FROM nfl_games g
-        LEFT JOIN user_picks up ON g.id = up.game_id
-        WHERE g.week = ? AND g.year = ?
-        GROUP BY g.id
-        ORDER BY g.game_date
-    ''', (week, year))
-    
-    results = []
-    for row in cursor.fetchall():
-        results.append(dict(row))
-    
-    conn.close()
-    return jsonify(results)
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT g.*, 
+                       COUNT(up.id) as total_picks,
+                       COUNT(CASE WHEN up.selected_team = 
+                           CASE WHEN g.home_score > g.away_score THEN g.home_team
+                                WHEN g.away_score > g.home_score THEN g.away_team
+                                ELSE NULL END THEN 1 END) as correct_picks
+                FROM nfl_games g
+                LEFT JOIN user_picks up ON g.id = up.game_id
+                WHERE g.week = ? AND g.year = ?
+                GROUP BY g.id
+                ORDER BY g.game_date
+            ''', (week, year))
+            
+            results = []
+            for row in cursor.fetchall():
+                results.append(dict(row))
+        
+        return jsonify(results)
+        
+    except Exception as e:
+        logger.error(f"Admin results error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/admin/calculate_results', methods=['POST'])
 def admin_calculate_results():
@@ -624,23 +644,26 @@ def admin_users():
         return jsonify({'error': 'Admin access required'}), 403
     
     try:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('SELECT id, username, email, is_admin, created_at FROM users ORDER BY username')
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, username, email, is_admin, created_at, last_login 
+                FROM users 
+                ORDER BY username
+            ''')
+            
+            users = []
+            for row in cursor.fetchall():
+                users.append({
+                    'id': row[0],
+                    'username': row[1],
+                    'email': row[2] or '',
+                    'is_admin': bool(row[3]),
+                    'created_at': row[4],
+                    'is_active': True,  # Add default value
+                    'last_login': row[5]  # Get actual last_login value
+                })
         
-        users = []
-        for row in cursor.fetchall():
-            users.append({
-                'id': row[0],
-                'username': row[1],
-                'email': row[2] or '',
-                'is_admin': bool(row[3]),
-                'created_at': row[4],
-                'is_active': True,  # Add default value
-                'last_login': None  # Add default value
-            })
-        
-        conn.close()
         return jsonify(users)
         
     except Exception as e:
@@ -660,21 +683,20 @@ def admin_modify_user():
         is_admin = data.get('is_admin', False)
         new_password = data.get('new_password')
         
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        if new_password:
-            password_hash = generate_password_hash(new_password)
-            cursor.execute('''
-                UPDATE users SET username = ?, email = ?, is_admin = ?, password_hash = ? WHERE id = ?
-            ''', (username, email, is_admin, password_hash, user_id))
-        else:
-            cursor.execute('''
-                UPDATE users SET username = ?, email = ?, is_admin = ? WHERE id = ?
-            ''', (username, email, is_admin, user_id))
-        
-        conn.commit()
-        conn.close()
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            if new_password:
+                password_hash = generate_password_hash(new_password)
+                cursor.execute('''
+                    UPDATE users SET username = ?, email = ?, is_admin = ?, password_hash = ? WHERE id = ?
+                ''', (username, email, is_admin, password_hash, user_id))
+            else:
+                cursor.execute('''
+                    UPDATE users SET username = ?, email = ?, is_admin = ? WHERE id = ?
+                ''', (username, email, is_admin, user_id))
+            
+            conn.commit()
         
         return jsonify({'success': True, 'message': 'User updated successfully'})
         
@@ -694,20 +716,19 @@ def admin_delete_user():
         if user_id == session['user_id']:
             return jsonify({'error': 'Cannot delete your own account'}), 400
         
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        # Delete user picks first
-        cursor.execute('DELETE FROM user_picks WHERE user_id = ?', (user_id,))
-        
-        # Delete weekly results
-        cursor.execute('DELETE FROM weekly_results WHERE user_id = ?', (user_id,))
-        
-        # Delete user
-        cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
-        
-        conn.commit()
-        conn.close()
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Delete user picks first (foreign key constraint)
+            cursor.execute('DELETE FROM user_picks WHERE user_id = ?', (user_id,))
+            
+            # Delete weekly results
+            cursor.execute('DELETE FROM weekly_results WHERE user_id = ?', (user_id,))
+            
+            # Delete user
+            cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
+            
+            conn.commit()
         
         return jsonify({'success': True, 'message': 'User deleted successfully'})
         
@@ -735,35 +756,34 @@ def force_create_games(week, year):
             schedule = get_2025_nfl_schedule()
             
             if week in schedule:
-                conn = get_db()
-                cursor = conn.cursor()
-                
-                # Clear existing games for this week
-                cursor.execute('DELETE FROM nfl_games WHERE week = ? AND year = ?', (week, year))
-                
-                games_created = 0
-                for game in schedule[week]:
-                    game_id = f"nfl_{year}_w{week}_{game['away_team']}_{game['home_team']}"
+                with get_db() as conn:
+                    cursor = conn.cursor()
                     
-                    cursor.execute('''
-                        INSERT INTO nfl_games 
-                        (week, year, game_id, away_team, home_team, game_date, 
-                         is_thursday_night, is_monday_night, is_sunday_night, 
-                         game_status, tv_network)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        week, year, game_id, game['away_team'], game['home_team'],
-                        game['game_date'].strftime('%Y-%m-%d %H:%M:%S'),
-                        game.get('is_thursday_night', False),
-                        game.get('is_monday_night', False),
-                        game.get('is_sunday_night', False),
-                        'scheduled',
-                        game.get('tv_network', 'TBD')
-                    ))
-                    games_created += 1
-                
-                conn.commit()
-                conn.close()
+                    # Clear existing games for this week
+                    cursor.execute('DELETE FROM nfl_games WHERE week = ? AND year = ?', (week, year))
+                    
+                    games_created = 0
+                    for game in schedule[week]:
+                        game_id = f"nfl_{year}_w{week}_{game['away_team']}_{game['home_team']}"
+                        
+                        cursor.execute('''
+                            INSERT INTO nfl_games 
+                            (week, year, game_id, away_team, home_team, game_date, 
+                             is_thursday_night, is_monday_night, is_sunday_night, 
+                             game_status, tv_network)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            week, year, game_id, game['away_team'], game['home_team'],
+                            game['game_date'].strftime('%Y-%m-%d %H:%M:%S'),
+                            game.get('is_thursday_night', False),
+                            game.get('is_monday_night', False),
+                            game.get('is_sunday_night', False),
+                            'scheduled',
+                            game.get('tv_network', 'TBD')
+                        ))
+                        games_created += 1
+                    
+                    conn.commit()
                 
                 flash(f'Successfully created {games_created} games for Week {week}', 'success')
             else:
@@ -784,93 +804,110 @@ def admin_user_picks():
     week = request.args.get('week', 1, type=int)
     year = request.args.get('year', 2025, type=int)
     
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT up.game_id, up.selected_team, up.predicted_home_score, up.predicted_away_score
-        FROM user_picks up
-        JOIN nfl_games g ON up.game_id = g.id
-        WHERE up.user_id = ? AND g.week = ? AND g.year = ?
-    ''', (user_id, week, year))
-    
-    picks = []
-    for row in cursor.fetchall():
-        picks.append({
-            'game_id': row[0],
-            'selected_team': row[1],
-            'predicted_home_score': row[2],
-            'predicted_away_score': row[3]
-        })
-    
-    conn.close()
-    return jsonify(picks)
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT up.game_id, up.selected_team, up.predicted_home_score, up.predicted_away_score,
+                       g.home_team, g.away_team, g.game_date
+                FROM user_picks up
+                JOIN nfl_games g ON up.game_id = g.id
+                WHERE up.user_id = ? AND g.week = ? AND g.year = ?
+                ORDER BY g.game_date
+            ''', (user_id, week, year))
+            
+            picks = []
+            for row in cursor.fetchall():
+                picks.append({
+                    'game_id': row[0],
+                    'selected_team': row[1],
+                    'predicted_home_score': row[2],
+                    'predicted_away_score': row[3],
+                    'home_team': row[4],
+                    'away_team': row[5],
+                    'game_date': row[6]
+                })
+        
+        return jsonify(picks)
+        
+    except Exception as e:
+        logger.error(f"Admin user picks error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/admin/set_user_picks', methods=['POST'])
 def admin_set_user_picks():
     if 'user_id' not in session or not session.get('is_admin'):
         return jsonify({'error': 'Admin access required'}), 403
     
-    data = request.get_json()
-    user_id = data.get('user_id')
-    picks = data.get('picks', [])
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    successful_picks = 0
-    
-    for pick in picks:
-        game_id = pick.get('game_id')
-        selected_team = pick.get('selected_team')
-        home_score = pick.get('home_score')
-        away_score = pick.get('away_score')
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        picks = data.get('picks', [])
         
-        if game_id and selected_team:
-            cursor.execute('''
-                INSERT OR REPLACE INTO user_picks 
-                (user_id, game_id, selected_team, predicted_home_score, predicted_away_score)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (user_id, game_id, selected_team, home_score, away_score))
-            successful_picks += 1
-    
-    conn.commit()
-    conn.close()
-    
-    return jsonify({
-        'success': True, 
-        'message': f'Successfully set {successful_picks} picks for user',
-        'picks_set': successful_picks
-    })
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            successful_picks = 0
+            
+            for pick in picks:
+                game_id = pick.get('game_id')
+                selected_team = pick.get('selected_team')
+                home_score = pick.get('home_score')
+                away_score = pick.get('away_score')
+                
+                if game_id and selected_team:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO user_picks 
+                        (user_id, game_id, selected_team, predicted_home_score, predicted_away_score, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (user_id, game_id, selected_team, home_score, away_score, datetime.now()))
+                    successful_picks += 1
+            
+            conn.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Successfully set {successful_picks} picks for user',
+            'picks_set': successful_picks
+        })
+        
+    except Exception as e:
+        logger.error(f"Admin set user picks error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/admin/clear_user_picks', methods=['POST'])
 def admin_clear_user_picks():
     if 'user_id' not in session or not session.get('is_admin'):
         return jsonify({'error': 'Admin access required'}), 403
     
-    data = request.get_json()
-    user_id = data.get('user_id')
-    week = data.get('week')
-    year = data.get('year')
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        DELETE FROM user_picks 
-        WHERE user_id = ? AND game_id IN (
-            SELECT id FROM nfl_games WHERE week = ? AND year = ?
-        )
-    ''', (user_id, week, year))
-    
-    picks_cleared = cursor.rowcount
-    conn.commit()
-    conn.close()
-    
-    return jsonify({
-        'success': True,
-        'message': f'Cleared {picks_cleared} picks for user',
-        'picks_cleared': picks_cleared
-    })
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        week = data.get('week')
+        year = data.get('year')
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                DELETE FROM user_picks 
+                WHERE user_id = ? AND game_id IN (
+                    SELECT id FROM nfl_games WHERE week = ? AND year = ?
+                )
+            ''', (user_id, week, year))
+            
+            picks_cleared = cursor.rowcount
+            conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Cleared {picks_cleared} picks for user',
+            'picks_cleared': picks_cleared
+        })
+        
+    except Exception as e:
+        logger.error(f"Admin clear user picks error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     print("🚀 Starting La Casa de Todos NFL Fantasy League...")
