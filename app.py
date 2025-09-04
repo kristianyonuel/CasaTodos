@@ -216,25 +216,42 @@ def fetch_nfl_games(week=None, year=None):
 
 @app.route('/')
 def index():
+    print(f"Index route accessed - Session: {dict(session)}")
+    
     if 'user_id' not in session:
+        print("No user_id in session, redirecting to login")
         return redirect(url_for('login'))
     
-    current_week = get_current_nfl_week()
-    current_year = datetime.datetime.now().year
-    
-    return render_template('index.html', 
-                         current_week=current_week, 
-                         current_year=current_year,
-                         username=session.get('username'))
+    try:
+        current_week = get_current_nfl_week()
+        current_year = datetime.datetime.now().year
+        
+        print(f"Rendering index for user: {session.get('username')} - Week: {current_week}")
+        
+        return render_template('index.html', 
+                             current_week=current_week, 
+                             current_year=current_year,
+                             username=session.get('username'))
+    except Exception as e:
+        print(f"Index error: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Error loading dashboard', 'error')
+        return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    print(f"Login route accessed - Method: {request.method}")
+    
     if request.method == 'POST':
         try:
             username = request.form.get('username', '').strip()
             password = request.form.get('password', '').strip()
             
+            print(f"Login attempt - Username: {username}")
+            
             if not username or not password:
+                print("Missing username or password")
                 flash('Please enter both username and password', 'error')
                 return render_template('login.html')
             
@@ -244,19 +261,34 @@ def login():
             user = cursor.fetchone()
             conn.close()
             
-            if user and check_password_hash(user[1], password):
-                session['user_id'] = user[0]
-                session['username'] = username
-                session['is_admin'] = bool(user[2])
-                flash('Successfully logged in!', 'success')
-                return redirect(url_for('index'))
+            print(f"User lookup result: {user is not None}")
+            
+            if user:
+                print(f"User found - ID: {user[0]}, Admin: {user[2]}")
+                password_check = check_password_hash(user[1], password)
+                print(f"Password check result: {password_check}")
+                
+                if password_check:
+                    session['user_id'] = user[0]
+                    session['username'] = username
+                    session['is_admin'] = bool(user[2])
+                    print(f"Login successful - Session set for user: {username}")
+                    flash('Successfully logged in!', 'success')
+                    return redirect(url_for('index'))
+                else:
+                    print("Password check failed")
             else:
-                flash('Invalid username or password', 'error')
+                print("User not found")
+                
+            flash('Invalid username or password', 'error')
                 
         except Exception as e:
             print(f"Login error: {e}")
+            import traceback
+            traceback.print_exc()
             flash('Login error occurred. Please try again.', 'error')
     
+    print("Rendering login template")
     return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -306,11 +338,16 @@ def logout():
 
 @app.route('/games')
 def games():
+    print(f"Games route accessed - Session: {dict(session)}")
+    
     if 'user_id' not in session:
+        print("No user_id in session, redirecting to login")
         return redirect(url_for('login'))
     
     week = request.args.get('week', get_current_nfl_week(), type=int)
     year = request.args.get('year', datetime.datetime.now().year, type=int)
+    
+    print(f"Loading games for week {week}, year {year}")
     
     try:
         # Get games from database or fetch new ones
@@ -383,6 +420,9 @@ def games():
                 'is_final': bool(game[11])
             })
         
+        print(f"Found {len(games_list)} games for week {week}")
+        print(f"User has {len(user_picks)} existing picks")
+        
         return render_template('games.html', 
                              games=games_list, 
                              user_picks=user_picks,
@@ -391,6 +431,8 @@ def games():
                              
     except Exception as e:
         print(f"Games page error: {e}")
+        import traceback
+        traceback.print_exc()
         flash('Error loading games. Please try again.', 'error')
         return redirect(url_for('index'))
 
@@ -442,3 +484,34 @@ def submit_picks():
     except Exception as e:
         print(f"Submit picks error: {e}")
         return jsonify({'error': 'Failed to submit picks'}), 500
+
+@app.errorhandler(404)
+def not_found_error(error):
+    print(f"404 Error: {error}")
+    return render_template('error.html', error="Page not found"), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    print(f"500 Error: {error}")
+    import traceback
+    traceback.print_exc()
+    return render_template('error.html', error="Internal server error"), 500
+
+if __name__ == '__main__':
+    print("Creating database and starting application...")
+    
+    try:
+        init_db()
+        print("Database initialized successfully")
+        
+        # Add debug mode
+        app.config['DEBUG'] = True
+        app.config['TEMPLATES_AUTO_RELOAD'] = True
+        
+        print("Starting Flask application...")
+        app.run(debug=True, host='127.0.0.1', port=5000)
+        
+    except Exception as e:
+        print(f"Application startup failed: {e}")
+        import traceback
+        traceback.print_exc()
