@@ -244,31 +244,68 @@
         }
 
         async function syncSeason() {
-            if (!confirm('This will sync all 18 weeks of NFL games. Continue?')) return;
+            if (!confirm('This will import the complete 2025 NFL schedule (all 18 weeks). Continue?')) return;
             
-            document.getElementById('admin-content').innerHTML = '<p>Syncing NFL season data...</p>';
+            document.getElementById('admin-content').innerHTML = '<p>Syncing 2025 NFL season data...</p>';
             
             try {
                 const response = await fetch('/sync_season', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ year: new Date().getFullYear() })
+                    body: JSON.stringify({ year: 2025 })
                 });
                 
                 const result = await response.json();
                 if (result.success) {
                     document.getElementById('admin-content').innerHTML = 
-                        `<h3>Season Sync Complete</h3><p>${result.message}</p>`;
+                        `<div class="alert alert-success">
+                            <h3>Season Sync Complete!</h3>
+                            <p>${result.message}</p>
+                            <p><strong>Games imported:</strong> ${result.games_added}</p>
+                            <button onclick="loadSchedule()" class="btn btn-primary">View Schedule</button>
+                        </div>`;
                 } else {
                     document.getElementById('admin-content').innerHTML = 
-                        `<h3>Sync Failed</h3><p>Error: ${result.error}</p>`;
+                        `<div class="alert alert-error">
+                            <h3>Sync Failed</h3>
+                            <p>Error: ${result.error}</p>
+                            <button onclick="syncSeason()" class="btn btn-warning">Retry</button>
+                        </div>`;
                 }
             } catch (error) {
+                console.error('Sync error:', error);
                 document.getElementById('admin-content').innerHTML = 
-                    '<h3>Sync Failed</h3><p>Network error occurred</p>';
+                    `<div class="alert alert-error">
+                        <h3>Sync Failed</h3>
+                        <p>Network error: ${error.message}</p>
+                        <button onclick="syncSeason()" class="btn btn-warning">Retry</button>
+                    </div>`;
             }
         }
-        
+
+        async function generateWeekGames() {
+            if (!confirm(`Generate official NFL games for Week ${currentWeek}, 2025?`)) return;
+            
+            try {
+                const response = await fetch('/admin/generate_week', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ week: currentWeek, year: 2025 })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert(`Successfully generated ${result.games_created} games for Week ${currentWeek}`);
+                    loadSchedule();
+                } else {
+                    alert('Error generating games: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Generate games error:', error);
+                alert('Error generating games: ' + error.message);
+            }
+        }
+
         async function createWeekGames() {
             const year = new Date().getFullYear();
             const url = `/force_create_games/${currentWeek}/${year}`;
@@ -524,29 +561,6 @@
                 }
             } catch (error) {
                 alert('Error deleting game');
-                console.error('Error:', error);
-            }
-        }
-
-        async function generateWeekGames() {
-            if (!confirm(`Generate default games for Week ${currentWeek}? This will create standard NFL games.`)) return;
-            
-            try {
-                const response = await fetch('/admin/generate_week', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ week: currentWeek, year: currentYear })
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    alert(`Generated ${result.games_created} games for Week ${currentWeek}`);
-                    loadSchedule();
-                } else {
-                    alert('Error generating games: ' + result.error);
-                }
-            } catch (error) {
-                alert('Error generating games');
                 console.error('Error:', error);
             }
         }
