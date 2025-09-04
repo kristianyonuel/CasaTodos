@@ -9,7 +9,7 @@
 <body>
     <div class="container">
         <header class="header">
-            <h1>🏈 Week {{ current_week }} Games</h1>
+            <h1>🏈 Make Your Picks</h1>
             <nav class="nav">
                 <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
                 <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
@@ -30,201 +30,201 @@
                 {% endif %}
             {% endwith %}
 
-            <div class="picks-container">
-                <div class="picks-header">
-                    <h2>Make Your Picks - Week {{ current_week }}</h2>
-                    <p>Select the winning team for each game. Monday Night Football requires score prediction.</p>
-                    <div class="week-stats">
-                        <span class="stat">📅 Week {{ current_week }} of 18</span>
-                        <span class="stat">🏈 {{ total_games or 0 }} Games</span>
-                        <span class="stat">⏰ Times shown in AST</span>
-                    </div>
-                    
-                    <!-- Week Navigation -->
-                    <div class="week-navigation">
-                        <h3>Select Week:</h3>
-                        <div class="week-buttons">
-                            {% for week_num in range(1, 19) %}
-                            <a href="{{ url_for('games', week=week_num, year=current_year) }}" 
-                               class="week-btn {% if week_num == current_week %}current{% endif %} {% if week_num == current_nfl_week %}active-week{% endif %}">
-                                Week {{ week_num }}
-                                {% if week_num == current_nfl_week %}<span class="live-indicator">LIVE</span>{% endif %}
-                            </a>
-                            {% endfor %}
-                        </div>
-                        <div class="week-info">
-                            <p><strong>Current NFL Week:</strong> {{ current_nfl_week }}</p>
-                            <p><strong>Viewing:</strong> Week {{ current_week }}</p>
-                            {% if session.get('is_admin') %}
-                            <p>
-                                <a href="{{ url_for('force_create_games', week=current_week, year=current_year) }}" 
-                                   class="btn btn-sm btn-secondary" onclick="return confirm('Force create games for this week?')">
-                                    🔧 Force Create Games
-                                </a>
-                            </p>
-                            {% endif %}
-                        </div>
-                    </div>
+            <div class="picks-header">
+                <h2>Week {{ current_week }}, {{ current_year }}</h2>
+                <div class="week-selector">
+                    <label for="week-select">Select Week:</label>
+                    <select id="week-select" onchange="changeWeek()">
+                        {% for week_num in available_weeks %}
+                        <option value="{{ week_num }}" {% if week_num == current_week %}selected{% endif %}>
+                            Week {{ week_num }}
+                        </option>
+                        {% endfor %}
+                    </select>
                 </div>
+                
+                <div class="picks-summary">
+                    <p><strong>Games this week:</strong> {{ total_games }}</p>
+                    <p><strong>Your picks:</strong> <span id="picks-count">{{ user_picks.keys()|length }}</span>/{{ total_games }}</p>
+                </div>
+            </div>
 
-                {% if games %}
-                <form id="picks-form" class="picks-form">
-                    <div class="games-grid">
+            {% if total_games == 0 %}
+                <div class="no-games-alert">
+                    <h3>No games available for Week {{ current_week }}</h3>
+                    <p>Games haven't been created yet for this week.</p>
+                    {% if session.get('is_admin') %}
+                        <div class="admin-actions">
+                            <a href="{{ url_for('force_create_games', week=current_week, year=current_year) }}" 
+                               class="btn btn-primary">Create Games for Week {{ current_week }}</a>
+                            <a href="{{ url_for('admin') }}" class="btn btn-secondary">Go to Admin Panel</a>
+                        </div>
+                    {% else %}
+                        <p>Please contact the administrator to set up games for this week.</p>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="games-container">
+                    <form id="picks-form">
                         {% for game in games %}
-                        <div class="game-card {% if game.is_monday_night %}monday-night{% endif %} {% if game.is_thursday_night %}thursday-night{% endif %} {% if game.is_final %}final{% endif %}">
-                            <div class="game-header">
-                                <span class="game-time">
-                                    {% if game.game_date %}
-                                        {{ game.game_date.strftime('%a %m/%d %I:%M %p AST') }}
-                                    {% else %}
-                                        TBD
+                        <div class="game-card" data-game-id="{{ game.id }}">
+                            <div class="game-info">
+                                <div class="game-date">
+                                    {{ game.game_date.strftime('%A, %B %d') if game.game_date else 'TBD' }}
+                                    <br>
+                                    {{ game.game_date.strftime('%I:%M %p ET') if game.game_date else '' }}
+                                    {% if game.is_thursday_night %}
+                                        <span class="game-type tnf">TNF</span>
+                                    {% elif game.is_monday_night %}
+                                        <span class="game-type mnf">MNF</span>
+                                    {% elif game.is_sunday_night %}
+                                        <span class="game-type snf">SNF</span>
                                     {% endif %}
-                                </span>
+                                </div>
+                                
+                                <div class="teams">
+                                    <div class="team away-team">
+                                        <input type="radio" 
+                                               name="game_{{ game.id }}" 
+                                               value="{{ game.away_team }}"
+                                               id="away_{{ game.id }}"
+                                               {% if user_picks.get(game.id, {}).get('selected_team') == game.away_team %}checked{% endif %}>
+                                        <label for="away_{{ game.id }}">{{ game.away_team }}</label>
+                                    </div>
+                                    
+                                    <div class="vs">@</div>
+                                    
+                                    <div class="team home-team">
+                                        <input type="radio" 
+                                               name="game_{{ game.id }}" 
+                                               value="{{ game.home_team }}"
+                                               id="home_{{ game.id }}"
+                                               {% if user_picks.get(game.id, {}).get('selected_team') == game.home_team %}checked{% endif %}>
+                                        <label for="home_{{ game.id }}">{{ game.home_team }}</label>
+                                    </div>
+                                </div>
+
                                 {% if game.is_monday_night %}
-                                <span class="mnf-badge">Monday Night Football</span>
-                                {% elif game.is_thursday_night %}
-                                <span class="tnf-badge">Thursday Night Football</span>
-                                {% endif %}
-                                {% if game.is_final %}
-                                <span class="final-badge">FINAL</span>
-                                {% endif %}
-                            </div>
-                            
-                            {% if game.is_final and game.home_score is not none %}
-                            <!-- Show final score -->
-                            <div class="final-score">
-                                <div class="team-score">
-                                    <span class="team-name">{{ game.away_team }}</span>
-                                    <span class="score">{{ game.away_score }}</span>
-                                </div>
-                                <div class="vs">@</div>
-                                <div class="team-score">
-                                    <span class="team-name">{{ game.home_team }}</span>
-                                    <span class="score">{{ game.home_score }}</span>
-                                </div>
-                            </div>
-                            {% else %}
-                            <!-- Show pick options -->
-                            <div class="teams">
-                                <div class="team away-team">
-                                    <input type="radio" 
-                                           name="game_{{ game.id }}" 
-                                           value="{{ game.away_team }}"
-                                           id="away_{{ game.id }}"
-                                           {% if user_picks.get(game.id, {}).get('selected_team') == game.away_team %}checked{% endif %}>
-                                    <label for="away_{{ game.id }}" class="team-option">
-                                        <div class="team-info">
-                                            <div class="team-name">{{ game.away_team }}</div>
-                                            <div class="team-label">Away</div>
-                                        </div>
-                                    </label>
-                                </div>
-                                
-                                <div class="vs">@</div>
-                                
-                                <div class="team home-team">
-                                    <input type="radio" 
-                                           name="game_{{ game.id }}" 
-                                           value="{{ game.home_team }}"
-                                           id="home_{{ game.id }}"
-                                           {% if user_picks.get(game.id, {}).get('selected_team') == game.home_team %}checked{% endif %}>
-                                    <label for="home_{{ game.id }}" class="team-option">
-                                        <div class="team-info">
-                                            <div class="team-name">{{ game.home_team }}</div>
-                                            <div class="team-label">Home</div>
-                                        </div>
-                                    </label>
-                                </div>
-                            </div>
-                            {% endif %}
-                            
-                            {% if game.is_monday_night and not game.is_final %}
-                            <div class="score-prediction">
-                                <h4>Score Prediction (Tiebreaker)</h4>
-                                <div class="score-inputs">
-                                    <div class="score-input">
-                                        <label for="away_score_{{ game.id }}">{{ game.away_team }}</label>
+                                <div class="score-prediction">
+                                    <h4>Score Prediction (Tiebreaker)</h4>
+                                    <div class="score-inputs">
                                         <input type="number" 
-                                               id="away_score_{{ game.id }}" 
-                                               name="away_score_{{ game.id }}"
+                                               name="away_score_{{ game.id }}" 
+                                               placeholder="Away"
                                                min="0" max="99"
-                                               value="{{ user_picks.get(game.id, {}).get('predicted_away_score', '') }}">
-                                    </div>
-                                    <div class="score-separator">-</div>
-                                    <div class="score-input">
-                                        <label for="home_score_{{ game.id }}">{{ game.home_team }}</label>
+                                               value="{{ user_picks.get(game.id, {}).get('predicted_away_score') or '' }}">
+                                        <span>-</span>
                                         <input type="number" 
-                                               id="home_score_{{ game.id }}" 
-                                               name="home_score_{{ game.id }}"
+                                               name="home_score_{{ game.id }}" 
+                                               placeholder="Home"
                                                min="0" max="99"
-                                               value="{{ user_picks.get(game.id, {}).get('predicted_home_score', '') }}">
+                                               value="{{ user_picks.get(game.id, {}).get('predicted_home_score') or '' }}">
                                     </div>
                                 </div>
+                                {% endif %}
                             </div>
-                            {% endif %}
-                            
-                            <input type="hidden" name="game_id" value="{{ game.id }}">
                         </div>
                         {% endfor %}
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Submit Picks</button>
-                        <button type="button" class="btn btn-secondary" onclick="clearPicks()">Clear All</button>
-                    </div>
-                </form>
-                {% else %}
-                <div class="no-games">
-                    <h3>No games available for Week {{ current_week }}</h3>
-                    <p>Games may not have been created yet.</p>
-                    <div class="no-games-actions">
-                        <a href="{{ url_for('games', week=current_nfl_week) }}" class="btn btn-primary">Go to Current Week</a>
-                        {% if session.get('is_admin') %}
-                        <a href="{{ url_for('force_create_games', week=current_week, year=current_year) }}" 
-                           class="btn btn-secondary" onclick="return confirm('Create games for Week {{ current_week }}?')">
-                            Create Games for This Week
-                        </a>
-                        {% endif %}
-                    </div>
+                        
+                        <div class="submit-section">
+                            <button type="submit" class="btn btn-primary btn-large">
+                                Submit All Picks
+                            </button>
+                            <p class="picks-info">
+                                You have selected <span id="selected-count">0</span> out of {{ total_games }} games
+                            </p>
+                        </div>
+                    </form>
                 </div>
-                {% endif %}
-            </div>
+            {% endif %}
         </main>
     </div>
 
     <script>
-        document.getElementById('picks-form')?.addEventListener('submit', async function(e) {
+        function changeWeek() {
+            const weekSelect = document.getElementById('week-select');
+            const selectedWeek = weekSelect.value;
+            window.location.href = `{{ url_for('games') }}?week=${selectedWeek}&year={{ current_year }}`;
+        }
+
+        function updatePicksCount() {
+            const selectedPicks = document.querySelectorAll('input[type="radio"]:checked').length;
+            document.getElementById('selected-count').textContent = selectedPicks;
+            document.getElementById('picks-count').textContent = selectedPicks;
+        }
+
+        // Update count when picks change
+        document.addEventListener('change', function(e) {
+            if (e.target.type === 'radio') {
+                updatePicksCount();
+            }
+        });
+
+        // Initial count
+        document.addEventListener('DOMContentLoaded', function() {
+            updatePicksCount();
+        });
+
+        // Handle form submission
+        document.getElementById('picks-form')?.addEventListener('submit', function(e) {
             e.preventDefault();
             
-            const formData = new FormData(this);
             const picks = [];
-            const gameIds = formData.getAll('game_id');
+            const gameCards = document.querySelectorAll('.game-card');
             
-            gameIds.forEach(gameId => {
-                const selectedTeam = formData.get(`game_${gameId}`);
-                const homeScore = formData.get(`home_score_${gameId}`);
-                const awayScore = formData.get(`away_score_${gameId}`);
+            gameCards.forEach(card => {
+                const gameId = card.dataset.gameId;
+                const selectedTeam = card.querySelector('input[type="radio"]:checked');
                 
                 if (selectedTeam) {
-                    picks.push({
+                    const pick = {
                         game_id: parseInt(gameId),
-                        selected_team: selectedTeam,
-                        home_score: homeScore ? parseInt(homeScore) : null,
-                        away_score: awayScore ? parseInt(awayScore) : null
-                    });
+                        selected_team: selectedTeam.value
+                    };
+                    
+                    // Add score predictions for Monday Night games
+                    const awayScoreInput = card.querySelector(`input[name="away_score_${gameId}"]`);
+                    const homeScoreInput = card.querySelector(`input[name="home_score_${gameId}"]`);
+                    
+                    if (awayScoreInput && homeScoreInput) {
+                        pick.away_score = awayScoreInput.value ? parseInt(awayScoreInput.value) : null;
+                        pick.home_score = homeScoreInput.value ? parseInt(homeScoreInput.value) : null;
+                    }
+                    
+                    picks.push(pick);
                 }
             });
-            
+
             if (picks.length === 0) {
                 alert('Please make at least one pick before submitting.');
                 return;
             }
-            
-            try {
-                const response = await fetch('/submit_picks', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ picks: picks })
+
+            // Submit picks
+            fetch('{{ url_for("submit_picks") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ picks: picks })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error submitting picks: ' + error.message);
+            });
+        });
+    </script>
+</body>
+</html>
                 });
                 
                 const result = await response.json();

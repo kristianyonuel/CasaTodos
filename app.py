@@ -68,7 +68,19 @@ def index():
     initialize_app()
     
     current_week = 1
-    current_year = datetime.now().year
+    current_year = 2025  # Use 2025 for NFL schedule
+    
+    # Get actual game count from database
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (current_week, current_year))
+    total_games = cursor.fetchone()[0]
+    
+    # If no games exist, get expected count and suggest creation
+    if total_games == 0:
+        from nfl_2025_schedule import get_week_game_count
+        expected_games = get_week_game_count(current_week)
+        total_games = expected_games
     
     dashboard_data = get_dashboard_data(session['user_id'], current_week, current_year)
     
@@ -77,12 +89,13 @@ def index():
         'current_year': current_year,
         'username': session.get('username', 'User'),
         'user_picks_count': dashboard_data['user_picks_count'],
-        'total_games': dashboard_data['total_games'],
+        'total_games': total_games,
         'user_wins': dashboard_data['user_wins'],
         'total_players': dashboard_data['total_players'],
         'available_weeks': list(range(1, 19))
     }
     
+    conn.close()
     return render_template('index.html', **data)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -654,6 +667,58 @@ def not_found_error(error):
 @app.errorhandler(500)
 def internal_error(error):
     return render_template('error.html', error="Internal server error"), 500
+
+@app.route('/force_create_games/<int:week>/<int:year>')
+def force_create_games(week, year):
+    if 'user_id' not in session or not session.get('is_admin'):
+        flash('Admin access required', 'error')
+        return redirect(url_for('games'))
+    
+    try:
+        if year == 2025:
+            from nfl_2025_schedule import get_2025_nfl_schedule
+            schedule = get_2025_nfl_schedule()
+            
+            if week in schedule:
+                conn = get_db()
+                cursor = conn.cursor()
+                
+                # Clear existing games for this week
+                cursor.execute('DELETE FROM nfl_games WHERE week = ? AND year = ?', (week, year))
+                
+                games_created = 0
+                for game in schedule[week]:
+                    game_id = f"nfl_{year}_w{week}_{game['away_team']}_{game['home_team']}"
+                    
+                    cursor.execute('''
+                        INSERT INTO nfl_games 
+                        (week, year, game_id, away_team, home_team, game_date, 
+                         is_thursday_night, is_monday_night, is_sunday_night, 
+                         game_status, tv_network)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        week, year, game_id, game['away_team'], game['home_team'],
+                        game['game_date'].strftime('%Y-%m-%d %H:%M:%S'),
+                        game.get('is_thursday_night', False),
+                        game.get('is_monday_night', False),
+                        game.get('is_sunday_night', False),
+                        'scheduled',
+                        game.get('tv_network', 'TBD')
+                    ))
+                    games_created += 1
+                
+                conn.commit()
+                conn.close()
+                
+                flash(f'Successfully created {games_created} games for Week {week}', 'success')
+            else:
+                flash(f'No schedule data available for Week {week}', 'error')
+        else:
+            flash(f'Schedule not available for year {year}', 'error')
+    except Exception as e:
+        flash(f'Error creating games: {str(e)}', 'error')
+    
+    return redirect(url_for('games', week=week, year=year))
 
 if __name__ == '__main__':
     print("🚀 Starting La Casa de Todos NFL Fantasy League...")
