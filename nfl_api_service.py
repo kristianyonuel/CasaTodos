@@ -235,41 +235,12 @@ class NFLAPIService:
 
 # Global API service instance
 nfl_api = NFLAPIService()
-                game_status = self._normalize_msf_status(schedule.get('playedStatus'))
-                is_final = game_status == 'final'
-                
-                # Determine game type
-                weekday = game_date.weekday()
-                hour = game_date.hour
-                
-                normalized_game = {
-                    'api_game_id': game.get('schedule', {}).get('id'),
-                    'week': schedule.get('week'),
-                    'year': schedule.get('season'),
-                    'away_team': away_team,
-                    'home_team': home_team,
-                    'game_date': game_date,
-                    'is_thursday_night': weekday == 3 and hour >= 18,
-                    'is_monday_night': weekday == 0 and hour >= 18,
-                    'is_sunday_night': weekday == 6 and hour >= 18,
-                    'away_score': away_score,
-                    'home_score': home_score,
-                    'game_status': game_status,
-                    'is_final': is_final,
-                    'quarter': score.get('currentPeriod'),
-                    'time_remaining': score.get('currentPeriodTimeRemaining'),
-                    'tv_network': None,
-                    'stadium': schedule.get('venue', {}).get('name')
-                }
-                
-                normalized.append(normalized_game)
-                
-            except Exception as e:
-                logger.error(f"Error normalizing MySportsFeeds game: {e}")
-                continue
-        
-        return normalized
-    
+
+    # The following methods were incorrectly indented; fix by unindenting them to be inside the class.
+
+class NFLAPIService:
+    # ... previous methods ...
+
     def _normalize_balldontlie_games(self, games_data: List[Dict], week: int, year: int) -> List[Dict]:
         """Normalize BallDontLie game data"""
         normalized = []
@@ -326,7 +297,7 @@ nfl_api = NFLAPIService()
                 continue
         
         return normalized
-    
+
     def _normalize_espn_games(self, games_data: List[Dict], week: int, year: int) -> List[Dict]:
         """Normalize ESPN game data"""
         normalized = []
@@ -403,13 +374,13 @@ nfl_api = NFLAPIService()
                 continue
         
         return normalized
-    
+
     def _has_msf_credentials(self) -> bool:
         """Check if MySportsFeeds credentials are configured"""
         return (self.msf_username != "YOUR_MSF_USERNAME" and 
                 self.msf_password != "YOUR_MSF_PASSWORD" and
                 self.msf_username and self.msf_password)
-    
+
     def _normalize_msf_status(self, status: str) -> str:
         """Normalize MySportsFeeds game status"""
         status_map = {
@@ -419,7 +390,7 @@ nfl_api = NFLAPIService()
             'POSTPONED': 'postponed'
         }
         return status_map.get(status, 'scheduled')
-    
+
     def _normalize_balldontlie_status(self, status: str) -> str:
         """Normalize BallDontLie game status"""
         status_map = {
@@ -429,7 +400,7 @@ nfl_api = NFLAPIService()
             'Postponed': 'postponed'
         }
         return status_map.get(status, 'scheduled')
-    
+
     def _normalize_espn_status(self, status: str) -> str:
         """Normalize ESPN game status"""
         status_map = {
