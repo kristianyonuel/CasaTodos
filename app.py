@@ -6,6 +6,7 @@ import json
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 from nfl_schedule_2025 import get_2025_schedule, get_current_nfl_week_2025, NFL_TEAMS
+from nfl_2025_official_schedule import get_official_2025_games, populate_all_2025_weeks
 
 app = Flask(__name__)
 app.secret_key = 'nfl-fantasy-secret-key-2024'
@@ -115,10 +116,10 @@ def init_db():
             ''', (username, user_hash, email, 0))
             print(f"✓ Created sample user: {username}")
     
-    # Initialize league settings
+    # Initialize league settings with updated costs
     default_settings = [
-        ('weekly_fee', '5.00', 'Weekly pool entry fee'),
-        ('season_fee', '10.00', 'Full season pool entry fee'),
+        ('weekly_fee', '20.00', 'Weekly pool entry fee'),
+        ('season_fee', '20.00', 'Season initial entry fee'), 
         ('current_season', str(datetime.datetime.now().year), 'Current NFL season'),
         ('league_name', 'La Casa de Todos NFL League', 'Name of the fantasy league'),
         ('max_participants', '20', 'Maximum number of league participants'),
@@ -191,56 +192,12 @@ def create_nfl_games_from_schedule(week, year):
     """Create NFL games from the official schedule"""
     try:
         if year >= 2025:
-            schedule = get_2025_schedule()
-            if week not in schedule:
-                return []
-            
-            games = []
-            week_data = schedule[week]
-            
-            # Thursday games
-            for game in week_data['thursday_games']:
-                games.append({
-                    'week': week,
-                    'year': year,
-                    'game_id': f'tnf_{year}_week_{week}',
-                    'home_team': game['home_team'],
-                    'away_team': game['away_team'],
-                    'game_date': game['game_time'],
-                    'is_monday_night': False,
-                    'is_thursday_night': True
-                })
-            
-            # Sunday games
-            for i, game in enumerate(week_data['sunday_games']):
-                games.append({
-                    'week': week,
-                    'year': year,
-                    'game_id': f'sun_{year}_week_{week}_game_{i+1}',
-                    'home_team': game['home_team'],
-                    'away_team': game['away_team'],
-                    'game_date': game['game_time'],
-                    'is_monday_night': False,
-                    'is_thursday_night': False
-                })
-            
-            # Monday games
-            for game in week_data['monday_games']:
-                games.append({
-                    'week': week,
-                    'year': year,
-                    'game_id': f'mnf_{year}_week_{week}',
-                    'home_team': game['home_team'],
-                    'away_team': game['away_team'],
-                    'game_date': game['game_time'],
-                    'is_monday_night': True,
-                    'is_thursday_night': False
-                })
-            
-            return games
-        else:
-            # Fall back to sample games for older years
-            return create_sample_games(week, year)
+            games = get_official_2025_games(week)
+            if games:
+                return games
+        
+        # Fall back to sample games for older years
+        return create_sample_games(week, year)
             
     except Exception as e:
         print(f"Error creating games from schedule: {e}")
@@ -258,49 +215,88 @@ def fetch_all_nfl_weeks(year=None):
     
     total_games_added = 0
     
-    for week in range(1, 19):
-        print(f"Processing week {week}...")
+    if year >= 2025:
+        # Use official 2025 schedule
+        all_weeks_data = populate_all_2025_weeks()
         
-        # Check if we already have games for this week
-        cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, year))
-        existing_games = cursor.fetchone()[0]
-        
-        if existing_games > 0:
-            print(f"Week {week} already has {existing_games} games, skipping...")
-            continue
-        
-        try:
-            # First try official schedule
-            games = create_nfl_games_from_schedule(week, year)
+        for week in range(1, 19):
+            print(f"Processing week {week}...")
             
-            # If no games from schedule, try ESPN API
-            if not games:
-                games = fetch_nfl_games(week, year)
+            # Check if we already have games for this week
+            cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, year))
+            existing_games = cursor.fetchone()[0]
             
-            # If still no games, create sample games
-            if not games:
-                games = create_sample_games(week, year)
+            if existing_games > 0:
+                print(f"Week {week} already has {existing_games} games, skipping...")
+                continue
             
-            week_games = 0
-            for game in games:
-                cursor.execute('''
-                    INSERT OR REPLACE INTO nfl_games 
-                    (game_id, week, year, home_team, away_team, game_date, 
-                     is_monday_night, is_thursday_night, home_score, away_score, is_final)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (game['game_id'], game['week'], game['year'], 
-                      game['home_team'], game['away_team'], game['game_date'],
-                      game['is_monday_night'], game['is_thursday_night'], 
-                      game.get('home_score'), game.get('away_score'), game.get('is_final', False)))
+            try:
+                games = all_weeks_data.get(week, [])
+                
+                week_games = 0
+                for game in games:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO nfl_games 
+                        (game_id, week, year, home_team, away_team, game_date, 
+                         is_monday_night, is_thursday_night, home_score, away_score, is_final)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (game['game_id'], game['week'], game['year'], 
+                          game['home_team'], game['away_team'], game['game_date'],
+                          game['is_monday_night'], game['is_thursday_night'], 
+                          game.get('home_score'), game.get('away_score'), game.get('is_final', False)))
                 
                 week_games += 1
                 total_games_added += 1
+                
+                print(f"Added {week_games} games for week {week}")
+                
+            except Exception as e:
+                print(f"Error processing week {week}: {e}")
+                continue
+    else:
+        for week in range(1, 19):
+            print(f"Processing week {week}...")
             
-            print(f"Added {week_games} games for week {week}")
+            # Check if we already have games for this week
+            cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, year))
+            existing_games = cursor.fetchone()[0]
             
-        except Exception as e:
-            print(f"Error processing week {week}: {e}")
-            continue
+            if existing_games > 0:
+                print(f"Week {week} already has {existing_games} games, skipping...")
+                continue
+            
+            try:
+                # First try official schedule
+                games = create_nfl_games_from_schedule(week, year)
+                
+                # If no games from schedule, try ESPN API
+                if not games:
+                    games = fetch_nfl_games(week, year)
+                
+                # If still no games, create sample games
+                if not games:
+                    games = create_sample_games(week, year)
+                
+                week_games = 0
+                for game in games:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO nfl_games 
+                        (game_id, week, year, home_team, away_team, game_date, 
+                         is_monday_night, is_thursday_night, home_score, away_score, is_final)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (game['game_id'], game['week'], game['year'], 
+                          game['home_team'], game['away_team'], game['game_date'],
+                          game['is_monday_night'], game['is_thursday_night'], 
+                          game.get('home_score'), game.get('away_score'), game.get('is_final', False)))
+                
+                week_games += 1
+                total_games_added += 1
+                
+                print(f"Added {week_games} games for week {week}")
+                
+            except Exception as e:
+                print(f"Error processing week {week}: {e}")
+                continue
     
     conn.commit()
     conn.close()
@@ -1062,6 +1058,10 @@ if __name__ == '__main__':
         traceback.print_exc()
         app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
         
+    except Exception as e:
+        print(f"Application startup failed: {e}")
+        import traceback
+        traceback.print_exc()
     except Exception as e:
         print(f"Application startup failed: {e}")
         import traceback
