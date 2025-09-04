@@ -503,6 +503,39 @@ def admin_modify_user():
         print(f"Admin modify user error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/admin/delete_user', methods=['POST'])
+def admin_delete_user():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        
+        if user_id == session['user_id']:
+            return jsonify({'error': 'Cannot delete your own account'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Delete user picks first
+        cursor.execute('DELETE FROM user_picks WHERE user_id = ?', (user_id,))
+        
+        # Delete weekly results
+        cursor.execute('DELETE FROM weekly_results WHERE user_id = ?', (user_id,))
+        
+        # Delete user
+        cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'User deleted successfully'})
+        
+    except Exception as e:
+        print(f"Admin delete user error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.errorhandler(404)
 def not_found_error(error):
     return render_template('error.html', error="Page not found"), 404
