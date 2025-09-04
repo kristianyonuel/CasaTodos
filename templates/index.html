@@ -36,7 +36,7 @@
                 <div class="welcome-card">
                     <h2>Welcome back, {{ username }}! 🏈</h2>
                     <p>Ready to make your picks for Week {{ current_week }}?</p>
-                    {% if user_picks_count and total_games %}
+                    {% if user_picks_count is defined and total_games is defined and total_games > 0 %}
                         <div class="progress-info">
                             <p>Your progress: {{ user_picks_count }}/{{ total_games }} games picked</p>
                             <div class="progress-bar">
@@ -49,7 +49,7 @@
                 <div class="stats-grid">
                     <div class="stat-card">
                         <h3>Current Week</h3>
-                        <div class="stat-value">{{ current_week }}</div>
+                        <div class="stat-value">{{ current_week or 1 }}</div>
                     </div>
                     <div class="stat-card">
                         <h3>Your Picks</h3>
@@ -90,15 +90,15 @@
                     <div class="status-cards">
                         <div class="status-card">
                             <h4>Thursday Night</h4>
-                            <p id="tnf-status">Loading...</p>
+                            <p>Picks due Thursday 8:00 PM</p>
                         </div>
                         <div class="status-card">
                             <h4>Sunday Games</h4>
-                            <p id="sunday-status">Loading...</p>
+                            <p>Picks due Sunday 1:00 PM</p>
                         </div>
                         <div class="status-card">
                             <h4>Monday Night</h4>
-                            <p id="mnf-status">Loading...</p>
+                            <p>Score prediction required</p>
                         </div>
                     </div>
                 </div>
@@ -123,8 +123,8 @@
             </div>
         </main>
     </div>
-
-    <script>
+</body>
+</html>
         // Load game status information
         document.addEventListener('DOMContentLoaded', function() {
             loadGameStatus();
