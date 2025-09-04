@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Make Picks - La Casa de Todos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🏈 Week {{ current_week }} Games</h1>
+            <nav class="nav">
+                <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
+                <a href="{{ url_for('rules') }}" class="nav-link">Rules</a>
+                <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <div class="picks-container">
+                <div class="picks-header">
+                    <h2>Make Your Picks</h2>
+                    <p>Select the winning team for each game. Monday Night Football requires score prediction.</p>
+                </div>
+
+                <form id="picks-form" class="picks-form">
+                    <div class="games-grid">
+                        {% for game in games %}
+                        <div class="game-card {% if game.is_monday_night %}monday-night{% endif %} {% if game.is_thursday_night %}thursday-night{% endif %}">
+                            <div class="game-header">
+                                <span class="game-time">{{ game.game_date }}</span>
+                                {% if game.is_monday_night %}
+                                <span class="mnf-badge">Monday Night Football</span>
+                                {% elif game.is_thursday_night %}
+                                <span class="tnf-badge">Thursday Night Football</span>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_{{ game.id }}" 
+                                           value="{{ game.away_team }}"
+                                           id="away_{{ game.id }}"
+                                           {% if user_picks.get(game.id, {}).get('selected_team') == game.away_team %}checked{% endif %}>
+                                    <label for="away_{{ game.id }}" class="team-option">
+                                        <div class="team-info">
+                                            <div class="team-name">{{ game.away_team }}</div>
+                                            <div class="team-label">Away</div>
+                                        </div>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_{{ game.id }}" 
+                                           value="{{ game.home_team }}"
+                                           id="home_{{ game.id }}"
+                                           {% if user_picks.get(game.id, {}).get('selected_team') == game.home_team %}checked{% endif %}>
+                                    <label for="home_{{ game.id }}" class="team-option">
+                                        <div class="team-info">
+                                            <div class="team-name">{{ game.home_team }}</div>
+                                            <div class="team-label">Home</div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            {% if game.is_monday_night %}
+                            <div class="score-prediction">
+                                <h4>Score Prediction (Tiebreaker)</h4>
+                                <div class="score-inputs">
+                                    <div class="score-input">
+                                        <label for="away_score_{{ game.id }}">{{ game.away_team }}</label>
+                                        <input type="number" 
+                                               id="away_score_{{ game.id }}" 
+                                               name="away_score_{{ game.id }}"
+                                               min="0" max="99"
+                                               value="{{ user_picks.get(game.id, {}).get('predicted_away_score', '') }}">
+                                    </div>
+                                    <div class="score-separator">-</div>
+                                    <div class="score-input">
+                                        <label for="home_score_{{ game.id }}">{{ game.home_team }}</label>
+                                        <input type="number" 
+                                               id="home_score_{{ game.id }}" 
+                                               name="home_score_{{ game.id }}"
+                                               min="0" max="99"
+                                               value="{{ user_picks.get(game.id, {}).get('predicted_home_score', '') }}">
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            <input type="hidden" name="game_id" value="{{ game.id }}">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Submit Picks</button>
+                        <button type="button" class="btn btn-secondary" onclick="clearPicks()">Clear All</button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.getElementById('picks-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const picks = [];
+            const gameIds = formData.getAll('game_id');
+            
+            gameIds.forEach(gameId => {
+                const selectedTeam = formData.get(`game_${gameId}`);
+                const homeScore = formData.get(`home_score_${gameId}`);
+                const awayScore = formData.get(`away_score_${gameId}`);
+                
+                if (selectedTeam) {
+                    picks.push({
+                        game_id: gameId,
+                        selected_team: selectedTeam,
+                        home_score: homeScore || null,
+                        away_score: awayScore || null
+                    });
+                }
+            });
+            
+            if (picks.length === 0) {
+                alert('Please make at least one pick before submitting.');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/submit_picks', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ picks: picks })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('Picks submitted successfully!');
+                } else {
+                    alert('Error submitting picks: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error submitting picks. Please try again.');
+            }
+        });
+        
+        function clearPicks() {
+            if (confirm('Are you sure you want to clear all picks?')) {
+                document.querySelectorAll('input[type="radio"]').forEach(radio => {
+                    radio.checked = false;
+                });
+                document.querySelectorAll('input[type="number"]').forEach(input => {
+                    input.value = '';
+                });
+            }
+        }
+    </script>
+</body>
+</html>

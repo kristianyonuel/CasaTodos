@@ -231,8 +231,12 @@ def index():
 def login():
     if request.method == 'POST':
         try:
-            username = request.form['username']
-            password = request.form['password']
+            username = request.form.get('username', '').strip()
+            password = request.form.get('password', '').strip()
+            
+            if not username or not password:
+                flash('Please enter both username and password', 'error')
+                return render_template('login.html')
             
             conn = sqlite3.connect('nfl_fantasy.db')
             cursor = conn.cursor()
@@ -258,34 +262,39 @@ def login():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        email = request.form.get('email', '')
-        
-        if len(password) < 6:
-            flash('Password must be at least 6 characters long', 'error')
-            return render_template('register.html')
-        
-        conn = sqlite3.connect('nfl_fantasy.db')
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
-        if cursor.fetchone():
-            flash('Username already exists', 'error')
+        try:
+            username = request.form.get('username', '').strip()
+            password = request.form.get('password', '').strip()
+            email = request.form.get('email', '').strip()
+            
+            if len(password) < 6:
+                flash('Password must be at least 6 characters long', 'error')
+                return render_template('register.html')
+            
+            conn = sqlite3.connect('nfl_fantasy.db')
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+            if cursor.fetchone():
+                flash('Username already exists', 'error')
+                conn.close()
+                return render_template('register.html')
+            
+            password_hash = generate_password_hash(password)
+            cursor.execute('''
+                INSERT INTO users (username, password_hash, email)
+                VALUES (?, ?, ?)
+            ''', (username, password_hash, email))
+            
+            conn.commit()
             conn.close()
-            return render_template('register.html')
-        
-        password_hash = generate_password_hash(password)
-        cursor.execute('''
-            INSERT INTO users (username, password_hash, email)
-            VALUES (?, ?, ?)
-        ''', (username, password_hash, email))
-        
-        conn.commit()
-        conn.close()
-        
-        flash('Registration successful! Please log in.', 'success')
-        return redirect(url_for('login'))
+            
+            flash('Registration successful! Please log in.', 'success')
+            return redirect(url_for('login'))
+            
+        except Exception as e:
+            print(f"Registration error: {e}")
+            flash('Registration failed. Please try again.', 'error')
     
     return render_template('register.html')
 
@@ -303,35 +312,133 @@ def games():
     week = request.args.get('week', get_current_nfl_week(), type=int)
     year = request.args.get('year', datetime.datetime.now().year, type=int)
     
-    # Get games from database or fetch new ones
-    conn = sqlite3.connect('nfl_fantasy.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT * FROM nfl_games WHERE week = ? AND year = ? ORDER BY game_date
-    ''', (week, year))
-    
-    db_games = cursor.fetchall()
-    
-    if not db_games:
-        # Fetch from API and store
-        api_games = fetch_nfl_games(week, year)
-        for game in api_games:
+    try:
+        # Get games from database or fetch new ones
+        conn = sqlite3.connect('nfl_fantasy.db')
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, week, year, game_id, home_team, away_team, game_date, 
+                   is_monday_night, is_thursday_night, home_score, away_score, is_final
+            FROM nfl_games WHERE week = ? AND year = ? ORDER BY game_date
+        ''', (week, year))
+        
+        db_games = cursor.fetchall()
+        
+        if not db_games:
+            # Fetch from API and store
+            api_games = fetch_nfl_games(week, year)
+            for game in api_games:
+                cursor.execute('''
+                    INSERT OR REPLACE INTO nfl_games 
+                    (game_id, week, year, home_team, away_team, game_date, 
+                     is_monday_night, is_thursday_night, home_score, away_score, is_final)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (game['id'], game['week'], game['year'], game['home_team'], 
+                      game['away_team'], game['game_date'], game['is_monday_night'],
+                      game['is_thursday_night'], game.get('home_score'), 
+                      game.get('away_score'), game['is_final']))
+            
+            conn.commit()
+            
+            # Fetch again from database
             cursor.execute('''
-                INSERT OR REPLACE INTO nfl_games 
-                (game_id, week, year, home_team, away_team, game_date, 
-                 is_monday_night, is_thursday_night, home_score, away_score, is_final)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (game['id'], game['week'], game['year'], game['home_team'], 
-                  game['away_team'], game['game_date'], game['is_monday_night'],
-                  game['is_thursday_night'], game.get('home_score'), 
-                  game.get('away_score'), game['is_final']))
+                SELECT id, week, year, game_id, home_team, away_team, game_date, 
+                       is_monday_night, is_thursday_night, home_score, away_score, is_final
+                FROM nfl_games WHERE week = ? AND year = ? ORDER BY game_date
+            ''', (week, year))
+            db_games = cursor.fetchall()
+        
+        # Get user's existing picks
+        cursor.execute('''
+            SELECT g.id, up.selected_team, up.predicted_home_score, up.predicted_away_score
+            FROM user_picks up
+            JOIN nfl_games g ON up.game_id = g.id
+            WHERE up.user_id = ? AND g.week = ? AND g.year = ?
+        ''', (session['user_id'], week, year))
+        
+        user_picks = {row[0]: {
+            'selected_team': row[1],
+            'predicted_home_score': row[2],
+            'predicted_away_score': row[3]
+        } for row in cursor.fetchall()}
+        
+        conn.close()
+        
+        # Format games for template
+        games_list = []
+        for game in db_games:
+            games_list.append({
+                'id': game[0],
+                'week': game[1],
+                'year': game[2],
+                'game_id': game[3],
+                'home_team': game[4],
+                'away_team': game[5],
+                'game_date': game[6],
+                'is_monday_night': bool(game[7]),
+                'is_thursday_night': bool(game[8]),
+                'home_score': game[9],
+                'away_score': game[10],
+                'is_final': bool(game[11])
+            })
+        
+        return render_template('games.html', 
+                             games=games_list, 
+                             user_picks=user_picks,
+                             current_week=week,
+                             current_year=year)
+                             
+    except Exception as e:
+        print(f"Games page error: {e}")
+        flash('Error loading games. Please try again.', 'error')
+        return redirect(url_for('index'))
+
+@app.route('/submit_picks', methods=['POST'])
+def submit_picks():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    
+    try:
+        data = request.get_json()
+        picks = data.get('picks', [])
+        
+        conn = sqlite3.connect('nfl_fantasy.db')
+        cursor = conn.cursor()
+        
+        for pick in picks:
+            game_id = pick.get('game_id')
+            selected_team = pick.get('selected_team')
+            home_score = pick.get('home_score')
+            away_score = pick.get('away_score')
+            
+            if not game_id or not selected_team:
+                continue
+                
+            # Check if pick already exists
+            cursor.execute('''
+                SELECT id FROM user_picks WHERE user_id = ? AND game_id = ?
+            ''', (session['user_id'], game_id))
+            
+            existing_pick = cursor.fetchone()
+            
+            if existing_pick:
+                cursor.execute('''
+                    UPDATE user_picks 
+                    SET selected_team = ?, predicted_home_score = ?, predicted_away_score = ?
+                    WHERE id = ?
+                ''', (selected_team, home_score, away_score, existing_pick[0]))
+            else:
+                cursor.execute('''
+                    INSERT INTO user_picks 
+                    (user_id, game_id, selected_team, predicted_home_score, predicted_away_score)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (session['user_id'], game_id, selected_team, home_score, away_score))
         
         conn.commit()
-        
-        # Fetch again from database
-        cursor.execute('''
-            SELECT * FROM nfl_games WHERE week = ? AND year = ? ORDER BY game_date
-        ''', (week, year))
-        db_games = cursor.fetchall()
-   
+        conn.close()
+        return jsonify({'success': True, 'message': 'Picks submitted successfully!'})
+    
+    except Exception as e:
+        print(f"Submit picks error: {e}")
+        return jsonify({'error': 'Failed to submit picks'}), 500
