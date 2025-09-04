@@ -75,14 +75,15 @@ def init_db():
         )
     ''')
     
-    # Create default admin user
-    cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = TRUE')
+    # Create default admin user - Fixed the email issue
+    cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = 1')
     if cursor.fetchone()[0] == 0:
         admin_hash = generate_password_hash('admin123')
         cursor.execute('''
             INSERT INTO users (username, password_hash, email, is_admin)
             VALUES (?, ?, ?, ?)
-        ''', ('admin', admin_hash, 'admin@lacasadetodos.com', True))
+        ''', ('admin', admin_hash, 'admin@localhost.com', 1))
+        print("Created default admin user: admin/admin123")
     
     conn.commit()
     conn.close()
@@ -161,23 +162,28 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        
-        conn = sqlite3.connect('nfl_fantasy.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
-        user = cursor.fetchone()
-        conn.close()
-        
-        if user and check_password_hash(user[1], password):
-            session['user_id'] = user[0]
-            session['username'] = username
-            session['is_admin'] = bool(user[2])
-            flash('Successfully logged in!', 'success')
-            return redirect(url_for('index'))
-        else:
-            flash('Invalid username or password', 'error')
+        try:
+            username = request.form['username']
+            password = request.form['password']
+            
+            conn = sqlite3.connect('nfl_fantasy.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
+            user = cursor.fetchone()
+            conn.close()
+            
+            if user and check_password_hash(user[1], password):
+                session['user_id'] = user[0]
+                session['username'] = username
+                session['is_admin'] = bool(user[2])
+                flash('Successfully logged in!', 'success')
+                return redirect(url_for('index'))
+            else:
+                flash('Invalid username or password', 'error')
+                
+        except Exception as e:
+            print(f"Login error: {e}")
+            flash('Login error occurred. Please try again.', 'error')
     
     return render_template('login.html')
 
@@ -260,279 +266,4 @@ def games():
             SELECT * FROM nfl_games WHERE week = ? AND year = ? ORDER BY game_date
         ''', (week, year))
         db_games = cursor.fetchall()
-    
-    conn.close()
-    
-    games = []
-    for game in db_games:
-        games.append({
-            'id': game[0],
-            'week': game[1],
-            'year': game[2],
-            'game_id': game[3],
-            'home_team': game[4],
-            'away_team': game[5],
-            'game_date': game[6],
-            'is_monday_night': game[7],
-            'is_thursday_night': game[8],
-            'home_score': game[9],
-            'away_score': game[10],
-            'is_final': game[11]
-        })
-    
-    return render_template('games.html', games=games, week=week, year=year)
-
-@app.route('/picks', methods=['GET', 'POST'])
-def picks():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    conn = sqlite3.connect('nfl_fantasy.db')
-    cursor = conn.cursor()
-    
-    if request.method == 'POST':
-        # User made a new pick
-        game_id = request.form['game_id']
-        selected_team = request.form['selected_team']
-        predicted_home_score = request.form.get('predicted_home_score', type=int)
-        predicted_away_score = request.form.get('predicted_away_score', type=int)
-        
-        cursor.execute('''
-            INSERT INTO user_picks (user_id, game_id, selected_team, predicted_home_score, predicted_away_score)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (session['user_id'], game_id, selected_team, predicted_home_score, predicted_away_score))
-        
-        conn.commit()
-        flash('Your pick has been saved!', 'success')
-        return redirect(url_for('picks'))
-    
-    # Get current week's games
-    week = get_current_nfl_week()
-    year = datetime.datetime.now().year
-    
-    cursor.execute('''
-        SELECT ng.*, up.selected_team, up.predicted_home_score, up.predicted_away_score 
-        FROM nfl_games ng
-        LEFT JOIN user_picks up ON ng.id = up.game_id AND up.user_id = ?
-        WHERE ng.week = ? AND ng.year = ?
-    ''', (session['user_id'], week, year))
-    
-    games = cursor.fetchall()
-    
-    picks = []
-    for game in games:
-        picks.append({
-            'id': game[0],
-            'week': game[1],
-            'year': game[2],
-            'game_id': game[3],
-            'home_team': game[4],
-            'away_team': game[5],
-            'game_date': game[6],
-            'is_monday_night': game[7],
-            'is_thursday_night': game[8],
-            'home_score': game[9],
-            'away_score': game[10],
-            'is_final': game[11],
-            'selected_team': game[12],
-            'predicted_home_score': game[13],
-            'predicted_away_score': game[14]
-        })
-    
-    conn.close()
-    
-    return render_template('picks.html', picks=picks, week=week, year=year)
-
-@app.route('/results')
-def results():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    conn = sqlite3.connect('nfl_fantasy.db')
-    cursor = conn.cursor()
-    
-    # Get current week
-    week = get_current_nfl_week()
-    year = datetime.datetime.now().year
-    
-    # Calculate results for the current week
-    cursor.execute('''
-        SELECT ng.*, up.selected_team, up.predicted_home_score, up.predicted_away_score, 
-               CASE 
-                   WHEN (ng.home_score - up.predicted_home_score) * (ng.away_score - up.predicted_away_score) > 0 THEN 1
-                   WHEN (ng.home_score - up.predicted_home_score) * (ng.away_score - up.predicted_away_score) < 0 THEN -1
-                   ELSE 0
-               END as result
-        FROM nfl_games ng
-        JOIN user_picks up ON ng.id = up.game_id
-        WHERE ng.week = ? AND ng.year = ? AND up.user_id = ?
-    ''', (week, year, session['user_id']))
-    
-    picks = cursor.fetchall()
-    
-    # Calculate score differences for Monday Night games
-    cursor.execute('''
-        SELECT SUM(ABS(up.predicted_home_score - ng.home_score)) as home_score_diff,
-               SUM(ABS(up.predicted_away_score - ng.away_score)) as away_score_diff
-        FROM nfl_games ng
-        JOIN user_picks up ON ng.id = up.game_id
-        WHERE ng.week = ? AND ng.year = ? AND up.user_id = ? AND ng.is_monday_night = 1
-    ''', (week, year, session['user_id']))
-    
-    monday_score_diff = cursor.fetchone()
-    
-    # Update or insert weekly results
-    cursor.execute('''
-        INSERT INTO weekly_results (user_id, week, year, correct_picks, total_picks, monday_score_diff)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(user_id, week, year) DO UPDATE SET
-            correct_picks = excluded.correct_picks,
-            total_picks = excluded.total_picks,
-            monday_score_diff = excluded.monday_score_diff
-    ''', (session['user_id'], week, year, sum(1 for p in picks if p[-1] == 1), len(picks), monday_score_diff[0] if monday_score_diff else 0))
-    
-    conn.commit()
-    
-    # Get updated results
-    cursor.execute('''
-        SELECT * FROM weekly_results WHERE user_id = ? ORDER BY year DESC, week DESC
-    ''', (session['user_id'],))
-    
-    results = cursor.fetchall()
-    
-    conn.close()
-    
-    return render_template('results.html', picks=picks, results=results, week=week, year=year)
-
-@app.route('/admin')
-def admin():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return redirect(url_for('login'))
-    
-    conn = sqlite3.connect('nfl_fantasy.db')
-    cursor = conn.cursor()
-    
-    # Get all users
-    cursor.execute('SELECT * FROM users')
-    users = cursor.fetchall()
-    
-    # Get all games
-    cursor.execute('SELECT * FROM nfl_games ORDER BY game_date')
-    games = cursor.fetchall()
-    
-    # Get all picks
-    cursor.execute('''
-        SELECT up.*, u.username, ng.home_team, ng.away_team, ng.game_date
-        FROM user_picks up
-        JOIN users u ON up.user_id = u.id
-        JOIN nfl_games ng ON up.game_id = ng.id
-        ORDER BY ng.game_date, u.username
-    ''')
-    picks = cursor.fetchall()
-    
-    # Get weekly results
-    cursor.execute('''
-        SELECT wr.*, u.username
-        FROM weekly_results wr
-        JOIN users u ON wr.user_id = u.id
-        ORDER BY wr.year DESC, wr.week DESC, u.username
-    ''')
-    weekly_results = cursor.fetchall()
-    
-    conn.close()
-    
-    return render_template('admin.html', users=users, games=games, picks=picks, weekly_results=weekly_results)
-
-@app.route('/api/games', methods=['GET'])
-def api_games():
-    week = request.args.get('week', type=int)
-    year = request.args.get('year', type=int)
-    
-    games = fetch_nfl_games(week, year)
-    
-    return jsonify(games)
-
-@app.route('/api/picks', methods=['POST'])
-def api_picks():
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    data = request.get_json()
-    game_id = data.get('game_id')
-    selected_team = data.get('selected_team')
-    predicted_home_score = data.get('predicted_home_score')
-    predicted_away_score = data.get('predicted_away_score')
-    
-    if not all([game_id, selected_team, predicted_home_score, predicted_away_score]):
-        return jsonify({'error': 'Missing data'}), 400
-    
-    conn = sqlite3.connect('nfl_fantasy.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        INSERT INTO user_picks (user_id, game_id, selected_team, predicted_home_score, predicted_away_score)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (session['user_id'], game_id, selected_team, predicted_home_score, predicted_away_score))
-    
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True})
-
-@app.route('/api/results', methods=['GET'])
-def api_results():
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    conn = sqlite3.connect('nfl_fantasy.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT wr.*, u.username
-        FROM weekly_results wr
-        JOIN users u ON wr.user_id = u.id
-        WHERE wr.user_id = ?
-        ORDER BY wr.year DESC, wr.week DESC
-    ''', (session['user_id'],))
-    
-    results = cursor.fetchall()
-    
-    conn.close()
-    
-    return jsonify(results)
-
-if __name__ == '__main__':
-    # Create directories if they don't exist
-    if not os.path.exists('templates'):
-        os.makedirs('templates')
-    if not os.path.exists('static'):
-        os.makedirs('static')
-    
-    # Initialize database
-    init_db()
-    
-    print("Starting La Casa de Todos NFL Fantasy League...")
-    
-    # Try to run on port 443 with different configurations
-    import ssl
-    
-    try:
-        # Try HTTPS with self-signed certificate
-        print("Attempting to start HTTPS server on port 443...")
-        print("Access at: https://127.0.0.1:443")
-        context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        app.run(debug=False, host='0.0.0.0', port=443, ssl_context='adhoc')
-    except PermissionError:
-        print("Permission denied for port 443. Trying HTTP on port 443...")
-        try:
-            app.run(debug=False, host='0.0.0.0', port=443)
-        except PermissionError:
-            print("Port 443 requires administrator privileges.")
-            print("Falling back to port 8443...")
-            app.run(debug=True, host='0.0.0.0', port=8443)
-    except Exception as e:
-        print(f"Failed to start on port 443: {e}")
-        print("Falling back to port 5000...")
-        app.run(debug=True, host='127.0.0.1', port=5000)
+   
