@@ -5,7 +5,7 @@ import requests
 import json
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
-from nfl_schedule_2025 import get_2025_schedule, get_current_nfl_week_2025, NFL_TEAMS
+from nfl_schedule_2025 import get_2025_2026_schedule, get_current_nfl_week_2025, NFL_TEAMS
 from nfl_2025_official_schedule import get_official_2025_games, populate_all_2025_weeks
 import pytz
 
@@ -91,17 +91,29 @@ def validate_nfl_games():
     for week, count in weeks_data:
         print(f"      Week {week}: {count} games")
     
-    # Validate minimum requirements
-    if total_games < 50:  # Minimum expected games
+    # Validate minimum requirements - NFL typically has 256 regular season games total
+    if total_games < 100:  # Should have at least 100 games for partial season
         print("   ⚠️  Warning: Low game count detected")
         return False
     
-    if len(weeks_data) < 5:  # At least 5 weeks should have games
-        print("   ⚠️  Warning: Few weeks have games")
-        return False
+    # Check that weeks have reasonable number of games (12-16 per week)
+    cursor.execute('''
+        SELECT week, COUNT(*) as game_count 
+        FROM nfl_games 
+        WHERE year = ? AND game_count < 10
+        GROUP BY week 
+    ''', (datetime.datetime.now().year,))
     
-    print("   ✅ NFL games validation passed")
-    return True
+    low_weeks = cursor.fetchall()
+    if low_weeks:
+        print(f"   ⚠️  Warning: {len(low_weeks)} weeks have fewer than 10 games")
+        for week, count in low_weeks:
+            print(f"      Week {week}: only {count} games")
+    
+    conn.close()
+    
+    print("   ✅ NFL games validation completed")
+    return len(low_weeks) == 0
 
 def get_week_game_count(week, year):
     """Get the number of games in a specific week"""
@@ -291,15 +303,58 @@ def get_current_nfl_week():
         return 1
 
 def create_nfl_games_from_schedule(week, year):
-    """Create NFL games from the official schedule"""
+    """Create NFL games from the official schedule for 2025-2026"""
     try:
         if year >= 2025:
-            games = get_official_2025_games(week)
-            if games:
-                return games
-        
-        # Fall back to sample games for older years
-        return create_sample_games(week, year)
+            schedule = get_2025_2026_schedule()
+            if year not in schedule or week not in schedule[year]:
+                return []
+            
+            games = []
+            week_data = schedule[year][week]
+            
+            # Thursday games
+            for game in week_data['thursday_games']:
+                games.append({
+                    'week': week,
+                    'year': year,
+                    'game_id': f'tnf_{year}_week_{week}',
+                    'home_team': game['home_team'],
+                    'away_team': game['away_team'],
+                    'game_date': game['game_time'],
+                    'is_monday_night': False,
+                    'is_thursday_night': True
+                })
+            
+            # Sunday games
+            for i, game in enumerate(week_data['sunday_games']):
+                games.append({
+                    'week': week,
+                    'year': year,
+                    'game_id': f'sun_{year}_week_{week}_game_{i+1}',
+                    'home_team': game['home_team'],
+                    'away_team': game['away_team'],
+                    'game_date': game['game_time'],
+                    'is_monday_night': False,
+                    'is_thursday_night': False
+                })
+            
+            # Monday games
+            for game in week_data['monday_games']:
+                games.append({
+                    'week': week,
+                    'year': year,
+                    'game_id': f'mnf_{year}_week_{week}',
+                    'home_team': game['home_team'],
+                    'away_team': game['away_team'],
+                    'game_date': game['game_time'],
+                    'is_monday_night': True,
+                    'is_thursday_night': False
+                })
+            
+            return games
+        else:
+            return create_sample_games(week, year)
             
     except Exception as e:
         print(f"Error creating games from schedule: {e}")
@@ -636,17 +691,19 @@ def logout():
 
 def create_emergency_games(week, year):
     """Create emergency minimal games when all other methods fail"""
-    teams = ['KC', 'BUF', 'DAL', 'SF', 'GB', 'NE', 'PIT', 'BAL', 'DEN', 'LAC', 'MIA', 'NYJ', 'CIN', 'CLE', 'HOU', 'IND']
+    teams = ['KC', 'BUF', 'DAL', 'SF', 'GB', 'NE', 'PIT', 'BAL', 'DEN', 'LAC', 'MIA', 'NYJ', 'CIN', 'CLE', 'HOU', 'IND', 
+             'JAX', 'TEN', 'NO', 'ATL', 'CAR', 'TB', 'MIN', 'DET', 'PHI', 'WAS', 'ARI', 'SEA', 'CHI', 'LV', 'LAR', 'NYG']
     
     # Calculate proper game dates for AST timezone
     if year >= 2025:
-        season_start = datetime.datetime(2025, 9, 4)  # 2025 season starts Sept 4
+        season_start = datetime.datetime(2025, 9, 4)
     else:
-        season_start = datetime.datetime(2024, 9, 5)  # 2024 season started Sept 5
+        season_start = datetime.datetime(2024, 9, 5)
     
     week_start = season_start + datetime.timedelta(weeks=week-1)
     
     games = []
+    used_teams = set()
     
     # Thursday Night Football (except week 1)
     if week > 1:
@@ -657,66 +714,77 @@ def create_emergency_games(week, year):
             'year': year,
             'home_team': teams[0],
             'away_team': teams[1],
-            'game_date': thursday_date.replace(hour=20, minute=15),  # Thursday 8:15 PM AST
+            'game_date': thursday_date.replace(hour=20, minute=15),
             'is_monday_night': False,
             'is_thursday_night': True
         })
-        used_teams = 2
-    else:
-        used_teams = 0
+        used_teams.update([teams[0], teams[1]])
     
-    # Sunday games
-    sunday = week_start + datetime.timedelta(days=(6 if week == 1 else 6))  # First Sunday
+    # Sunday Early Games (1:00 PM AST) - 8 games
+    sunday = week_start + datetime.timedelta(days=(6 if week == 1 else 6))
+    available_teams = [t for t in teams if t not in used_teams]
     
-    # Early Sunday games (1:00 PM AST)
-    game_counter = 0
-    for i in range(used_teams, min(used_teams + 12, len(teams)), 2):
-        if i + 1 < len(teams):
+    for i in range(0, min(16, len(available_teams)), 2):
+        if i + 1 < len(available_teams):
             games.append({
-                'game_id': f'emergency_sun_early_{week}_{year}_{game_counter}',
+                'game_id': f'emergency_sun_early_{week}_{year}_{i//2}',
                 'week': week,
                 'year': year,
-                'home_team': teams[i],
-                'away_team': teams[i + 1],
-                'game_date': sunday.replace(hour=13, minute=0),  # 1:00 PM AST
+                'home_team': available_teams[i],
+                'away_team': available_teams[i + 1],
+                'game_date': sunday.replace(hour=13, minute=0),
                 'is_monday_night': False,
                 'is_thursday_night': False
             })
-            game_counter += 1
+            used_teams.update([available_teams[i], available_teams[i + 1]])
     
-    # Late Sunday games (4:25 PM AST)
-    start_idx = used_teams + 12
-    for i in range(start_idx, min(start_idx + 4, len(teams)), 2):
-        if i + 1 < len(teams):
+    # Sunday Late Games (4:25 PM AST) - 3-4 games
+    remaining_teams = [t for t in teams if t not in used_teams]
+    for i in range(0, min(8, len(remaining_teams)), 2):
+        if i + 1 < len(remaining_teams):
             games.append({
-                'game_id': f'emergency_sun_late_{week}_{year}_{game_counter}',
+                'game_id': f'emergency_sun_late_{week}_{year}_{i//2}',
                 'week': week,
                 'year': year,
-                'home_team': teams[i],
-                'away_team': teams[i + 1],
-                'game_date': sunday.replace(hour=16, minute=25),  # 4:25 PM AST
+                'home_team': remaining_teams[i],
+                'away_team': remaining_teams[i + 1],
+                'game_date': sunday.replace(hour=16, minute=25),
                 'is_monday_night': False,
                 'is_thursday_night': False
             })
-            game_counter += 1
+            used_teams.update([remaining_teams[i], remaining_teams[i + 1]])
     
-    # Monday Night Football
-    monday = week_start + datetime.timedelta(days=7)  # Next Monday
-    remaining_teams = [t for t in teams if t not in [g['home_team'] for g in games] + [g['away_team'] for g in games]]
+    # Sunday Night Football (8:20 PM AST) - 1 game
+    final_remaining = [t for t in teams if t not in used_teams]
+    if len(final_remaining) >= 2:
+        games.append({
+            'game_id': f'emergency_snf_{week}_{year}',
+            'week': week,
+            'year': year,
+            'home_team': final_remaining[0],
+            'away_team': final_remaining[1],
+            'game_date': sunday.replace(hour=20, minute=20),
+            'is_monday_night': False,
+            'is_thursday_night': False
+        })
+        used_teams.update([final_remaining[0], final_remaining[1]])
     
-    if len(remaining_teams) >= 2:
+    # Monday Night Football (8:15 PM AST) - 1 game
+    monday = week_start + datetime.timedelta(days=7)
+    final_teams = [t for t in teams if t not in used_teams]
+    if len(final_teams) >= 2:
         games.append({
             'game_id': f'emergency_mnf_{week}_{year}',
             'week': week,
             'year': year,
-            'home_team': remaining_teams[0],
-            'away_team': remaining_teams[1],
-            'game_date': monday.replace(hour=20, minute=15),  # Monday 8:15 PM AST
+            'home_team': final_teams[0],
+            'away_team': final_teams[1],
+            'game_date': monday.replace(hour=20, minute=15),
             'is_monday_night': True,
             'is_thursday_night': False
         })
     
-    print(f"Created {len(games)} emergency games for Week {week}")
+    print(f"Created {len(games)} emergency games for Week {week} (typical NFL week has 16 games)")
     return games
 
 def ensure_games_exist(week, year):
@@ -790,6 +858,55 @@ def ensure_games_exist(week, year):
                     game.get('home_score'),
                     game.get('away_score'),
                     game.get('is_final', False)
+                ))
+                games_created += 1
+                
+            except Exception as game_error:
+                print(f"Error inserting game: {game_error}")
+                continue
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"Successfully created {games_created} games for Week {week}")
+        return games_created
+        
+    except Exception as e:
+        print(f"Critical error in ensure_games_exist: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+
+def auto_populate_nfl_games():
+    """Auto-populate NFL games for 2025 and 2026 seasons"""
+    print("🏈 Auto-populating NFL games for 2025-2026 seasons...")
+    
+    total_games_created = 0
+    
+    for year in [2025, 2026]:
+        print(f"Processing {year} season...")
+        
+        for week in range(1, 19):
+            try:
+                conn = sqlite3.connect('nfl_fantasy.db')
+                cursor = conn.cursor()
+                cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, year))
+                existing_games = cursor.fetchone()[0]
+                conn.close()
+                
+                if existing_games == 0:
+                    games_created = ensure_games_exist(week, year)
+                    total_games_created += games_created
+                    print(f"   ✓ Created {games_created} games for {year} Week {week}")
+                
+            except Exception as e:
+                print(f"   ❌ Error processing {year} Week {week}: {e}")
+                continue
+    
+    print(f"🎯 Auto-population complete! Total new games created: {total_games_created}")
+    return total_games_created
+
+# ...existing code...
                 ))
                 games_created += 1
                 

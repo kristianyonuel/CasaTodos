@@ -41,82 +41,90 @@ NFL_TEAMS = {
     'Washington Commanders': 'WAS'
 }
 
-def get_2025_schedule():
-    """Generate NFL 2025 schedule based on typical NFL calendar"""
+def get_2025_2026_schedule():
+    """Generate NFL 2025 and 2026 schedule"""
     schedule = {}
     
-    # 2025 NFL Season starts September 4, 2025 (approximate)
-    season_start = datetime.datetime(2025, 9, 4)
+    # 2025 NFL Season (September 4, 2025 to January 12, 2026)
+    season_2025_start = datetime.datetime(2025, 9, 4)
     
-    for week in range(1, 19):
-        # Calculate week start date
-        week_start = season_start + datetime.timedelta(weeks=week-1)
+    # 2026 NFL Season (September 10, 2026 to January 18, 2027)
+    season_2026_start = datetime.datetime(2026, 9, 10)
+    
+    for year in [2025, 2026]:
+        schedule[year] = {}
+        season_start = season_2025_start if year == 2025 else season_2026_start
         
-        # Thursday of that week
-        thursday = week_start
-        # Sunday of that week
-        sunday = week_start + datetime.timedelta(days=3)
-        # Monday of next week
-        monday = week_start + datetime.timedelta(days=4)
-        
-        schedule[week] = {
-            'week_start': week_start,
-            'thursday_games': [],
-            'sunday_games': [],
-            'monday_games': []
-        }
-        
-        # Add typical game structure
-        teams_list = list(NFL_TEAMS.values())
-        
-        # Thursday Night Football (usually 1 game)
-        if week > 1:  # No TNF in week 1 typically
-            tnf_home = teams_list[(week * 2) % len(teams_list)]
-            tnf_away = teams_list[(week * 2 + 1) % len(teams_list)]
-            schedule[week]['thursday_games'].append({
-                'home_team': tnf_home,
-                'away_team': tnf_away,
-                'game_time': thursday.replace(hour=20, minute=15)  # 8:15 PM
-            })
-        
-        # Sunday games (typically 13-14 games)
-        used_teams = set()
-        if schedule[week]['thursday_games']:
-            used_teams.update([schedule[week]['thursday_games'][0]['home_team'], 
-                             schedule[week]['thursday_games'][0]['away_team']])
-        
-        available_teams = [t for t in teams_list if t not in used_teams]
-        
-        # Early Sunday games (1:00 PM ET)
-        for i in range(0, min(16, len(available_teams)), 2):
-            if i + 1 < len(available_teams):
-                schedule[week]['sunday_games'].append({
-                    'home_team': available_teams[i],
-                    'away_team': available_teams[i + 1],
-                    'game_time': sunday.replace(hour=13, minute=0)  # 1:00 PM
+        for week in range(1, 19):
+            week_start = season_start + datetime.timedelta(weeks=week-1)
+            
+            schedule[year][week] = {
+                'week_start': week_start,
+                'thursday_games': [],
+                'sunday_games': [],
+                'monday_games': []
+            }
+            
+            # Create full game schedule for each week
+            teams_list = list(NFL_TEAMS.values())
+            
+            # Thursday Night Football (weeks 2-17)
+            if 2 <= week <= 17:
+                tnf_home = teams_list[(week * 2) % len(teams_list)]
+                tnf_away = teams_list[(week * 2 + 1) % len(teams_list)]
+                schedule[year][week]['thursday_games'].append({
+                    'home_team': tnf_home,
+                    'away_team': tnf_away,
+                    'game_time': (week_start + datetime.timedelta(days=3)).replace(hour=20, minute=15)
                 })
-                used_teams.update([available_teams[i], available_teams[i + 1]])
-        
-        # Late Sunday games (4:25 PM ET)
-        remaining_teams = [t for t in available_teams if t not in used_teams]
-        for i in range(0, min(6, len(remaining_teams)), 2):
-            if i + 1 < len(remaining_teams):
-                schedule[week]['sunday_games'].append({
-                    'home_team': remaining_teams[i],
-                    'away_team': remaining_teams[i + 1],
-                    'game_time': sunday.replace(hour=16, minute=25)  # 4:25 PM
-                })
-                used_teams.update([remaining_teams[i], remaining_teams[i + 1]])
-        
-        # Monday Night Football (usually 1 game)
-        final_remaining = [t for t in teams_list if t not in used_teams]
-        if len(final_remaining) >= 2:
-            mnf_home = final_remaining[0]
-            mnf_away = final_remaining[1]
-            schedule[week]['monday_games'].append({
-                'home_team': mnf_home,
-                'away_team': mnf_away,
-                'game_time': monday.replace(hour=20, minute=15)  # 8:15 PM
+            
+            # Sunday games (13-15 games)
+            used_teams = set()
+            if schedule[year][week]['thursday_games']:
+                used_teams.update([schedule[year][week]['thursday_games'][0]['home_team'], 
+                                 schedule[year][week]['thursday_games'][0]['away_team']])
+            
+            available_teams = [t for t in teams_list if t not in used_teams]
+            
+            # Create Sunday games
+            sunday = week_start + datetime.timedelta(days=6)
+            for i in range(0, min(26, len(available_teams)), 2):
+                if i + 1 < len(available_teams):
+                    game_time = sunday.replace(hour=13, minute=0) if i < 16 else sunday.replace(hour=16, minute=25)
+                    schedule[year][week]['sunday_games'].append({
+                        'home_team': available_teams[i],
+                        'away_team': available_teams[i + 1],
+                        'game_time': game_time
+                    })
+                    used_teams.update([available_teams[i], available_teams[i + 1]])
+            
+            # Monday Night Football (weeks 1-17)
+            if week <= 17:
+                remaining_teams = [t for t in teams_list if t not in used_teams]
+                if len(remaining_teams) >= 2:
+                    monday = week_start + datetime.timedelta(days=7)
+                    schedule[year][week]['monday_games'].append({
+                        'home_team': remaining_teams[0],
+                        'away_team': remaining_teams[1],
+                        'game_time': monday.replace(hour=20, minute=15)
+                    })
+    
+    return schedule
+
+def get_current_nfl_week_2025():
+    """Get current NFL week for 2025 season"""
+    now = datetime.datetime.now()
+    season_start = datetime.datetime(2025, 9, 4)
+    season_end = datetime.datetime(2026, 1, 12)
+    
+    if now < season_start:
+        return 1
+    elif now > season_end:
+        return 18
+    else:
+        days_since_start = (now - season_start).days
+        week = min(18, max(1, (days_since_start // 7) + 1))
+        return week
             })
     
     return schedule
