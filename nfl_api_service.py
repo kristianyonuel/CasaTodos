@@ -22,7 +22,7 @@ def get_season_schedule(year: int = 2025) -> List[Dict]:
     try:
         all_games = []
         
-        # BallDontLie NFL API uses specific season parameter
+        # BallDontLie NFL API uses seasons array parameter
         for week in range(1, 19):
             week_games = get_week_games(week, year)
             all_games.extend(week_games)
@@ -40,11 +40,11 @@ def get_week_games(week: int, year: int = 2025) -> List[Dict]:
     try:
         url = f"{BALLDONTLIE_BASE}/games"
         
-        # Ensure we're requesting the correct year
+        # Use correct BallDontLie API parameters
         params = {
-            'season': year,          # Explicitly set the season year
-            'season_type': 'regular', # Regular season games
-            'week': week,
+            'seasons[]': year,       # seasons parameter as array
+            'weeks[]': week,         # weeks parameter as array
+            'postseason': 'false',   # regular season only
             'per_page': 100
         }
         
@@ -79,6 +79,31 @@ def get_teams() -> List[Dict]:
         
     except Exception as e:
         logger.error(f"Error fetching teams: {e}")
+        return []
+
+def get_games_by_date(date: str, year: int = 2025) -> List[Dict]:
+    """Get games for specific date from BallDontLie"""
+    try:
+        url = f"{BALLDONTLIE_BASE}/games"
+        
+        # Use dates parameter for specific date
+        params = {
+            'seasons[]': year,
+            'dates[]': date,  # YYYY-MM-DD format
+            'postseason': 'false',
+            'per_page': 100
+        }
+        
+        response = requests.get(url, headers=HEADERS, params=params, timeout=15)
+        response.raise_for_status()
+        
+        data = response.json()
+        games = data.get('data', [])
+        
+        return normalize_games(games, None, year)
+        
+    except Exception as e:
+        logger.error(f"Error fetching games for date {date}: {e}")
         return []
 
 def normalize_games(games_data: List[Dict], week: int, year: int) -> List[Dict]:
