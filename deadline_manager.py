@@ -19,8 +19,10 @@ class DeadlineManager:
         # Default deadline offsets (minutes before game start)
         self.deadline_offsets = {
             'thursday_night': 30,    # 30 minutes before TNF
-            'sunday_games': 60,      # 1 hour before first Sunday game  
-            'monday_night': 30,      # 30 minutes before MNF
+            'friday_games': 30,      # 30 minutes before Friday games
+            'saturday_games': 30,    # 30 minutes before Saturday games
+            'sunday_games': 30,      # 30 minutes before first Sunday game (covers Sunday + Monday)
+            'monday_night': 30,      # Uses same deadline as Sunday games
             'elimination': 10080     # 7 days (7 * 24 * 60) before Saturday
         }
     
@@ -53,7 +55,12 @@ class DeadlineManager:
             if not games:
                 return self._get_default_deadlines()
             
-            # Process each game type
+            # Separate games by type
+            thursday_games = []
+            friday_games = []
+            saturday_games = []
+            sunday_monday_games = []
+            
             for game in games:
                 try:
                     # Parse game time - ensure we handle it as UTC first
@@ -65,49 +72,83 @@ class DeadlineManager:
                     else:
                         game_time_ast = convert_to_ast(game[0])
                     
-                    if game[1]:  # Thursday Night
-                        deadline = game_time_ast - timedelta(minutes=self.deadline_offsets['thursday_night'])
-                        deadlines['thursday_night'] = {
-                            'game_time': game_time_ast,
-                            'deadline': deadline,
-                            'matchup': f"{game[5]} @ {game[4]}",
-                            'status': self._get_deadline_status(game_time_ast, 'thursday_night')
-                        }
+                    # Determine game type based on day of week and flags
+                    weekday = game_time_ast.weekday()  # Monday = 0, Sunday = 6
                     
-                    elif game[3]:  # Monday Night  
-                        deadline = game_time_ast - timedelta(minutes=self.deadline_offsets['monday_night'])
-                        deadlines['monday_night'] = {
-                            'game_time': game_time_ast,
-                            'deadline': deadline,
-                            'matchup': f"{game[5]} @ {game[4]}",
-                            'status': self._get_deadline_status(game_time_ast, 'monday_night')
-                        }
+                    if game[1]:  # Thursday Night flag
+                        thursday_games.append((game, game_time_ast))
+                    elif weekday == 4:  # Friday = 4
+                        friday_games.append((game, game_time_ast))
+                    elif weekday == 5:  # Saturday = 5
+                        saturday_games.append((game, game_time_ast))
+                    else:  # Sunday, Monday, or other days
+                        sunday_monday_games.append((game, game_time_ast))
                         
                 except Exception as e:
                     print(f"Error processing game {game}: {e}")
                     continue
             
-            # Find first Sunday game for Sunday deadline
-            sunday_games = [g for g in games if not g[1] and not g[2] and not g[3]]
-            if sunday_games:
-                first_sunday = min(sunday_games, key=lambda x: x[0])
-                try:
-                    if isinstance(first_sunday[0], str):
-                        sunday_time = datetime.strptime(first_sunday[0], '%Y-%m-%d %H:%M:%S')
-                        sunday_time_utc = sunday_time.replace(tzinfo=pytz.UTC)
-                        sunday_time_ast = sunday_time_utc.astimezone(self.ast_tz)
-                    else:
-                        sunday_time_ast = convert_to_ast(first_sunday[0])
-                    
-                    deadline = sunday_time_ast - timedelta(minutes=self.deadline_offsets['sunday_games'])
-                    deadlines['sunday_games'] = {
-                        'game_time': sunday_time_ast,
+            # Process Thursday Night games
+            if thursday_games:
+                game, game_time_ast = thursday_games[0]  # Usually only one Thursday game
+                deadline = game_time_ast - timedelta(minutes=self.deadline_offsets['thursday_night'])
+                deadlines['thursday_night'] = {
+                    'game_time': game_time_ast,
+                    'deadline': deadline,
+                    'matchup': f"{game[5]} @ {game[4]}",
+                    'status': self._get_deadline_status(game_time_ast, 'thursday_night')
+                }
+            
+            # Friday games have individual deadlines (NOT included in Sunday deadline)
+            if friday_games:
+                deadlines['friday_games'] = []
+                for game, game_time_ast in friday_games:
+                    deadline = game_time_ast - timedelta(minutes=self.deadline_offsets['friday_games'])
+                    deadlines['friday_games'].append({
+                        'game_time': game_time_ast,
                         'deadline': deadline,
-                        'matchup': f"First Sunday Game: {first_sunday[5]} @ {first_sunday[4]}",
-                        'status': self._get_deadline_status(sunday_time_ast, 'sunday_games')
+                        'matchup': f"{game[5]} @ {game[4]}",
+                        'status': self._get_deadline_status(game_time_ast, 'friday_games')
+                    })
+            
+            # Saturday games have individual deadlines (NOT included in Sunday deadline)
+            if saturday_games:
+                deadlines['saturday_games'] = []
+                for game, game_time_ast in saturday_games:
+                    deadline = game_time_ast - timedelta(minutes=self.deadline_offsets['saturday_games'])
+                    deadlines['saturday_games'].append({
+                        'game_time': game_time_ast,
+                        'deadline': deadline,
+                        'matchup': f"{game[5]} @ {game[4]}",
+                        'status': self._get_deadline_status(game_time_ast, 'saturday_games')
+                    })
+                    
+            # Find first Sunday game for Sunday+Monday deadline
+            # Only Sunday and Monday games share the same deadline: 30 minutes before first Sunday game
+            # Friday and Saturday games are NOT included in this deadline
+            if sunday_monday_games:
+                first_sunday = min(sunday_monday_games, key=lambda x: x[1])  # x[1] is game_time_ast
+                game, sunday_time_ast = first_sunday
+                
+                deadline = sunday_time_ast - timedelta(minutes=self.deadline_offsets['sunday_games'])
+                deadlines['sunday_games'] = {
+                    'game_time': sunday_time_ast,
+                    'deadline': deadline,
+                    'matchup': f"First Sunday Game: {game[5]} @ {game[4]}",
+                    'status': self._get_deadline_status(sunday_time_ast, 'sunday_games')
+                }
+                
+                # Monday games also use this same deadline
+                monday_games = [(g, t) for g, t in sunday_monday_games if g[3]]  # Monday Night games
+                if monday_games:
+                    monday_game, monday_time_ast = monday_games[0]  # Usually only one Monday game
+                    
+                    deadlines['monday_night'] = {
+                        'game_time': monday_time_ast,
+                        'deadline': deadline,  # Same deadline as Sunday games
+                        'matchup': f"{monday_game[5]} @ {monday_game[4]}",
+                        'status': self._get_deadline_status(sunday_time_ast, 'sunday_games')  # Status based on Sunday game
                     }
-                except Exception as e:
-                    print(f"Error processing Sunday game {first_sunday}: {e}")
             
             # Calculate elimination deadline (7 days before Saturday)
             if games:
@@ -163,6 +204,14 @@ class DeadlineManager:
             'thursday_night': {
                 'deadline': None,
                 'status': {'status': 'no_game', 'message': 'No Thursday game this week', 'css_class': 'info'}
+            },
+            'friday_games': {
+                'deadline': None,
+                'status': {'status': 'no_game', 'message': 'No Friday games this week', 'css_class': 'info'}
+            },
+            'saturday_games': {
+                'deadline': None,
+                'status': {'status': 'no_game', 'message': 'No Saturday games this week', 'css_class': 'info'}
             },
             'sunday_games': {
                 'deadline': None, 
@@ -231,19 +280,50 @@ class DeadlineManager:
                 
                 if weekday == 3:  # Thursday
                     deadline_info = deadlines.get('thursday_night')
-                elif weekday == 0:  # Monday
-                    deadline_info = deadlines.get('monday_night')
+                    if deadline_info and deadline_info.get('deadline'):
+                        return now < deadline_info['deadline']
+                elif weekday == 4:  # Friday
+                    friday_deadlines = deadlines.get('friday_games', [])
+                    for deadline_info in friday_deadlines:
+                        if deadline_info and deadline_info.get('deadline'):
+                            # Find the deadline for this specific Friday game
+                            game_deadline = deadline_info['deadline']
+                            if abs((game_deadline + timedelta(minutes=30) - game_time_ast).total_seconds()) < 3600:  # Within 1 hour
+                                return now < game_deadline
+                    # If no specific Friday deadline found, default to allowing picks
+                    return True
+                elif weekday == 5:  # Saturday
+                    saturday_deadlines = deadlines.get('saturday_games', [])
+                    for deadline_info in saturday_deadlines:
+                        if deadline_info and deadline_info.get('deadline'):
+                            # Find the deadline for this specific Saturday game
+                            game_deadline = deadline_info['deadline']
+                            if abs((game_deadline + timedelta(minutes=30) - game_time_ast).total_seconds()) < 3600:  # Within 1 hour
+                                return now < game_deadline
+                    # If no specific Saturday deadline found, default to allowing picks
+                    return True
+                elif weekday == 0:  # Monday - uses same deadline as Sunday games
+                    deadline_info = deadlines.get('monday_night')  # This uses Sunday deadline
+                    if deadline_info and deadline_info.get('deadline'):
+                        return now < deadline_info['deadline']
                 else:  # Sunday and other days (assume Sunday deadline)
                     deadline_info = deadlines.get('sunday_games')
-                
-                if deadline_info and deadline_info.get('deadline'):
-                    return now < deadline_info['deadline']
+                    if deadline_info and deadline_info.get('deadline'):
+                        return now < deadline_info['deadline']
             
             # If no specific game date, check if any deadline is still open
             for key, deadline_info in deadlines.items():
-                if deadline_info and deadline_info.get('deadline'):
-                    if now < deadline_info['deadline']:
-                        return True
+                if key in ['friday_games', 'saturday_games']:
+                    # Handle list of deadlines for Friday/Saturday
+                    if isinstance(deadline_info, list):
+                        for info in deadline_info:
+                            if info and info.get('deadline') and now < info['deadline']:
+                                return True
+                else:
+                    # Handle single deadline
+                    if deadline_info and deadline_info.get('deadline'):
+                        if now < deadline_info['deadline']:
+                            return True
             
             return False
             
@@ -259,6 +339,8 @@ class DeadlineManager:
             
             summary = {
                 'thursday': None,
+                'friday': None,
+                'saturday': None,
                 'sunday': None,
                 'monday': None,
                 'next_deadline': None,
@@ -266,7 +348,38 @@ class DeadlineManager:
             }
             
             for key, deadline_info in deadlines.items():
-                if deadline_info and deadline_info.get('deadline'):
+                if key in ['friday_games', 'saturday_games']:
+                    # Handle list of deadlines for Friday/Saturday
+                    if isinstance(deadline_info, list) and deadline_info:
+                        game_summaries = []
+                        for info in deadline_info:
+                            if info and info.get('deadline'):
+                                deadline = info['deadline']
+                                hours_remaining = (deadline - now).total_seconds() / 3600
+                                
+                                game_summary = {
+                                    'deadline': deadline,
+                                    'hours_remaining': hours_remaining,
+                                    'passed': hours_remaining <= 0,
+                                    'matchup': info.get('matchup', ''),
+                                    'formatted_time': deadline.strftime('%A %-I:%M %p AST'),
+                                    'urgency': 'critical' if 0 < hours_remaining <= 2 else 'warning' if 0 < hours_remaining <= 24 else 'normal'
+                                }
+                                game_summaries.append(game_summary)
+                                
+                                if hours_remaining > 0:
+                                    summary['all_deadlines_passed'] = False
+                                    if not summary['next_deadline'] or hours_remaining < summary['next_deadline']['hours_remaining']:
+                                        summary['next_deadline'] = game_summary.copy()
+                                        summary['next_deadline']['type'] = key
+                        
+                        if key == 'friday_games':
+                            summary['friday'] = game_summaries
+                        elif key == 'saturday_games':
+                            summary['saturday'] = game_summaries
+                            
+                elif deadline_info and deadline_info.get('deadline'):
+                    # Handle single deadline
                     deadline = deadline_info['deadline']
                     hours_remaining = (deadline - now).total_seconds() / 3600
                     
@@ -298,6 +411,8 @@ class DeadlineManager:
             print(f"Error getting deadline summary: {e}")
             return {
                 'thursday': None,
+                'friday': None,
+                'saturday': None,
                 'sunday': None, 
                 'monday': None,
                 'next_deadline': None,
@@ -315,8 +430,38 @@ class DeadlineManager:
             override_manager = DeadlineOverrideManager()
             
             # Check for user-specific or global overrides
-            for deadline_type in ['thursday', 'sunday', 'monday']:
-                if base_summary[deadline_type]:
+            for deadline_type in ['thursday', 'friday', 'saturday', 'sunday', 'monday']:
+                if deadline_type in ['friday', 'saturday']:
+                    # Handle list of deadlines for Friday/Saturday
+                    game_list = base_summary.get(deadline_type, [])
+                    if isinstance(game_list, list):
+                        for i, game_info in enumerate(game_list):
+                            if game_info:
+                                original_deadline = game_info['deadline']
+                                
+                                # Map deadline types to database format
+                                db_type = deadline_type
+                                
+                                # Get effective deadline (considering overrides)
+                                effective_deadline = override_manager.get_user_deadline(
+                                    week, year, db_type, user_id, original_deadline
+                                )
+                                
+                                if effective_deadline != original_deadline:
+                                    # Update with override deadline
+                                    now = datetime.now(self.ast_tz)
+                                    hours_remaining = (effective_deadline - now).total_seconds() / 3600
+                                    
+                                    base_summary[deadline_type][i].update({
+                                        'deadline': effective_deadline,
+                                        'hours_remaining': hours_remaining,
+                                        'passed': hours_remaining <= 0,
+                                        'formatted_time': effective_deadline.strftime('%A %-I:%M %p AST'),
+                                        'urgency': 'critical' if 0 < hours_remaining <= 2 else 'warning' if 0 < hours_remaining <= 24 else 'normal',
+                                        'is_override': True
+                                    })
+                elif base_summary[deadline_type]:
+                    # Handle single deadline
                     original_deadline = base_summary[deadline_type]['deadline']
                     
                     # Map deadline types to database format
