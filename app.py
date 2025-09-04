@@ -1,4 +1,3 @@
-from asyncio.log import logger
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 import sqlite3
 import os
@@ -32,7 +31,6 @@ def index():
     conn = get_db()
     cursor = conn.cursor()
     
-    # Get basic dashboard data
     cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = 1 AND year = ?', (datetime.now().year,))
     total_games = cursor.fetchone()[0]
     
@@ -98,7 +96,6 @@ def games():
     conn = get_db()
     cursor = conn.cursor()
     
-    # Get games for the week
     cursor.execute('''
         SELECT * FROM nfl_games 
         WHERE week = ? AND year = ? 
@@ -106,7 +103,6 @@ def games():
     ''', (week, year))
     games_data = cursor.fetchall()
     
-    # Get user picks
     cursor.execute('''
         SELECT g.id, up.selected_team, up.predicted_home_score, up.predicted_away_score
         FROM user_picks up
@@ -255,248 +251,4 @@ def internal_error(error):
 
 if __name__ == '__main__':
     print("🚀 Starting La Casa de Todos NFL Fantasy League...")
-    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-
-@app.route('/leaderboard')
-def leaderboard():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT u.username, 
-                       COUNT(CASE WHEN wr.is_winner = 1 THEN 1 END) as wins,
-                       AVG(wr.correct_picks) as avg_correct,
-                       SUM(wr.total_points) as total_points
-                FROM users u
-                LEFT JOIN weekly_results wr ON u.id = wr.user_id
-                WHERE u.is_admin = 0
-                GROUP BY u.id, u.username
-                ORDER BY wins DESC, total_points DESC
-            ''')
-            
-            leaderboard_data = []
-            for row in cursor.fetchall():
-                leaderboard_data.append({
-                    'username': row[0],
-                    'wins': row[1] or 0,
-                    'avg_correct': round(row[2] or 0, 1),
-                    'total_points': row[3] or 0
-                })
-        
-        return render_template('leaderboard.html', leaderboard=leaderboard_data)
-        
-    except Exception as e:
-        logger.error(f"Leaderboard error: {e}")
-        flash('Error loading leaderboard', 'error')
-        return redirect(url_for('index'))
-
-@app.route('/rules')
-def rules():
-    return render_template('rules.html')
-
-@app.route('/admin')
-def admin():
-    if 'user_id' not in session or not session.get('is_admin'):
-        flash('Admin access required', 'error')
-        return redirect(url_for('index'))
-    
-    return render_template('admin.html')
-
-@app.route('/admin/all_picks')
-def admin_all_picks():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    week = request.args.get('week', 1, type=int)
-    year = request.args.get('year', datetime.now().year, type=int)
-    
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT u.username, g.home_team, g.away_team, g.is_monday_night,
-                       up.selected_team, up.predicted_home_score, up.predicted_away_score, up.id, u.id
-                FROM user_picks up
-                JOIN users u ON up.user_id = u.id
-                JOIN nfl_games g ON up.game_id = g.id
-                WHERE g.week = ? AND g.year = ?
-                ORDER BY u.username, g.game_date
-            ''', (week, year))
-            
-            picks_data = []
-            for row in cursor.fetchall():
-                picks_data.append({
-                    'username': row[0],
-                    'home_team': row[1],
-                    'away_team': row[2],
-                    'is_monday_night': bool(row[3]),
-                    'selected_team': row[4],
-                    'predicted_home_score': row[5],
-                    'predicted_away_score': row[6],
-                    'pick_id': row[7],
-                    'user_id': row[8]
-                })
-        
-        return jsonify(picks_data)
-        
-    except Exception as e:
-        logger.error(f"Admin picks error: {e}")
-        return jsonify({'error': 'Failed to load picks'}), 500
-
-@app.route('/admin/users')
-def admin_users():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, email, is_admin, created_at FROM users ORDER BY username')
-            
-            users = []
-            for row in cursor.fetchall():
-                users.append({
-                    'id': row[0],
-                    'username': row[1],
-                    'email': row[2] or '',
-                    'is_admin': bool(row[3]),
-                    'created_at': row[4]
-                })
-        
-        return jsonify(users)
-        
-    except Exception as e:
-        logger.error(f"Admin users error: {e}")
-        return jsonify({'error': 'Failed to load users'}), 500
-
-@app.route('/admin/modify_user', methods=['POST'])
-def admin_modify_user():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    try:
-        data = request.get_json()
-        user_id = data.get('user_id')
-        username = data.get('username')
-        email = data.get('email')
-        is_admin = data.get('is_admin', False)
-        new_password = data.get('new_password')
-        
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            
-            if new_password:
-                password_hash = generate_password_hash(new_password)
-                cursor.execute('''
-                    UPDATE users SET username = ?, email = ?, is_admin = ?, password_hash = ? WHERE id = ?
-                ''', (username, email, is_admin, password_hash, user_id))
-            else:
-                cursor.execute('''
-                    UPDATE users SET username = ?, email = ?, is_admin = ? WHERE id = ?
-                ''', (username, email, is_admin, user_id))
-            
-            conn.commit()
-        
-        return jsonify({'success': True, 'message': 'User updated successfully'})
-        
-    except Exception as e:
-        logger.error(f"Admin modify user error: {e}")
-        # Removed stray return statement that was outside any function
-
-@app.route('/admin/modify_pick', methods=['POST'])
-def admin_modify_pick():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    try:
-        data = request.get_json()
-        pick_id = data.get('pick_id')
-        selected_team = data.get('selected_team')
-        home_score = data.get('home_score')
-        away_score = data.get('away_score')
-        
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE user_picks 
-                SET selected_team = ?, predicted_home_score = ?, predicted_away_score = ?
-                WHERE id = ?
-            ''', (selected_team, home_score, away_score, pick_id))
-            conn.commit()
-        
-        return jsonify({'success': True, 'message': 'Pick updated successfully'})
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/admin/delete_pick', methods=['POST'])
-def admin_delete_pick():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    try:
-        data = request.get_json()
-        pick_id = data.get('pick_id')
-        
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM user_picks WHERE id = ?', (pick_id,))
-            conn.commit()
-        
-        return jsonify({'success': True, 'message': 'Pick deleted successfully'})
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/force_create_games/<int:week>/<int:year>')
-def force_create_games(week, year):
-    if 'user_id' not in session or not session.get('is_admin'):
-        flash('Admin access required', 'error')
-        return redirect(url_for('games'))
-    
-    try:
-        flash(f'Games for Week {week} already exist or were created', 'success')
-    except Exception as e:
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('games', week=week, year=year))
-
-@app.route('/sync_season', methods=['POST'])
-def sync_season():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    try:
-        year = request.json.get('year', datetime.now().year)
-        return jsonify({
-            'success': True, 
-            'message': f'Season {year} data synchronized',
-            'games_added': 0
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.errorhandler(Exception)
-def handle_exception(e):
-    logger.error(f"Unhandled exception: {e}", exc_info=True)
-    return render_template('error.html', error="An unexpected error occurred"), 500
-
-@app.errorhandler(404)
-def not_found_error(error):
-    return render_template('error.html', error="Page not found"), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    return render_template('error.html', error="Internal server error"), 500
-
-if __name__ == '__main__':
-    if not os.path.exists('templates'):
-        os.makedirs('templates')
-    if not os.path.exists('static'):
-        os.makedirs('static')
-    print("🚀 Starting La Casa de Todos NFL Fantasy League...")
-    print("=" * 60)
     app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
