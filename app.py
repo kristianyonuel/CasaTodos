@@ -505,6 +505,59 @@ def admin():
     
     return render_template('admin.html')
 
+@app.route('/admin/all_picks')
+def admin_all_picks():
+    """Get all user picks for a specific week"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    week = request.args.get('week', 1, type=int)
+    year = request.args.get('year', datetime.now().year, type=int)
+    
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT 
+                    p.id as pick_id,
+                    u.username,
+                    g.away_team,
+                    g.home_team,
+                    g.game_time,
+                    g.is_monday_night,
+                    p.selected_team,
+                    p.predicted_home_score,
+                    p.predicted_away_score,
+                    p.pick_time
+                FROM user_picks p
+                JOIN users u ON p.user_id = u.id
+                JOIN nfl_games g ON p.game_id = g.id
+                WHERE g.week = ? AND g.year = ?
+                ORDER BY u.username, g.game_time
+            ''', (week, year))
+            
+            picks = []
+            for row in cursor.fetchall():
+                picks.append({
+                    'pick_id': row['pick_id'],
+                    'username': row['username'],
+                    'away_team': row['away_team'],
+                    'home_team': row['home_team'],
+                    'game_time': row['game_time'],
+                    'is_monday_night': bool(row['is_monday_night']),
+                    'selected_team': row['selected_team'],
+                    'predicted_home_score': row['predicted_home_score'],
+                    'predicted_away_score': row['predicted_away_score'],
+                    'pick_time': row['pick_time']
+                })
+            
+            logger.info(f"Admin {session['username']} viewed all picks for Week {week}, {year}")
+            return jsonify(picks)
+            
+    except Exception as e:
+        logger.error(f"Error loading all picks: {e}")
+        return jsonify({'error': 'Failed to load picks'}), 500
+
 @app.route('/admin/schedule')
 def admin_schedule():
     if 'user_id' not in session or not session.get('is_admin'):
