@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from setup_database import setup_complete_database
+from database_sync import sync_season_from_api, sync_week_from_api, update_live_scores
 
 app = Flask(__name__)
 app.secret_key = 'nfl-fantasy-secret-key-2024'
@@ -131,13 +132,69 @@ def logout():
     flash('You have been logged out', 'info')
     return redirect(url_for('login'))
 
+@app.route('/sync_season', methods=['POST'])
+def sync_season():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    data = request.json or {}
+    year = data.get('year', 2025)
+    
+    games_added = sync_season_from_api(year)
+    
+    if games_added > 0:
+        return jsonify({
+            'success': True,
+            'message': f'Successfully synced {games_added} games from NFL API for {year} season',
+            'games_added': games_added
+        })
+    else:
+        return jsonify({
+            'error': 'Failed to sync season data from NFL API. Check API configuration.'
+        }), 500
+
+@app.route('/admin/generate_week', methods=['POST'])
+def admin_generate_week():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    data = request.get_json()
+    week = data.get('week')
+    year = data.get('year', 2025)
+    
+    games_created = sync_week_from_api(week, year)
+    
+    if games_created > 0:
+        return jsonify({
+            'success': True, 
+            'games_created': games_created, 
+            'message': f'Synced {games_created} games from NFL API for Week {week}'
+        })
+    else:
+        return jsonify({
+            'error': f'Failed to sync Week {week} from NFL API'
+        }), 500
+
+@app.route('/update_scores/<int:week>/<int:year>')
+def update_scores(week, year):
+    """Update live scores - can be called by anyone"""
+    games_updated = update_live_scores(week, year)
+    return jsonify({
+        'success': True,
+        'games_updated': games_updated,
+        'message': f'Updated {games_updated} games with live scores'
+    })
+
 @app.route('/games')
 def games():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
     week = request.args.get('week', 1, type=int)
-    year = request.args.get('year', datetime.now().year, type=int)
+    year = request.args.get('year', 2025, type=int)
+    
+    # Auto-update live scores on page load
+    update_live_scores(week, year)
     
     conn = get_db()
     cursor = conn.cursor()
@@ -593,86 +650,6 @@ def admin_delete_user():
         print(f"Admin delete user error: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/admin/generate_week', methods=['POST'])
-def admin_generate_week():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    try:
-        data = request.get_json()
-        week = data.get('week')
-        year = data.get('year')
-        
-        if year == 2025:
-            from nfl_2025_schedule import get_2025_nfl_schedule
-            schedule = get_2025_nfl_schedule()
-            
-            if week in schedule:
-                conn = get_db()
-                cursor = conn.cursor()
-                
-                # Clear existing games for this week
-                cursor.execute('DELETE FROM nfl_games WHERE week = ? AND year = ?', (week, year))
-                
-                games_created = 0
-                for game in schedule[week]:
-                    game_id = f"nfl_{year}_w{week}_{game['away_team']}_{game['home_team']}"
-                    
-                    cursor.execute('''
-                        INSERT INTO nfl_games 
-                        (week, year, game_id, away_team, home_team, game_date, 
-                         is_thursday_night, is_monday_night, is_sunday_night, 
-                         game_status, tv_network)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        week, year, game_id, game['away_team'], game['home_team'],
-                        game['game_date'].strftime('%Y-%m-%d %H:%M:%S'),
-                        game.get('is_thursday_night', False),
-                        game.get('is_monday_night', False),
-                        game.get('is_sunday_night', False),
-                        'scheduled',
-                        game.get('tv_network', 'TBD')
-                    ))
-                    games_created += 1
-                
-                conn.commit()
-                conn.close()
-                
-                return jsonify({'success': True, 'games_created': games_created, 'message': f'Generated {games_created} games for Week {week}'})
-            else:
-                return jsonify({'error': f'No schedule data for Week {week}'}), 400
-        else:
-            return jsonify({'error': f'Schedule not available for year {year}'}), 400
-            
-    except Exception as e:
-        print(f"Generate week error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/sync_season', methods=['POST'])
-def sync_season():
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    try:
-        data = request.json or {}
-        year = data.get('year', 2025)
-        
-        if year == 2025:
-            from nfl_2025_schedule import import_2025_schedule_to_db
-            games_added = import_2025_schedule_to_db()
-            
-            return jsonify({
-                'success': True,
-                'message': f'Successfully synced {games_added} games for {year} NFL season',
-                'games_added': games_added
-            })
-        else:
-            return jsonify({'error': f'NFL schedule not available for year {year}'}), 400
-            
-    except Exception as e:
-        print(f"Sync season error: {e}")
-        return jsonify({'error': str(e)}), 500
-
 @app.errorhandler(404)
 def not_found_error(error):
     return render_template('error.html', error="Page not found"), 404
@@ -713,6 +690,29 @@ def force_create_games(week, year):
                         week, year, game_id, game['away_team'], game['home_team'],
                         game['game_date'].strftime('%Y-%m-%d %H:%M:%S'),
                         game.get('is_thursday_night', False),
+                        game.get('is_monday_night', False),
+                        game.get('is_sunday_night', False),
+                        'scheduled',
+                        game.get('tv_network', 'TBD')
+                    ))
+                    games_created += 1
+                
+                conn.commit()
+                conn.close()
+                
+                flash(f'Successfully created {games_created} games for Week {week}', 'success')
+            else:
+                flash(f'No schedule data available for Week {week}', 'error')
+        else:
+            flash(f'Schedule not available for year {year}', 'error')
+    except Exception as e:
+        flash(f'Error creating games: {str(e)}', 'error')
+    
+    return redirect(url_for('games', week=week, year=year))
+
+if __name__ == '__main__':
+    print("🚀 Starting La Casa de Todos NFL Fantasy League...")
+    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
                         game.get('is_monday_night', False),
                         game.get('is_sunday_night', False),
                         'scheduled',
