@@ -471,23 +471,25 @@ def leaderboard():
     cursor = conn.cursor()
     cursor.execute('''
         SELECT u.username, 
-               COUNT(CASE WHEN wr.is_winner = 1 THEN 1 END) as wins,
-               AVG(wr.correct_picks) as avg_correct,
-               SUM(wr.total_points) as total_points
+               COUNT(CASE WHEN wr.is_winner = 1 THEN 1 END) as weekly_wins,
+               SUM(COALESCE(wr.correct_picks, 0)) as total_games_won,
+               COUNT(DISTINCT wr.week) as weeks_played,
+               ROUND(AVG(COALESCE(wr.correct_picks, 0)), 1) as avg_games_won_per_week
         FROM users u
         LEFT JOIN weekly_results wr ON u.id = wr.user_id
         WHERE u.is_admin = 0
         GROUP BY u.id, u.username
-        ORDER BY wins DESC, total_points DESC
+        ORDER BY weekly_wins DESC, total_games_won DESC, avg_games_won_per_week DESC
     ''')
     
     leaderboard_data = []
     for row in cursor.fetchall():
         leaderboard_data.append({
             'username': row[0],
-            'wins': row[1] or 0,
-            'avg_correct': round(row[2] or 0, 1),
-            'total_points': row[3] or 0
+            'weekly_wins': row[1] or 0,
+            'total_games_won': row[2] or 0,
+            'weeks_played': row[3] or 0,
+            'avg_games_won_per_week': row[4] or 0.0
         })
     
     conn.close()
@@ -1637,26 +1639,25 @@ def weekly_leaderboard(week=None, year=None):
                                  available_weeks=available_weeks,
                                  no_data_message=f"No completed games for Week {week}, {year}")
         
-        # Get users who made picks for this week with basic scoring
+        # Get users who made picks for this week with simplified scoring (1 point per win)
         cursor.execute('''
             SELECT u.id, u.username,
                    COUNT(p.id) as total_picks,
-                   SUM(CASE WHEN p.is_correct = 1 THEN 1 ELSE 0 END) as correct_picks,
-                   SUM(COALESCE(p.points_earned, 0)) as total_points
+                   SUM(CASE WHEN p.is_correct = 1 THEN 1 ELSE 0 END) as correct_picks
             FROM users u
             JOIN user_picks p ON u.id = p.user_id
             JOIN nfl_games g ON p.game_id = g.id
             WHERE g.week = ? AND g.year = ? AND g.is_final = 1 AND u.is_admin = 0
             GROUP BY u.id, u.username
             HAVING total_picks > 0
-            ORDER BY correct_picks DESC, total_points DESC, u.username
+            ORDER BY correct_picks DESC, u.username
         ''', (week, year))
         
         user_results = cursor.fetchall()
         
         # Get Monday Night data for tiebreakers
         leaderboard_data = []
-        for i, (user_id, username, total_picks, correct_picks, total_points) in enumerate(user_results, 1):
+        for i, (user_id, username, total_picks, correct_picks) in enumerate(user_results, 1):
             
             # Get Monday Night pick data for this user
             cursor.execute('''
@@ -1695,24 +1696,23 @@ def weekly_leaderboard(week=None, year=None):
             leaderboard_data.append({
                 'rank': i,
                 'username': username,
-                'total_score': total_points or 0,
+                'total_score': correct_picks,  # 1 point per correct pick
                 'total_picks': total_picks,
                 'correct_picks': correct_picks,
                 'breakdown': {
-                    'exact_predictions': correct_picks * 10,  # Simplified
-                    'proximity_points': max(0, (total_points or 0) - (correct_picks * 10)),
-                    'total_proximity_bonus': 0,
-                    'total_score': total_points or 0
+                    'games_won': correct_picks,
+                    'games_played': total_picks,
+                    'win_percentage': round((correct_picks / total_picks * 100) if total_picks > 0 else 0, 1),
+                    'total_score': correct_picks  # Same as correct_picks since 1 point per win
                 },
                 'monday_tiebreaker': monday_tiebreaker,
                 'is_winner': i == 1
             })
         
         # Re-sort with Monday Night tiebreaker logic if there are ties
-        # This is a simplified version - in practice you'd use the full scoring_manager
+        # Simplified: 1 point per win, then Monday Night tiebreakers
         leaderboard_data.sort(key=lambda x: (
-            -x['correct_picks'],                               # Most correct picks first
-            -x['total_score'],                                 # Highest score
+            -x['correct_picks'],                               # Most games won (1 point each)
             x['monday_tiebreaker'].get('home_diff', 999),      # Closest to home team
             x['monday_tiebreaker'].get('away_diff', 999),      # Closest to away team
             x['monday_tiebreaker'].get('total_diff', 999),     # Closest to total
@@ -1814,21 +1814,20 @@ def debug_leaderboard():
         cursor.execute('''
             SELECT u.id, u.username,
                    COUNT(p.id) as total_picks,
-                   SUM(CASE WHEN p.is_correct = 1 THEN 1 ELSE 0 END) as correct_picks,
-                   SUM(COALESCE(p.points_earned, 0)) as total_points
+                   SUM(CASE WHEN p.is_correct = 1 THEN 1 ELSE 0 END) as games_won
             FROM users u
             JOIN user_picks p ON u.id = p.user_id
             JOIN nfl_games g ON p.game_id = g.id
             WHERE g.week = ? AND g.year = ? AND g.is_final = 1 AND u.is_admin = 0
             GROUP BY u.id, u.username
             HAVING total_picks > 0
-            ORDER BY correct_picks DESC, total_points DESC, u.username
+            ORDER BY games_won DESC, u.username
         ''', (week, year))
         
         results = cursor.fetchall()
         debug_info.append(f"Query for Week {week}, {year} returned {len(results)} users")
         for result in results:
-            debug_info.append(f"  User: {result[1]} - Picks: {result[2]} - Correct: {result[3]} - Points: {result[4]}")
+            debug_info.append(f"  User: {result[1]} - Total Picks: {result[2]} - Games Won: {result[3]} - Points: {result[3]} (1 pt per win)")
         
         conn.close()
         

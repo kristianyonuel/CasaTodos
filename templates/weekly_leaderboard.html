@@ -159,20 +159,15 @@
                         {% endif %}
                     </td>
                     <td>
-                        <strong>{{ user.correct_picks }}/{{ user.total_picks }}</strong> correct<br>
-                        <span style="font-size: 0.9em; color: #6c757d;">{{ user.total_score }} points</span>
+                        <strong>{{ user.correct_picks }}/{{ user.total_picks }}</strong> games won<br>
+                        <span style="font-size: 0.9em; color: #6c757d;">{{ user.total_score }} points (1 pt per win)</span>
                     </td>
                     <td>
                         <div class="score-breakdown">
                             {% if user.breakdown %}
-                                Correct Picks: {{ user.correct_picks }}<br>
-                                Total Points: {{ user.total_score }}
-                                {% if user.breakdown.get('monday_night_bonus', 0) > 0 %}
-                                    <br>MNF Bonus: {{ user.breakdown.get('monday_night_bonus', 0) }}pts
-                                {% endif %}
-                                {% if user.breakdown.get('perfect_week_bonus', 0) > 0 %}
-                                    <br>Perfect Week: {{ user.breakdown.get('perfect_week_bonus', 0) }}pts
-                                {% endif %}
+                                Games Won: {{ user.breakdown.games_won }}/{{ user.breakdown.games_played }}<br>
+                                Win Rate: {{ user.breakdown.win_percentage }}%<br>
+                                Total Points: {{ user.breakdown.total_score }} (1 pt per win)
                             {% endif %}
                         </div>
                     </td>
@@ -199,15 +194,23 @@
         </table>
         
         <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+            <h4>🏈 Scoring Rules:</h4>
+            <p><strong>Simple Scoring System:</strong></p>
+            <ul>
+                <li><strong>1 point for each game won</strong> (including Monday Night Football)</li>
+                <li><strong>No bonus points</strong> - just 1 point per correct pick</li>
+                <li><strong>All games are equal</strong> - Thursday, Sunday, and Monday games all worth 1 point</li>
+            </ul>
+            
             <h4>🔧 Tiebreaker Rules:</h4>
-            <p>When users have the same number of correct picks, ties are broken using Monday Night Football predictions:</p>
+            <p>When users have the same number of games won, ties are broken using Monday Night Football predictions:</p>
             <ol>
                 <li><strong>Closest to Home Team Score</strong> (either higher or lower)</li>
                 <li><strong>Closest to Away Team Score</strong></li>
                 <li><strong>Closest to Total Combined Score</strong></li>
                 <li><strong>Alphabetical Order</strong> (if still tied)</li>
             </ol>
-            <p><em>This ensures Monday Night predictions matter for final rankings!</em></p>
+            <p><em>Monday Night predictions are the key tiebreaker when users win the same number of games!</em></p>
         </div>
         
         {% else %}
