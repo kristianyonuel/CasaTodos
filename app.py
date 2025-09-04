@@ -713,26 +713,3 @@ def force_create_games(week, year):
 if __name__ == '__main__':
     print("🚀 Starting La Casa de Todos NFL Fantasy League...")
     app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-                        game.get('is_monday_night', False),
-                        game.get('is_sunday_night', False),
-                        'scheduled',
-                        game.get('tv_network', 'TBD')
-                    ))
-                    games_created += 1
-                
-                conn.commit()
-                conn.close()
-                
-                flash(f'Successfully created {games_created} games for Week {week}', 'success')
-            else:
-                flash(f'No schedule data available for Week {week}', 'error')
-        else:
-            flash(f'Schedule not available for year {year}', 'error')
-    except Exception as e:
-        flash(f'Error creating games: {str(e)}', 'error')
-    
-    return redirect(url_for('games', week=week, year=year))
-
-if __name__ == '__main__':
-    print("🚀 Starting La Casa de Todos NFL Fantasy League...")
-    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
