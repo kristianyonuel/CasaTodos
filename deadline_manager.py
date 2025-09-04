@@ -19,9 +19,9 @@ class DeadlineManager:
         
         # Default deadline offsets (minutes before game start)
         self.deadline_offsets = {
-            'thursday_night': 5,     # 5 minutes before TNF (more lenient)
-            'sunday_games': 15,      # 15 minutes before first Sunday game  
-            'monday_night': 5,       # 5 minutes before MNF (more lenient)
+            'thursday_night': 30,    # 30 minutes before TNF
+            'sunday_games': 60,      # 1 hour before first Sunday game  
+            'monday_night': 30,      # 30 minutes before MNF
             'elimination': 10080     # 7 days (7 * 24 * 60) before Saturday
         }
     
@@ -56,38 +56,59 @@ class DeadlineManager:
             
             # Process each game type
             for game in games:
-                game_time = datetime.strptime(game[0], '%Y-%m-%d %H:%M:%S')
-                game_time_ast = convert_to_ast(game_time)
-                
-                if game[1]:  # Thursday Night
-                    deadlines['thursday_night'] = {
-                        'game_time': game_time_ast,
-                        'deadline': game_time_ast - timedelta(minutes=self.deadline_offsets['thursday_night']),
-                        'matchup': f"{game[5]} @ {game[4]}",
-                        'status': self._get_deadline_status(game_time_ast, 'thursday_night')
-                    }
-                
-                elif game[3]:  # Monday Night  
-                    deadlines['monday_night'] = {
-                        'game_time': game_time_ast,
-                        'deadline': game_time_ast - timedelta(minutes=self.deadline_offsets['monday_night']),
-                        'matchup': f"{game[5]} @ {game[4]}",
-                        'status': self._get_deadline_status(game_time_ast, 'monday_night')
-                    }
+                try:
+                    # Parse game time - ensure we handle it as UTC first
+                    if isinstance(game[0], str):
+                        game_time = datetime.strptime(game[0], '%Y-%m-%d %H:%M:%S')
+                        # Assume stored times are in UTC, then convert to AST
+                        game_time_utc = game_time.replace(tzinfo=pytz.UTC)
+                        game_time_ast = game_time_utc.astimezone(self.ast_tz)
+                    else:
+                        game_time_ast = convert_to_ast(game[0])
+                    
+                    if game[1]:  # Thursday Night
+                        deadline = game_time_ast - timedelta(minutes=self.deadline_offsets['thursday_night'])
+                        deadlines['thursday_night'] = {
+                            'game_time': game_time_ast,
+                            'deadline': deadline,
+                            'matchup': f"{game[5]} @ {game[4]}",
+                            'status': self._get_deadline_status(game_time_ast, 'thursday_night')
+                        }
+                    
+                    elif game[3]:  # Monday Night  
+                        deadline = game_time_ast - timedelta(minutes=self.deadline_offsets['monday_night'])
+                        deadlines['monday_night'] = {
+                            'game_time': game_time_ast,
+                            'deadline': deadline,
+                            'matchup': f"{game[5]} @ {game[4]}",
+                            'status': self._get_deadline_status(game_time_ast, 'monday_night')
+                        }
+                        
+                except Exception as e:
+                    print(f"Error processing game {game}: {e}")
+                    continue
             
             # Find first Sunday game for Sunday deadline
             sunday_games = [g for g in games if not g[1] and not g[2] and not g[3]]
             if sunday_games:
                 first_sunday = min(sunday_games, key=lambda x: x[0])
-                sunday_time = datetime.strptime(first_sunday[0], '%Y-%m-%d %H:%M:%S')
-                sunday_time_ast = convert_to_ast(sunday_time)
-                
-                deadlines['sunday_games'] = {
-                    'game_time': sunday_time_ast,
-                    'deadline': sunday_time_ast - timedelta(minutes=self.deadline_offsets['sunday_games']),
-                    'matchup': f"First Sunday Game: {first_sunday[5]} @ {first_sunday[4]}",
-                    'status': self._get_deadline_status(sunday_time_ast, 'sunday_games')
-                }
+                try:
+                    if isinstance(first_sunday[0], str):
+                        sunday_time = datetime.strptime(first_sunday[0], '%Y-%m-%d %H:%M:%S')
+                        sunday_time_utc = sunday_time.replace(tzinfo=pytz.UTC)
+                        sunday_time_ast = sunday_time_utc.astimezone(self.ast_tz)
+                    else:
+                        sunday_time_ast = convert_to_ast(first_sunday[0])
+                    
+                    deadline = sunday_time_ast - timedelta(minutes=self.deadline_offsets['sunday_games'])
+                    deadlines['sunday_games'] = {
+                        'game_time': sunday_time_ast,
+                        'deadline': deadline,
+                        'matchup': f"First Sunday Game: {first_sunday[5]} @ {first_sunday[4]}",
+                        'status': self._get_deadline_status(sunday_time_ast, 'sunday_games')
+                    }
+                except Exception as e:
+                    print(f"Error processing Sunday game {first_sunday}: {e}")
             
             # Calculate elimination deadline (7 days before Saturday)
             if games:
@@ -116,29 +137,24 @@ class DeadlineManager:
     def _get_deadline_status(self, game_time: datetime, game_type: str) -> Dict[str, any]:
         """Determine if deadline is open, closing soon, or closed"""
         now = datetime.now(self.ast_tz)
-        deadline = game_time - timedelta(minutes=self.deadline_offsets[game_type])
         
-        if now < deadline:
-            time_until_deadline = deadline - now
-            
-            if time_until_deadline.total_seconds() < 3600:  # Less than 1 hour
-                return {
-                    'status': 'closing_soon',
-                    'message': f"Closes in {int(time_until_deadline.total_seconds() // 60)} minutes",
-                    'css_class': 'warning'
-                }
-            else:
-                return {
-                    'status': 'open', 
-                    'message': f"Open until {deadline.strftime('%a %I:%M %p AST')}",
-                    'css_class': 'success'
-                }
-        else:
-            return {
-                'status': 'closed',
-                'message': f"Closed since {deadline.strftime('%a %I:%M %p AST')}",
-                'css_class': 'danger'
-            }
+        # Ensure game_time is timezone-aware (AST)
+        if game_time.tzinfo is None:
+            game_time = self.ast_tz.localize(game_time)
+        elif game_time.tzinfo != self.ast_tz:
+            game_time = game_time.astimezone(self.ast_tz)
+        
+        deadline = game_time - timedelta(minutes=self.deadline_offsets[game_type])
+        time_until_deadline = (deadline - now).total_seconds()
+        hours_until_deadline = time_until_deadline / 3600
+        
+        return {
+            'is_closed': time_until_deadline <= 0,
+            'hours_until_deadline': hours_until_deadline,
+            'deadline_time': deadline,
+            'game_time': game_time,
+            'current_time': now
+        }
     
     def _get_default_deadlines(self) -> Dict[str, Dict]:
         """Return default deadlines when no games are scheduled"""
@@ -203,6 +219,7 @@ class DeadlineManager:
     def can_make_picks(self, week: int, year: int, game_date: str = None) -> bool:
         """Check if picks can still be made for a specific game or week"""
         try:
+            deadlines = self.get_week_deadlines(week, year)
             now = datetime.now(self.ast_tz)
             
             if game_date:
@@ -210,30 +227,18 @@ class DeadlineManager:
                 game_time = datetime.strptime(game_date, '%Y-%m-%d %H:%M:%S')
                 game_time_ast = convert_to_ast(game_time)
                 
-                # Determine game type and use appropriate deadline offset
+                # Determine game type based on day of week
                 weekday = game_time_ast.weekday()  # Monday = 0, Sunday = 6
                 
                 if weekday == 3:  # Thursday
-                    offset_minutes = self.deadline_offsets['thursday_night']
-                elif weekday == 0:  # Monday  
-                    offset_minutes = self.deadline_offsets['monday_night']
-                else:  # Sunday and other days
-                    offset_minutes = self.deadline_offsets['sunday_games']
+                    deadline_info = deadlines.get('thursday_night')
+                elif weekday == 0:  # Monday
+                    deadline_info = deadlines.get('monday_night')
+                else:  # Sunday and other days (assume Sunday deadline)
+                    deadline_info = deadlines.get('sunday_games')
                 
-                # Calculate deadline using appropriate offset
-                deadline = game_time_ast - timedelta(minutes=offset_minutes)
-                
-                # Debug logging
-                print(f"DEBUG: Game time (AST): {game_time_ast}")
-                print(f"DEBUG: Current time (AST): {now}")
-                print(f"DEBUG: Deadline ({offset_minutes} min before): {deadline}")
-                print(f"DEBUG: Minutes until deadline: {(deadline - now).total_seconds() / 60:.1f}")
-                print(f"DEBUG: Can make picks: {now < deadline}")
-                
-                return now < deadline
-            
-            # If no specific game date, check general week deadlines
-            deadlines = self.get_week_deadlines(week, year)
+                if deadline_info and deadline_info.get('deadline'):
+                    return now < deadline_info['deadline']
             
             # If no specific game date, check if any deadline is still open
             for key, deadline_info in deadlines.items():
@@ -245,8 +250,7 @@ class DeadlineManager:
             
         except Exception as e:
             print(f"Error checking pick availability: {e}")
-            # Default to allowing picks if error occurs (safer for users)
-            return True
+            return True  # Default to allowing picks if error occurs
     
     def get_deadline_summary(self, week: int, year: int) -> Dict[str, Any]:
         """Get a user-friendly summary of deadlines with hours remaining"""

@@ -13,6 +13,9 @@ from utils.timezone_utils import convert_to_ast, format_ast_time
 from contextlib import contextmanager
 from deadline_manager import DeadlineManager
 from deadline_override_manager import DeadlineOverrideManager
+import csv
+import io
+from werkzeug.utils import secure_filename
 
 # Configure logging for better debugging
 logging.basicConfig(
@@ -1079,66 +1082,345 @@ def admin_remove_deadline_override():
         logger.error(f"Error removing deadline override: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/admin/emergency_deadline_extend', methods=['POST'])
-def emergency_deadline_extend():
-    """Emergency route to quickly extend all deadlines by X minutes"""
+@app.route('/admin/emergency_deadline_extension', methods=['POST'])
+def admin_emergency_deadline_extension():
+    """Emergency deadline extension - extends all deadlines by specified hours"""
     if 'user_id' not in session or not session.get('is_admin'):
         return jsonify({'error': 'Admin access required'}), 403
     
     try:
         data = request.get_json()
-        minutes_to_extend = data.get('minutes', 60)  # Default 1 hour extension
         week = data.get('week', 1)
         year = data.get('year', 2025)
+        hours_to_extend = data.get('hours', 1)
+        reason = data.get('reason', 'Emergency deadline extension')
+        
+        if not hours_to_extend or hours_to_extend <= 0:
+            return jsonify({'success': False, 'error': 'Invalid extension hours'})
         
         override_manager = DeadlineOverrideManager()
+        current_time = datetime.now()
+        new_deadline = current_time + timedelta(hours=hours_to_extend)
         
-        # Get current deadlines
-        deadline_manager = DeadlineManager()
-        current_deadlines = deadline_manager.get_week_deadlines(week, year)
+        # Create global overrides for all deadline types
+        deadline_types = ['thursday', 'sunday', 'monday']
+        created_overrides = 0
         
-        extensions_created = 0
+        for deadline_type in deadline_types:
+            success = override_manager.create_override(
+                week=week,
+                year=year,
+                deadline_type=deadline_type,
+                new_deadline=new_deadline,
+                admin_id=session['user_id'],
+                user_id=None,  # Global override
+                reason=f"EMERGENCY: {reason}"
+            )
+            if success:
+                created_overrides += 1
         
-        for deadline_type, deadline_info in current_deadlines.items():
-            if deadline_info and deadline_info.get('deadline'):
-                # Create new deadline with extension
-                original_deadline = deadline_info['deadline']
-                new_deadline = original_deadline + timedelta(minutes=minutes_to_extend)
-                
-                # Map deadline types
-                db_type = deadline_type.replace('_night', '').replace('_games', '')
-                if db_type == 'thursday':
-                    db_type = 'thursday'
-                elif db_type == 'sunday':
-                    db_type = 'sunday'
-                elif db_type == 'monday':
-                    db_type = 'monday'
-                else:
-                    continue
-                
-                success = override_manager.create_override(
-                    week=week,
-                    year=year,
-                    deadline_type=db_type,
-                    new_deadline=new_deadline,
-                    admin_id=session['user_id'],
-                    user_id=None,  # Global override
-                    reason=f"Emergency extension: +{minutes_to_extend} minutes"
-                )
-                
-                if success:
-                    extensions_created += 1
+        logger.info(f"Admin {session['username']} created emergency deadline extension: {hours_to_extend} hours for week {week}")
         
-        logger.info(f"Admin {session['username']} created emergency deadline extensions (+{minutes_to_extend} min)")
         return jsonify({
             'success': True, 
-            'message': f'Extended {extensions_created} deadlines by {minutes_to_extend} minutes'
+            'message': f'Emergency extension created: {created_overrides} deadline types extended by {hours_to_extend} hours'
         })
         
     except Exception as e:
         logger.error(f"Error creating emergency deadline extension: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-if __name__ == '__main__':
-    print("🚀 Starting La Casa de Todos NFL Fantasy League...")
-    app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+@app.route('/admin/export_picks_csv', methods=['GET'])
+def admin_export_picks_csv():
+    """Export all user picks for a week as CSV"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        week = request.args.get('week', 1, type=int)
+        year = request.args.get('year', 2025, type=int)
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Get all games for the week
+            cursor.execute('''
+                SELECT id, away_team, home_team, game_date, is_monday_night
+                FROM nfl_games 
+                WHERE week = ? AND year = ?
+                ORDER BY game_date
+            ''', (week, year))
+            
+            games = [dict(row) for row in cursor.fetchall()]
+            
+            if not games:
+                return jsonify({'error': f'No games found for Week {week}, {year}'}), 404
+            
+            # Get all users
+            cursor.execute('SELECT id, username FROM users ORDER BY username')
+            users = [dict(row) for row in cursor.fetchall()]
+            
+            # Get existing picks
+            cursor.execute('''
+                SELECT up.user_id, up.game_id, up.selected_team, 
+                       up.predicted_home_score, up.predicted_away_score,
+                       u.username
+                FROM user_picks up
+                JOIN users u ON up.user_id = u.id
+                JOIN nfl_games g ON up.game_id = g.id
+                WHERE g.week = ? AND g.year = ?
+            ''', (week, year))
+            
+            picks = {}
+            for row in cursor.fetchall():
+                key = (row['user_id'], row['game_id'])
+                picks[key] = {
+                    'selected_team': row['selected_team'],
+                    'predicted_home_score': row['predicted_home_score'],
+                    'predicted_away_score': row['predicted_away_score']
+                }
+        
+        # Create CSV content
+        output = io.StringIO()
+        fieldnames = ['username', 'game_id', 'away_team', 'home_team', 'selected_team', 
+                     'predicted_home_score', 'predicted_away_score']
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        
+        writer.writeheader()
+        
+        # Write a row for each user-game combination
+        for user in users:
+            for game in games:
+                pick_key = (user['id'], game['id'])
+                pick_data = picks.get(pick_key, {})
+                
+                row = {
+                    'username': user['username'],
+                    'game_id': game['id'],
+                    'away_team': game['away_team'],
+                    'home_team': game['home_team'],
+                    'selected_team': pick_data.get('selected_team', ''),
+                    'predicted_home_score': pick_data.get('predicted_home_score', ''),
+                    'predicted_away_score': pick_data.get('predicted_away_score', '')
+                }
+                writer.writerow(row)
+        
+        # Prepare response
+        csv_content = output.getvalue()
+        output.close()
+        
+        response = app.response_class(
+            csv_content,
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename=picks_week_{week}_{year}.csv'}
+        )
+        
+        logger.info(f"Admin {session['username']} exported picks CSV for Week {week}, {year}")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error exporting picks CSV: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/import_picks_csv', methods=['POST'])
+def admin_import_picks_csv():
+    """Import user picks from CSV file"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        week = request.args.get('week', 1, type=int)
+        year = request.args.get('year', 2025, type=int)
+        validate_only = request.form.get('validate_only') == 'true'
+        overwrite_existing = request.form.get('overwrite_existing') == 'true'
+        create_missing_users = request.form.get('create_missing_users') == 'true'
+        
+        if 'csv_file' not in request.files:
+            return jsonify({'error': 'No CSV file provided'}), 400
+        
+        file = request.files['csv_file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not file.filename.lower().endswith('.csv'):
+            return jsonify({'error': 'File must be a CSV'}), 400
+        
+        # Read and parse CSV
+        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        csv_reader = csv.DictReader(stream)
+        
+        # Validation variables
+        total_rows = 0
+        valid_picks = 0
+        empty_picks = 0
+        users_found = set()
+        missing_users = set()
+        warnings = []
+        errors = []
+        
+        # Import variables
+        picks_imported = 0
+        picks_updated = 0
+        users_created = 0
+        skipped_picks = 0
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Get existing users
+            cursor.execute('SELECT id, username FROM users')
+            existing_users = {row['username']: row['id'] for row in cursor.fetchall()}
+            
+            # Get existing games for the week
+            cursor.execute('''
+                SELECT id, away_team, home_team FROM nfl_games 
+                WHERE week = ? AND year = ?
+            ''', (week, year))
+            existing_games = {row['id']: row for row in cursor.fetchall()}
+            
+            picks_to_process = []
+            
+            for row in csv_reader:
+                total_rows += 1
+                
+                username = row.get('username', '').strip()
+                game_id = row.get('game_id', '').strip()
+                selected_team = row.get('selected_team', '').strip()
+                predicted_home_score = row.get('predicted_home_score', '').strip()
+                predicted_away_score = row.get('predicted_away_score', '').strip()
+                
+                if not username:
+                    errors.append(f"Row {total_rows}: Missing username")
+                    continue
+                
+                if not game_id or not game_id.isdigit():
+                    errors.append(f"Row {total_rows}: Invalid game_id '{game_id}'")
+                    continue
+                
+                game_id = int(game_id)
+                
+                if game_id not in existing_games:
+                    errors.append(f"Row {total_rows}: Game ID {game_id} not found for Week {week}, {year}")
+                    continue
+                
+                if not selected_team:
+                    empty_picks += 1
+                    continue
+                
+                # Validate team name
+                game = existing_games[game_id]
+                if selected_team not in [game['away_team'], game['home_team']]:
+                    errors.append(f"Row {total_rows}: '{selected_team}' is not valid for {game['away_team']} @ {game['home_team']}")
+                    continue
+                
+                # Check user exists
+                if username in existing_users:
+                    users_found.add(username)
+                    user_id = existing_users[username]
+                else:
+                    missing_users.add(username)
+                    if not create_missing_users:
+                        warnings.append(f"User '{username}' not found and user creation disabled")
+                        continue
+                    user_id = None  # Will create later
+                
+                # Validate score predictions
+                home_score = None
+                away_score = None
+                if predicted_home_score:
+                    try:
+                        home_score = int(predicted_home_score)
+                    except ValueError:
+                        warnings.append(f"Row {total_rows}: Invalid home score '{predicted_home_score}'")
+                
+                if predicted_away_score:
+                    try:
+                        away_score = int(predicted_away_score)
+                    except ValueError:
+                        warnings.append(f"Row {total_rows}: Invalid away score '{predicted_away_score}'")
+                
+                picks_to_process.append({
+                    'username': username,
+                    'user_id': user_id,
+                    'game_id': game_id,
+                    'selected_team': selected_team,
+                    'predicted_home_score': home_score,
+                    'predicted_away_score': away_score
+                })
+                
+                valid_picks += 1
+            
+            # If validation only, return results
+            if validate_only:
+                return jsonify({
+                    'success': True,
+                    'total_rows': total_rows,
+                    'valid_picks': valid_picks,
+                    'empty_picks': empty_picks,
+                    'users_found': len(users_found),
+                    'missing_users': list(missing_users),
+                    'warnings': warnings
+                })
+            
+            # Process imports
+            for pick in picks_to_process:
+                try:
+                    # Create user if needed
+                    if pick['user_id'] is None:
+                        cursor.execute('''
+                            INSERT INTO users (username, password_hash, email, is_admin)
+                            VALUES (?, ?, ?, ?)
+                        ''', (pick['username'], generate_password_hash('changeme123'), '', False))
+                        pick['user_id'] = cursor.lastrowid
+                        users_created += 1
+                        existing_users[pick['username']] = pick['user_id']
+                    
+                    # Check if pick already exists
+                    cursor.execute('''
+                        SELECT id FROM user_picks 
+                        WHERE user_id = ? AND game_id = ?
+                    ''', (pick['user_id'], pick['game_id']))
+                    
+                    existing_pick = cursor.fetchone()
+                    
+                    if existing_pick and not overwrite_existing:
+                        skipped_picks += 1
+                        continue
+                    
+                    # Insert or update pick
+                    if existing_pick:
+                        cursor.execute('''
+                            UPDATE user_picks 
+                            SET selected_team = ?, predicted_home_score = ?, predicted_away_score = ?
+                            WHERE user_id = ? AND game_id = ?
+                        ''', (pick['selected_team'], pick['predicted_home_score'], 
+                             pick['predicted_away_score'], pick['user_id'], pick['game_id']))
+                        picks_updated += 1
+                    else:
+                        cursor.execute('''
+                            INSERT INTO user_picks 
+                            (user_id, game_id, selected_team, predicted_home_score, predicted_away_score)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (pick['user_id'], pick['game_id'], pick['selected_team'], 
+                             pick['predicted_home_score'], pick['predicted_away_score']))
+                        picks_imported += 1
+                
+                except Exception as e:
+                    errors.append(f"Error processing pick for {pick['username']}: {str(e)}")
+            
+            conn.commit()
+        
+        logger.info(f"Admin {session['username']} imported {picks_imported + picks_updated} picks from CSV for Week {week}, {year}")
+        
+        return jsonify({
+            'success': True,
+            'picks_imported': picks_imported,
+            'picks_updated': picks_updated,
+            'users_created': users_created,
+            'skipped_picks': skipped_picks,
+            'errors': errors
+        })
+        
+    except Exception as e:
+        logger.error(f"Error importing picks CSV: {e}")
+        return jsonify({'error': str(e)}, 500)

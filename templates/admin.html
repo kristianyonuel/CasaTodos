@@ -46,8 +46,8 @@
                     <button onclick="loadSchedule()" class="btn btn-success">Manage Schedule</button>
                     <button onclick="loadGameResults()" class="btn btn-warning">Update Game Results</button>
                     <button onclick="loadDeadlineOverrides()" class="btn btn-danger">Deadline Overrides</button>
+                    <button onclick="emergencyDeadlineExtension()" class="btn btn-danger" style="background-color: #dc2626;">🚨 Emergency Extension</button>
                     <button onclick="syncSeason()" class="btn btn-secondary">Sync NFL Season</button>
-                    <button onclick="emergencyDeadlineExtend()" class="btn btn-danger">🚨 Emergency Deadline Extend</button>
                 </div>
                 
                 <div id="admin-content">
@@ -1128,14 +1128,20 @@
             }
         }
 
-        async function emergencyDeadlineExtend() {
-            const minutes = prompt('How many minutes to extend all current deadlines?', '60');
-            if (!minutes || isNaN(minutes)) {
-                alert('Please enter a valid number of minutes');
+        async function emergencyDeadlineExtension() {
+            const hours = prompt('🚨 EMERGENCY DEADLINE EXTENSION\n\nExtend all deadlines by how many hours?', '2');
+            
+            if (!hours || isNaN(hours) || hours <= 0) {
+                if (hours !== null) {
+                    alert('Please enter a valid number of hours');
+                }
                 return;
             }
             
-            if (!confirm(`Are you sure you want to extend ALL current deadlines by ${minutes} minutes?`)) {
+            const reason = prompt('Reason for emergency extension:', 'Game delay or technical issues');
+            if (reason === null) return;
+            
+            if (!confirm(`⚠️ This will extend ALL deadlines by ${hours} hours for the current week.\n\nReason: ${reason}\n\nContinue?`)) {
                 return;
             }
             
@@ -1143,25 +1149,243 @@
                 const week = document.getElementById('admin-week').value;
                 const year = document.getElementById('admin-year').value;
                 
-                const response = await fetch('/admin/emergency_deadline_extend', {
+                const response = await fetch('/admin/emergency_deadline_extension', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        minutes: parseInt(minutes),
                         week: parseInt(week),
-                        year: parseInt(year)
+                        year: parseInt(year),
+                        hours: parseFloat(hours),
+                        reason: reason
                     })
                 });
                 
                 const result = await response.json();
                 if (result.success) {
-                    alert('SUCCESS: ' + result.message);
+                    alert(`✅ Emergency extension successful!\n\n${result.message}\n\nAll users can now submit picks until the new deadline.`);
                 } else {
-                    alert('ERROR: ' + result.error);
+                    alert('❌ Error creating emergency extension: ' + result.error);
                 }
             } catch (error) {
-                alert('Error extending deadlines');
+                alert('❌ Error creating emergency deadline extension');
                 console.error('Error:', error);
+            }
+        }
+
+        async function exportUserPicks() {
+            try {
+                const week = document.getElementById('admin-week').value;
+                const year = document.getElementById('admin-year').value;
+                
+                document.getElementById('admin-content').innerHTML = '<p>Preparing CSV export...</p>';
+                
+                const response = await fetch(`/admin/export_picks_csv?week=${week}&year=${year}`);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `picks_week_${week}_${year}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    document.getElementById('admin-content').innerHTML = 
+                        `<div class="success-message">
+                            <h3>✅ CSV Export Complete</h3>
+                            <p>Downloaded: picks_week_${week}_${year}.csv</p>
+                            <p>This file contains all users and games for Week ${week}, ${year}</p>
+                        </div>`;
+                } else {
+                    const errorData = await response.json();
+                    document.getElementById('admin-content').innerHTML = 
+                        `<p class="error">Error exporting CSV: ${errorData.error}</p>`;
+                }
+            } catch (error) {
+                console.error('Error exporting picks:', error);
+                document.getElementById('admin-content').innerHTML = 
+                    '<p class="error">Error exporting picks CSV</p>';
+            }
+        }
+        
+        function showImportPicks() {
+            const week = document.getElementById('admin-week').value;
+            const year = document.getElementById('admin-year').value;
+            
+            const html = `
+                <div class="csv-import-section">
+                    <h3>Import Picks CSV - Week ${week}, ${year}</h3>
+                    
+                    <div class="import-instructions">
+                        <h4>📋 Import Instructions</h4>
+                        <ul>
+                            <li>Use the exported CSV format or create a new file with the same structure</li>
+                            <li>Required columns: username, game_id, away_team, home_team, selected_team</li>
+                            <li>Optional columns: predicted_home_score, predicted_away_score (for Monday Night games)</li>
+                            <li>Leave selected_team empty for games without picks</li>
+                            <li>Use exact team names as they appear in the database</li>
+                        </ul>
+                        
+                        <div class="csv-format-example">
+                            <h5>Expected CSV Format:</h5>
+                            <code>
+                            username,game_id,away_team,home_team,selected_team,predicted_home_score,predicted_away_score<br>
+                            john_doe,1,Bills,Chiefs,Chiefs,,<br>
+                            john_doe,2,Cowboys,Giants,Cowboys,,<br>
+                            jane_smith,1,Bills,Chiefs,Bills,,<br>
+                            jane_smith,5,Packers,Bears,Packers,24,17
+                            </code>
+                        </div>
+                    </div>
+                    
+                    <div class="import-form">
+                        <form id="csv-import-form" enctype="multipart/form-data">
+                            <div class="file-upload">
+                                <label for="csv-file">Select CSV File:</label>
+                                <input type="file" id="csv-file" name="csv_file" accept=".csv" required>
+                            </div>
+                            
+                            <div class="import-options">
+                                <label>
+                                    <input type="checkbox" id="overwrite-existing" checked>
+                                    Overwrite existing picks
+                                </label>
+                                
+                                <label>
+                                    <input type="checkbox" id="create-missing-users">
+                                    Create missing users (they will need to set passwords)
+                                </label>
+                            </div>
+                            
+                            <div class="import-actions">
+                                <button type="button" onclick="validateCSV()" class="btn btn-secondary">
+                                    Validate CSV
+                                </button>
+                                <button type="button" onclick="importCSV()" class="btn btn-primary">
+                                    Import Picks
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <div id="import-results"></div>
+                </div>`;
+            
+            document.getElementById('admin-content').innerHTML = html;
+        }
+        
+        async function validateCSV() {
+            try {
+                const fileInput = document.getElementById('csv-file');
+                const file = fileInput.files[0];
+                
+                if (!file) {
+                    alert('Please select a CSV file first');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('csv_file', file);
+                formData.append('validate_only', 'true');
+                
+                const week = document.getElementById('admin-week').value;
+                const year = document.getElementById('admin-year').value;
+                
+                document.getElementById('import-results').innerHTML = '<p>Validating CSV...</p>';
+                
+                const response = await fetch(`/admin/import_picks_csv?week=${week}&year=${year}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('import-results').innerHTML = `
+                        <div class="validation-results success">
+                            <h4>✅ CSV Validation Successful</h4>
+                            <p><strong>Total Rows:</strong> ${result.total_rows}</p>
+                            <p><strong>Valid Picks:</strong> ${result.valid_picks}</p>
+                            <p><strong>Empty Picks:</strong> ${result.empty_picks}</p>
+                            <p><strong>Users Found:</strong> ${result.users_found}</p>
+                            ${result.missing_users?.length > 0 ? 
+                                `<p><strong>Missing Users:</strong> ${result.missing_users.join(', ')}</p>` : ''}
+                            ${result.warnings?.length > 0 ? 
+                                `<div class="warnings"><strong>Warnings:</strong><ul>${result.warnings.map(w => `<li>${w}</li>`).join('')}</ul></div>` : ''}
+                        </div>`;
+                } else {
+                    document.getElementById('import-results').innerHTML = `
+                        <div class="validation-results error">
+                            <h4>❌ CSV Validation Failed</h4>
+                            <p><strong>Error:</strong> ${result.error}</p>
+                            ${result.details ? `<pre>${result.details}</pre>` : ''}
+                        </div>`;
+                }
+                
+            } catch (error) {
+                console.error('Error validating CSV:', error);
+                document.getElementById('import-results').innerHTML = 
+                    '<div class="error">Error validating CSV file</div>';
+            }
+        }
+        
+        async function importCSV() {
+            try {
+                const fileInput = document.getElementById('csv-file');
+                const file = fileInput.files[0];
+                
+                if (!file) {
+                    alert('Please select a CSV file first');
+                    return;
+                }
+                
+                if (!confirm('Are you sure you want to import these picks? This action cannot be undone.')) {
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('csv_file', file);
+                formData.append('overwrite_existing', document.getElementById('overwrite-existing').checked);
+                formData.append('create_missing_users', document.getElementById('create-missing-users').checked);
+                
+                const week = document.getElementById('admin-week').value;
+                const year = document.getElementById('admin-year').value;
+                
+                document.getElementById('import-results').innerHTML = '<p>Importing picks...</p>';
+                
+                const response = await fetch(`/admin/import_picks_csv?week=${week}&year=${year}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('import-results').innerHTML = `
+                        <div class="import-results success">
+                            <h4>✅ Import Successful</h4>
+                            <p><strong>Picks Imported:</strong> ${result.picks_imported}</p>
+                            <p><strong>Picks Updated:</strong> ${result.picks_updated}</p>
+                            <p><strong>Users Created:</strong> ${result.users_created}</p>
+                            ${result.skipped_picks > 0 ? `<p><strong>Picks Skipped:</strong> ${result.skipped_picks}</p>` : ''}
+                            ${result.errors?.length > 0 ? 
+                                `<div class="import-errors"><strong>Errors:</strong><ul>${result.errors.map(e => `<li>${e}</li>`).join('')}</ul></div>` : ''}
+                        </div>`;
+                } else {
+                    document.getElementById('import-results').innerHTML = `
+                        <div class="import-results error">
+                            <h4>❌ Import Failed</h4>
+                            <p><strong>Error:</strong> ${result.error}</p>
+                            ${result.details ? `<pre>${result.details}</pre>` : ''}
+                        </div>`;
+                }
+                
+            } catch (error) {
+                console.error('Error importing CSV:', error);
+                document.getElementById('import-results').innerHTML = 
+                    '<div class="error">Error importing CSV file</div>';
             }
         }
     </script>
