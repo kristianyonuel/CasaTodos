@@ -717,6 +717,103 @@ def force_create_games(week, year):
     
     return redirect(url_for('games', week=week, year=year))
 
+@app.route('/admin/user_picks')
+def admin_user_picks():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    user_id = request.args.get('user_id', type=int)
+    week = request.args.get('week', 1, type=int)
+    year = request.args.get('year', 2025, type=int)
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT up.game_id, up.selected_team, up.predicted_home_score, up.predicted_away_score
+        FROM user_picks up
+        JOIN nfl_games g ON up.game_id = g.id
+        WHERE up.user_id = ? AND g.week = ? AND g.year = ?
+    ''', (user_id, week, year))
+    
+    picks = []
+    for row in cursor.fetchall():
+        picks.append({
+            'game_id': row[0],
+            'selected_team': row[1],
+            'predicted_home_score': row[2],
+            'predicted_away_score': row[3]
+        })
+    
+    conn.close()
+    return jsonify(picks)
+
+@app.route('/admin/set_user_picks', methods=['POST'])
+def admin_set_user_picks():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    data = request.get_json()
+    user_id = data.get('user_id')
+    picks = data.get('picks', [])
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    successful_picks = 0
+    
+    for pick in picks:
+        game_id = pick.get('game_id')
+        selected_team = pick.get('selected_team')
+        home_score = pick.get('home_score')
+        away_score = pick.get('away_score')
+        
+        if game_id and selected_team:
+            cursor.execute('''
+                INSERT OR REPLACE INTO user_picks 
+                (user_id, game_id, selected_team, predicted_home_score, predicted_away_score)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, game_id, selected_team, home_score, away_score))
+            successful_picks += 1
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True, 
+        'message': f'Successfully set {successful_picks} picks for user',
+        'picks_set': successful_picks
+    })
+
+@app.route('/admin/clear_user_picks', methods=['POST'])
+def admin_clear_user_picks():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    data = request.get_json()
+    user_id = data.get('user_id')
+    week = data.get('week')
+    year = data.get('year')
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        DELETE FROM user_picks 
+        WHERE user_id = ? AND game_id IN (
+            SELECT id FROM nfl_games WHERE week = ? AND year = ?
+        )
+    ''', (user_id, week, year))
+    
+    picks_cleared = cursor.rowcount
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'message': f'Cleared {picks_cleared} picks for user',
+        'picks_cleared': picks_cleared
+    })
+
 if __name__ == '__main__':
     print("🚀 Starting La Casa de Todos NFL Fantasy League...")
     app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)

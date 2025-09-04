@@ -179,8 +179,8 @@ The application uses SQLite database with the following tables:
 ## 🎨 Customization
 
 ### Entry Fees
-- Weekly Pool: $5 per participant
-- Season Pool: $10 per participant
+- Weekly Pool: $20 per participant
+- Initial Joining Fee: $20 (one-time payment)
 - Modify in database or application settings
 
 ### Game Rules
@@ -192,9 +192,10 @@ The application uses SQLite database with the following tables:
 
 1. **Create Admin Account**: Use default or create new admin
 2. **Add Family Members**: Each person registers their account
-3. **Set Weekly Schedule**: Ensure everyone knows deadlines
-4. **Monitor Picks**: Admin can view all selections
-5. **Declare Winners**: Based on Monday Night tiebreaker
+3. **Collect Entry Fees**: $20 initial joining fee + $20 per week
+4. **Set Weekly Schedule**: Ensure everyone knows deadlines
+5. **Monitor Picks**: Admin can view all selections
+6. **Declare Winners**: Based on Monday Night tiebreaker
 
 ## 📱 Mobile Support
 
@@ -256,6 +257,8 @@ python app.py
 ## 🎉 Family Fun Features
 
 - **Friendly Competition**: Family-focused design
+- **Weekly Prizes**: $20 per week pool
+- **Initial Buy-in**: $20 to join the league
 - **Easy Interface**: Simple pick selection
 - **Weekly Excitement**: New games every week
 - **Tiebreaker Drama**: Monday Night excitement

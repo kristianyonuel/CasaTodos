@@ -460,10 +460,10 @@ def initialize_league_settings():
             ('general', 'max_participants', '20', 'integer', 'Max Participants', 'Maximum number of league participants'),
             
             # Financial Settings
-            ('financial', 'weekly_fee', '5.00', 'decimal', 'Weekly Fee', 'Weekly pool entry fee'),
-            ('financial', 'season_fee', '10.00', 'decimal', 'Season Fee', 'Full season pool entry fee'),
-            ('financial', 'weekly_prize', '50.00', 'decimal', 'Weekly Prize', 'Weekly winner prize amount'),
-            ('financial', 'season_prize', '200.00', 'decimal', 'Season Prize', 'Season winner prize amount'),
+            ('financial', 'weekly_fee', '20.00', 'decimal', 'Weekly Fee', 'Weekly pool entry fee'),
+            ('financial', 'season_fee', '20.00', 'decimal', 'Initial Fee', 'One-time joining fee'),
+            ('financial', 'weekly_prize', '400.00', 'decimal', 'Weekly Prize', 'Weekly winner prize amount'),
+            ('financial', 'season_prize', '500.00', 'decimal', 'Season Prize', 'Season winner prize amount'),
             
             # Game Rules
             ('rules', 'confidence_scoring', 'true', 'boolean', 'Confidence Scoring', 'Enable confidence point scoring'),

@@ -42,6 +42,7 @@
                 <div class="admin-actions">
                     <button onclick="loadAllPicks()" class="btn btn-primary">View All Picks</button>
                     <button onclick="loadUsers()" class="btn btn-info">Manage Users</button>
+                    <button onclick="loadUserPicks()" class="btn btn-warning">Set User Picks</button>
                     <button onclick="loadSchedule()" class="btn btn-success">Manage Schedule</button>
                     <button onclick="loadGameResults()" class="btn btn-warning">Update Game Results</button>
                     <button onclick="syncSeason()" class="btn btn-secondary">Sync NFL Season</button>
@@ -133,19 +134,23 @@
                 let html = '<h3>User Management</h3>';
                 html += '<div class="user-actions">';
                 html += '<button onclick="showAddUserForm()" class="btn btn-success">Add New User</button>';
+                html += '<button onclick="exportUserData()" class="btn btn-info">Export User Data</button>';
                 html += '</div>';
                 html += '<table class="admin-picks-table">';
-                html += '<thead><tr><th>Username</th><th>Email</th><th>Admin</th><th>Created</th><th>Actions</th></tr></thead><tbody>';
+                html += '<thead><tr><th>Username</th><th>Email</th><th>Admin</th><th>Active</th><th>Created</th><th>Last Login</th><th>Actions</th></tr></thead><tbody>';
                 
                 users.forEach(user => {
                     html += `<tr data-user-id="${user.id}">
                         <td><input type="text" value="${user.username}" id="username-${user.id}"></td>
                         <td><input type="email" value="${user.email || ''}" id="email-${user.id}"></td>
                         <td><input type="checkbox" ${user.is_admin ? 'checked' : ''} id="admin-${user.id}"></td>
+                        <td><input type="checkbox" ${user.is_active !== false ? 'checked' : ''} id="active-${user.id}"></td>
                         <td>${new Date(user.created_at).toLocaleDateString()}</td>
+                        <td>${user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}</td>
                         <td>
                             <button onclick="updateUser(${user.id})" class="btn btn-sm btn-primary">Update</button>
                             <button onclick="resetPassword(${user.id})" class="btn btn-sm btn-warning">Reset Password</button>
+                            <button onclick="viewUserStats(${user.id})" class="btn btn-sm btn-info">Stats</button>
                             <button onclick="deleteUser(${user.id})" class="btn btn-sm btn-danger">Delete</button>
                         </td>
                     </tr>`;
@@ -169,6 +174,7 @@
             const username = document.getElementById(`username-${userId}`).value;
             const email = document.getElementById(`email-${userId}`).value;
             const isAdmin = document.getElementById(`admin-${userId}`).checked;
+            const isActive = document.getElementById(`active-${userId}`).checked;
             
             try {
                 const response = await fetch('/admin/modify_user', {
@@ -178,7 +184,8 @@
                         user_id: userId,
                         username: username,
                         email: email,
-                        is_admin: isAdmin
+                        is_admin: isAdmin,
+                        is_active: isActive
                     })
                 });
                 
@@ -591,6 +598,263 @@
             }
         }
 
+        async function loadUserPicks() {
+            try {
+                document.getElementById('admin-content').innerHTML = '<p>Loading user picks management...</p>';
+                
+                // Get users and games for current week
+                const [usersResponse, gamesResponse] = await Promise.all([
+                    fetch('/admin/users'),
+                    fetch(`/admin/schedule?week=${currentWeek}&year=${currentYear}`)
+                ]);
+                
+                const users = await usersResponse.json();
+                const games = await gamesResponse.json();
+                
+                let html = `<h3>Set User Picks - Week ${currentWeek}, ${currentYear}</h3>`;
+                
+                if (users.length === 0 || games.length === 0) {
+                    html += '<p>No users or games available.</p>';
+                    document.getElementById('admin-content').innerHTML = html;
+                    return;
+                }
+                
+                html += '<div class="user-picks-management">';
+                html += '<div class="user-selector">';
+                html += '<label for="pick-user-select">Select User:</label>';
+                html += '<select id="pick-user-select" onchange="loadUserCurrentPicks()">';
+                html += '<option value="">Choose a user...</option>';
+                
+                users.forEach(user => {
+                    if (!user.is_admin) {
+                        html += `<option value="${user.id}">${user.username}</option>`;
+                    }
+                });
+                
+                html += '</select>';
+                html += '</div>';
+                
+                html += '<div id="user-picks-form" style="display: none;">';
+                html += '<form id="admin-picks-form">';
+                html += '<h4>Set Picks for <span id="selected-username"></span></h4>';
+                
+                games.forEach(game => {
+                    const gameType = game.is_thursday_night ? 'TNF' : 
+                                   game.is_monday_night ? 'MNF' : 
+                                   game.is_sunday_night ? 'SNF' : 'Regular';
+                    
+                    html += `<div class="admin-game-card" data-game-id="${game.id}">
+                        <div class="game-header">
+                            <strong>${game.away_team} @ ${game.home_team}</strong>
+                            <span class="game-type-badge">${gameType}</span>
+                        </div>
+                        <div class="pick-options">
+                            <label>
+                                <input type="radio" name="game_${game.id}" value="${game.away_team}">
+                                ${game.away_team}
+                            </label>
+                            <label>
+                                <input type="radio" name="game_${game.id}" value="${game.home_team}">
+                                ${game.home_team}
+                            </label>
+                        </div>`;
+                    
+                    if (game.is_monday_night) {
+                        html += `<div class="score-prediction">
+                            <label>Score Prediction:</label>
+                            <input type="number" name="away_score_${game.id}" placeholder="Away" min="0" max="99">
+                            -
+                            <input type="number" name="home_score_${game.id}" placeholder="Home" min="0" max="99">
+                        </div>`;
+                    }
+                    
+                    html += '</div>';
+                });
+                
+                html += '<div class="admin-form-actions">';
+                html += '<button type="button" onclick="saveUserPicks()" class="btn btn-primary">Save User Picks</button>';
+                html += '<button type="button" onclick="clearUserPicks()" class="btn btn-danger">Clear All Picks</button>';
+                html += '</div>';
+                html += '</form>';
+                html += '</div>';
+                html += '</div>';
+                
+                document.getElementById('admin-content').innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading user picks management:', error);
+                document.getElementById('admin-content').innerHTML = '<p>Error loading user picks management</p>';
+            }
+        }
+
+        async function loadUserCurrentPicks() {
+            const userSelect = document.getElementById('pick-user-select');
+            const userId = userSelect.value;
+            const username = userSelect.options[userSelect.selectedIndex].text;
+            
+            if (!userId) {
+                document.getElementById('user-picks-form').style.display = 'none';
+                return;
+            }
+            
+            document.getElementById('selected-username').textContent = username;
+            document.getElementById('user-picks-form').style.display = 'block';
+            
+            try {
+                // Load existing picks for this user
+                const response = await fetch(`/admin/user_picks?user_id=${userId}&week=${currentWeek}&year=${currentYear}`);
+                const picks = await response.json();
+                
+                // Clear all selections first
+                document.querySelectorAll('#admin-picks-form input[type="radio"]').forEach(radio => {
+                    radio.checked = false;
+                });
+                document.querySelectorAll('#admin-picks-form input[type="number"]').forEach(input => {
+                    input.value = '';
+                });
+                
+                // Set existing picks
+                picks.forEach(pick => {
+                    const gameRadio = document.querySelector(`input[name="game_${pick.game_id}"][value="${pick.selected_team}"]`);
+                    if (gameRadio) {
+                        gameRadio.checked = true;
+                    }
+                    
+                    if (pick.predicted_away_score !== null) {
+                        const awayInput = document.querySelector(`input[name="away_score_${pick.game_id}"]`);
+                        if (awayInput) awayInput.value = pick.predicted_away_score;
+                    }
+                    
+                    if (pick.predicted_home_score !== null) {
+                        const homeInput = document.querySelector(`input[name="home_score_${pick.game_id}"]`);
+                        if (homeInput) homeInput.value = pick.predicted_home_score;
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading user picks:', error);
+            }
+        }
+
+        async function saveUserPicks() {
+            const userId = document.getElementById('pick-user-select').value;
+            if (!userId) {
+                alert('Please select a user first');
+                return;
+            }
+            
+            const picks = [];
+            const gameCards = document.querySelectorAll('.admin-game-card');
+            
+            gameCards.forEach(card => {
+                const gameId = card.dataset.gameId;
+                const selectedTeam = card.querySelector(`input[name="game_${gameId}"]:checked`);
+                
+                if (selectedTeam) {
+                    const pick = {
+                        game_id: parseInt(gameId),
+                        selected_team: selectedTeam.value
+                    };
+                    
+                    // Add score predictions if present
+                    const awayScoreInput = card.querySelector(`input[name="away_score_${gameId}"]`);
+                    const homeScoreInput = card.querySelector(`input[name="home_score_${gameId}"]`);
+                    
+                    if (awayScoreInput && homeScoreInput) {
+                        pick.away_score = awayScoreInput.value ? parseInt(awayScoreInput.value) : null;
+                        pick.home_score = homeScoreInput.value ? parseInt(homeScoreInput.value) : null;
+                    }
+                    
+                    picks.push(pick);
+                }
+            });
+            
+            try {
+                const response = await fetch('/admin/set_user_picks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: parseInt(userId),
+                        picks: picks
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert(`Successfully set ${picks.length} picks for user`);
+                } else {
+                    alert('Error setting picks: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error saving user picks:', error);
+                alert('Error saving picks: ' + error.message);
+            }
+        }
+
+        async function clearUserPicks() {
+            const userId = document.getElementById('pick-user-select').value;
+            const username = document.getElementById('selected-username').textContent;
+            
+            if (!userId) {
+                alert('Please select a user first');
+                return;
+            }
+            
+            if (!confirm(`Clear all picks for ${username} in Week ${currentWeek}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/admin/clear_user_picks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: parseInt(userId),
+                        week: currentWeek,
+                        year: currentYear
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('User picks cleared successfully');
+                    loadUserCurrentPicks(); // Refresh the form
+                } else {
+                    alert('Error clearing picks: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error clearing user picks:', error);
+                alert('Error clearing picks: ' + error.message);
+            }
+        }
+
+        async function exportUserData() {
+            try {
+                const response = await fetch('/admin/export_users', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    // Create a download link for the CSV file
+                    const a = document.createElement('a');
+                    a.href = result.file_url;
+                    a.download = 'user_data_export.csv';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    
+                    alert('User data exported successfully!');
+                } else {
+                    alert('Error exporting data: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error exporting user data:', error);
+                alert('Error exporting data: ' + error.message);
+            }
+        }
+
         // Enhanced user management with more options
         async function loadUsers() {
             try {
@@ -705,8 +969,6 @@
                 console.error('Error:', error);
             }
         }
-
-        // ...existing code...
     </script>
 </body>
 </html>
