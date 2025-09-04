@@ -200,14 +200,14 @@ def games():
         user_picks = get_user_picks_for_week(session['user_id'], week, year)
         
         return render_template('games.html',
-                             games=games_data,
-                             user_picks=user_picks,
-                             current_week=week,
-                             current_year=year,
-                             available_weeks=list(range(1, 19)),
-                             current_nfl_week=1,
-                             total_games=len(games_data))
-                             
+                               games=games_data,
+                               user_picks=user_picks,
+                               current_week=week,
+                               current_year=year,
+                               available_weeks=list(range(1, 19)),
+                               current_nfl_week=1,
+                               total_games=len(games_data))
+                               
     except Exception as e:
         logger.error(f"Games page error: {e}")
         flash(f'Error loading games for Week {week}', 'error')
@@ -336,33 +336,111 @@ def admin():
     
     return render_template('admin.html')
 
+@app.route('/admin/all_picks')
+def admin_all_picks():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    week = request.args.get('week', 1, type=int)
+    year = request.args.get('year', datetime.now().year, type=int)
+    
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT u.username, g.home_team, g.away_team, g.is_monday_night,
+                       up.selected_team, up.predicted_home_score, up.predicted_away_score, up.id, u.id
+                FROM user_picks up
+                JOIN users u ON up.user_id = u.id
+                JOIN nfl_games g ON up.game_id = g.id
+                WHERE g.week = ? AND g.year = ?
+                ORDER BY u.username, g.game_date
+            ''', (week, year))
+            
+            picks_data = []
+            for row in cursor.fetchall():
+                picks_data.append({
+                    'username': row[0],
+                    'home_team': row[1],
+                    'away_team': row[2],
+                    'is_monday_night': bool(row[3]),
+                    'selected_team': row[4],
+                    'predicted_home_score': row[5],
+                    'predicted_away_score': row[6],
+                    'pick_id': row[7],
+                    'user_id': row[8]
+                })
+        
+        return jsonify(picks_data)
+        
+    except Exception as e:
+        logger.error(f"Admin picks error: {e}")
+        return jsonify({'error': 'Failed to load picks'}), 500
+
+@app.route('/admin/users')
+def admin_users():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, username, email, is_admin, created_at FROM users ORDER BY username')
+            
+            users = []
+            for row in cursor.fetchall():
+                users.append({
+                    'id': row[0],
+                    'username': row[1],
+                    'email': row[2] or '',
+                    'is_admin': bool(row[3]),
+                    'created_at': row[4]
+                })
+        
+        return jsonify(users)
+        
+    except Exception as e:
+        logger.error(f"Admin users error: {e}")
+        return jsonify({'error': 'Failed to load users'}), 500
+
+@app.route('/admin/modify_user', methods=['POST'])
+def admin_modify_user():
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        username = data.get('username')
+        email = data.get('email')
+        is_admin = data.get('is_admin', False)
+        new_password = data.get('new_password')
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            if new_password:
+                password_hash = generate_password_hash(new_password)
+                cursor.execute('''
+                    UPDATE users SET username = ?, email = ?, is_admin = ?, password_hash = ? WHERE id = ?
+                ''', (username, email, is_admin, password_hash, user_id))
+            else:
+                cursor.execute('''
+                    UPDATE users SET username = ?, email = ?, is_admin = ? WHERE id = ?
+                ''', (username, email, is_admin, user_id))
+            
+            conn.commit()
+        
+        return jsonify({'success': True, 'message': 'User updated successfully'})
+        
+    except Exception as e:
+        logger.error(f"Admin modify user error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.errorhandler(Exception)
 def handle_exception(e):
     logger.error(f"Unhandled exception: {e}", exc_info=True)
     return render_template('error.html', error="An unexpected error occurred"), 500
-
-if __name__ == '__main__':
-    try:
-        logger.info("🚀 Starting La Casa de Todos NFL Fantasy League...")
-        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
-    except Exception as e:
-        logger.error(f"❌ Startup failed: {e}")
-    cursor = conn.cursor()
-    
-    if new_password:
-        password_hash = generate_password_hash(new_password)
-        cursor.execute('''
-            UPDATE users SET username = ?, email = ?, is_admin = ?, password_hash = ? WHERE id = ?
-        ''', (username, email, is_admin, password_hash, user_id))
-    else:
-        cursor.execute('''
-            UPDATE users SET username = ?, email = ?, is_admin = ? WHERE id = ?
-        ''', (username, email, is_admin, user_id))
-    
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True, 'message': 'User updated successfully'})
 
 @app.errorhandler(404)
 def not_found_error(error):
@@ -412,6 +490,13 @@ if __name__ == '__main__':
         print("🏈 Application ready!")
         print("Access at: http://127.0.0.1:5000")
         print("=" * 60)
+        
+        app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+        
+    except Exception as e:
+        print(f"❌ Application startup failed: {e}")
+        import traceback
+        traceback.print_exc()
         
         app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
         
