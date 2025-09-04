@@ -22,33 +22,64 @@ def initialize_app():
     else:
         print("Database exists, ready to run")
 
+def get_dashboard_data(user_id, week, year):
+    """Get dashboard data with accurate game counts"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Get actual games count for the week
+    cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (week, year))
+    total_games = cursor.fetchone()[0]
+    
+    # If no games in DB, get expected count from schedule
+    if total_games == 0 and year == 2025:
+        from nfl_2025_schedule import get_week_game_count
+        total_games = get_week_game_count(week)
+    
+    # Get user's picks for this week
+    cursor.execute('''
+        SELECT COUNT(*) FROM user_picks up
+        JOIN nfl_games g ON up.game_id = g.id
+        WHERE up.user_id = ? AND g.week = ? AND g.year = ?
+    ''', (user_id, week, year))
+    user_picks_count = cursor.fetchone()[0]
+    
+    # Get other stats
+    cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = 0')
+    total_players = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT COUNT(*) FROM weekly_results WHERE user_id = ? AND is_winner = 1', (user_id,))
+    user_wins = cursor.fetchone()[0]
+    
+    conn.close()
+    
+    return {
+        'total_games': total_games,
+        'user_picks_count': user_picks_count,
+        'total_players': total_players,
+        'user_wins': user_wins
+    }
+
 @app.route('/')
 def index():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    # Initialize app on first access
     initialize_app()
     
-    conn = get_db()
-    cursor = conn.cursor()
+    current_week = 1
+    current_year = datetime.now().year
     
-    cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = 1 AND year = ?', (datetime.now().year,))
-    total_games = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM users WHERE is_admin = 0')
-    total_players = cursor.fetchone()[0]
-    
-    conn.close()
+    dashboard_data = get_dashboard_data(session['user_id'], current_week, current_year)
     
     data = {
-        'current_week': 1,
-        'current_year': datetime.now().year,
+        'current_week': current_week,
+        'current_year': current_year,
         'username': session.get('username', 'User'),
-        'user_picks_count': 0,
-        'total_games': total_games,
-        'user_wins': 0,
-        'total_players': total_players,
+        'user_picks_count': dashboard_data['user_picks_count'],
+        'total_games': dashboard_data['total_games'],
+        'user_wins': dashboard_data['user_wins'],
+        'total_players': dashboard_data['total_players'],
         'available_weeks': list(range(1, 19))
     }
     

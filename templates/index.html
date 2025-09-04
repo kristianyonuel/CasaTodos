@@ -54,6 +54,13 @@
                     <div class="stat-card">
                         <h3>Your Picks</h3>
                         <div class="stat-value">{{ user_picks_count or 0 }}/{{ total_games or 0 }}</div>
+                        <div class="stat-subtitle">
+                            {% if total_games and user_picks_count %}
+                                {{ "%.1f"|format((user_picks_count / total_games * 100)) }}% Complete
+                            {% else %}
+                                Ready to pick
+                            {% endif %}
+                        </div>
                     </div>
                     <div class="stat-card">
                         <h3>Your Wins</h3>
@@ -104,19 +111,19 @@
                 </div>
 
                 <div class="recent-activity">
-                    <h3>League Information</h3>
+                    <h3>Week {{ current_week }} Information</h3>
                     <div class="info-grid">
                         <div class="info-item">
-                            <strong>Season:</strong> {{ current_year }} NFL Season
+                            <strong>Total Games:</strong> {{ total_games }} games this week
+                        </div>
+                        <div class="info-item">
+                            <strong>Your Progress:</strong> {{ user_picks_count }}/{{ total_games }} picks made
                         </div>
                         <div class="info-item">
                             <strong>Entry Fees:</strong> $5 Weekly / $10 Season
                         </div>
                         <div class="info-item">
                             <strong>Tiebreaker:</strong> Monday Night Score Prediction
-                        </div>
-                        <div class="info-item">
-                            <strong>Format:</strong> Pick all games each week
                         </div>
                     </div>
                 </div>
