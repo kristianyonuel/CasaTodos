@@ -64,10 +64,52 @@
                     {% endif %}
                 </div>
             {% else %}
+                <!-- Display deadline information -->
+                {% if deadlines and deadline_status %}
+                <div class="deadline-info">
+                    {% if deadline_status.thursday and deadline_status.thursday.hours_until < 24 %}
+                        <div class="deadline-warning">
+                            ⏰ Thursday Night Game deadline: {{ deadlines.thursday.strftime('%A %-I:%M %p AST') }}
+                            {% if deadline_status.thursday.passed %}
+                                (Deadline passed)
+                            {% else %}
+                                ({{ deadline_status.thursday.hours_until|round(1) }} hours remaining)
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                    
+                    {% if deadline_status.sunday and deadline_status.sunday.hours_until < 24 %}
+                        <div class="deadline-warning">
+                            ⏰ Sunday Games deadline: {{ deadlines.sunday.strftime('%A %-I:%M %p AST') }}
+                            {% if deadline_status.sunday.passed %}
+                                (Deadline passed)
+                            {% else %}
+                                ({{ deadline_status.sunday.hours_until|round(1) }} hours remaining)
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
                 <div class="games-container">
                     <form id="picks-form">
                         {% for game in games %}
-                        <div class="game-card" data-game-id="{{ game.id }}">
+                        {% set game_deadline_passed = False %}
+                        {% if deadline_status %}
+                            {% if game.is_thursday_night and deadline_status.thursday and deadline_status.thursday.passed %}
+                                {% set game_deadline_passed = True %}
+                            {% elif not game.is_thursday_night and not game.is_monday_night and deadline_status.sunday and deadline_status.sunday.passed %}
+                                {% set game_deadline_passed = True %}
+                            {% endif %}
+                        {% endif %}
+                        
+                        <div class="game-card {% if game_deadline_passed %}deadline-passed{% endif %}" data-game-id="{{ game.id }}">
+                            {% if game_deadline_passed %}
+                                <div class="deadline-warning">
+                                    🔒 Deadline has passed for this game
+                                </div>
+                            {% endif %}
+                            
                             <div class="game-info">
                                 <div class="game-date">
                                     {% if game.game_date %}
@@ -96,7 +138,8 @@
                                                name="game_{{ game.id }}" 
                                                value="{{ game.away_team }}"
                                                id="away_{{ game.id }}"
-                                               {% if user_picks.get(game.id, {}).get('selected_team') == game.away_team %}checked{% endif %}>
+                                               {% if user_picks.get(game.id, {}).get('selected_team') == game.away_team %}checked{% endif %}
+                                               {% if game_deadline_passed %}disabled{% endif %}>
                                         <label for="away_{{ game.id }}">{{ game.away_team }}</label>
                                     </div>
                                     
@@ -107,7 +150,8 @@
                                                name="game_{{ game.id }}" 
                                                value="{{ game.home_team }}"
                                                id="home_{{ game.id }}"
-                                               {% if user_picks.get(game.id, {}).get('selected_team') == game.home_team %}checked{% endif %}>
+                                               {% if user_picks.get(game.id, {}).get('selected_team') == game.home_team %}checked{% endif %}
+                                               {% if game_deadline_passed %}disabled{% endif %}>
                                         <label for="home_{{ game.id }}">{{ game.home_team }}</label>
                                     </div>
                                 </div>
@@ -120,13 +164,15 @@
                                                name="away_score_{{ game.id }}" 
                                                placeholder="Away"
                                                min="0" max="99"
-                                               value="{{ user_picks.get(game.id, {}).get('predicted_away_score') or '' }}">
+                                               value="{{ user_picks.get(game.id, {}).get('predicted_away_score') or '' }}"
+                                               {% if game_deadline_passed %}disabled{% endif %}>
                                         <span>-</span>
                                         <input type="number" 
                                                name="home_score_{{ game.id }}" 
                                                placeholder="Home"
                                                min="0" max="99"
-                                               value="{{ user_picks.get(game.id, {}).get('predicted_home_score') or '' }}">
+                                               value="{{ user_picks.get(game.id, {}).get('predicted_home_score') or '' }}"
+                                               {% if game_deadline_passed %}disabled{% endif %}>
                                     </div>
                                 </div>
                                 {% endif %}
@@ -221,6 +267,10 @@
                 if (data.success) {
                     alert(data.message);
                     location.reload();
+                } else if (data.partial) {
+                    // Some picks were rejected due to deadlines
+                    alert(data.message + '\n\nPlease refresh the page to see updated deadline status.');
+                    location.reload();
                 } else {
                     alert('Error: ' + (data.error || 'Unknown error'));
                 }
@@ -230,90 +280,6 @@
                 alert('Error submitting picks: ' + error.message);
             });
         });
-    </script>
-</body>
-</html>
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    alert(result.message);
-                    location.reload();
-                } else {
-                    alert('Error: ' + result.error);
-                }
-            } catch (error) {
-                alert('Error submitting picks. Please try again.');
-            }
-        });
-    </script>
-</body>
-</html>
-                        }
-                        
-                        const result = await response.json();
-                        
-                        if (result.success) {
-                            alert(result.message || 'Picks submitted successfully!');
-                            location.reload();
-                        } else {
-                            alert('Error submitting picks: ' + (result.error || 'Unknown error'));
-                        }
-                        
-                    } catch (error) {
-                        console.error('Error submitting picks:', error);
-                        alert('Error submitting picks. Please check your connection and try
-</html>
-                    location.reload();
-                } else {
-                    alert('Error submitting picks: ' + result.error);
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Error submitting picks. Please try again.');
-            } finally {
-                document.querySelector('.btn-primary').disabled = false;
-                document.querySelector('.btn-primary').textContent = 'Submit Picks';
-            }
-        });
-        
-        function validatePicks() {
-            const mondayNightGames = document.querySelectorAll('.monday-night:not(.final)');
-            let valid = true;
-            let errorMessage = '';
-            
-            mondayNightGames.forEach(gameCard => {
-                const gameId = gameCard.querySelector('input[name="game_id"]').value;
-                const selectedTeam = gameCard.querySelector(`input[name="game_${gameId}"]:checked`);
-                const homeScore = gameCard.querySelector(`input[name="home_score_${gameId}"]`);
-                const awayScore = gameCard.querySelector(`input[name="away_score_${gameId}"]`);
-                
-                if (selectedTeam && (!homeScore.value || !awayScore.value)) {
-                    valid = false;
-                    errorMessage = 'Monday Night Football games require score predictions for tiebreaker.';
-                    homeScore.style.borderColor = '#dc3545';
-                    awayScore.style.borderColor = '#dc3545';
-                }
-            });
-            
-            if (!valid) {
-                alert(errorMessage);
-            }
-            
-            return valid;
-        }
-        
-        function clearPicks() {
-            if (confirm('Are you sure you want to clear all picks?')) {
-                document.querySelectorAll('input[type="radio"]').forEach(radio => {
-                    radio.checked = false;
-                });
-                document.querySelectorAll('input[type="number"]').forEach(input => {
-                    input.value = '';
-                    input.style.borderColor = '';
-                });
-            }
-        }
     </script>
 </body>
 </html>

@@ -11,6 +11,7 @@ from setup_database import setup_complete_database
 from database_sync import sync_season_from_api, sync_week_from_api, update_live_scores
 from utils.timezone_utils import convert_to_ast, format_ast_time
 from contextlib import contextmanager
+from deadline_manager import DeadlineManager
 
 # Configure logging for better debugging
 logging.basicConfig(
@@ -111,6 +112,11 @@ def index():
     
     dashboard_data = get_dashboard_data(session['user_id'], current_week, current_year)
     
+    # Get deadline information using deadline manager
+    deadline_manager = DeadlineManager()
+    deadlines = deadline_manager.get_week_deadlines(current_week, current_year)
+    deadline_status = deadline_manager.get_deadline_status(current_week, current_year)
+    
     data = {
         'current_week': current_week,
         'current_year': current_year,
@@ -119,7 +125,9 @@ def index():
         'total_games': total_games,
         'user_wins': dashboard_data['user_wins'],
         'total_players': dashboard_data['total_players'],
-        'available_weeks': list(range(1, 19))
+        'available_weeks': list(range(1, 19)),
+        'deadlines': deadlines,
+        'deadline_status': deadline_status
     }
     
     return render_template('index.html', **data)
@@ -282,7 +290,9 @@ def games():
                           current_year=year,
                           available_weeks=list(range(1, 19)),
                           current_nfl_week=1,
-                          total_games=len(games_data))
+                          total_games=len(games_data),
+                          deadlines=DeadlineManager().get_week_deadlines(week, year),
+                          deadline_status=DeadlineManager().get_deadline_status(week, year))
 
 @app.route('/submit_picks', methods=['POST'])
 def submit_picks():
@@ -292,9 +302,13 @@ def submit_picks():
     data = request.get_json()
     picks = data.get('picks', [])
     
+    # Check deadlines before allowing submissions
+    deadline_manager = DeadlineManager()
+    
     with get_db() as conn:
         cursor = conn.cursor()
         successful_picks = 0
+        failed_picks = 0
         
         for pick in picks:
             game_id = pick.get('game_id')
@@ -303,14 +317,33 @@ def submit_picks():
             away_score = pick.get('away_score')
             
             if game_id and selected_team:
-                cursor.execute('''
-                    INSERT OR REPLACE INTO user_picks 
-                    (user_id, game_id, selected_team, predicted_home_score, predicted_away_score)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (session['user_id'], game_id, selected_team, home_score, away_score))
-                successful_picks += 1
+                # Get game info to check deadline
+                cursor.execute('SELECT week, year, game_date FROM nfl_games WHERE id = ?', (game_id,))
+                game_info = cursor.fetchone()
+                
+                if game_info:
+                    week, year, game_date = game_info
+                    
+                    # Check if picks are still allowed for this game
+                    if deadline_manager.can_make_picks(week, year, game_date):
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO user_picks 
+                            (user_id, game_id, selected_team, predicted_home_score, predicted_away_score)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (session['user_id'], game_id, selected_team, home_score, away_score))
+                        successful_picks += 1
+                    else:
+                        failed_picks += 1
+                        logger.warning(f"Pick submission after deadline for game {game_id} by user {session['user_id']}")
         
         conn.commit()
+    
+    if failed_picks > 0:
+        return jsonify({
+            'success': False, 
+            'message': f'Some picks were rejected due to deadline. {successful_picks} picks saved, {failed_picks} rejected.',
+            'partial': True
+        })
     
     return jsonify({'success': True, 'message': f'Successfully submitted {successful_picks} picks!'})
 

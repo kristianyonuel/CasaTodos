@@ -95,18 +95,44 @@
                 <div class="game-status">
                     <h3>This Week's Status (AST)</h3>
                     <div class="status-cards">
-                        <div class="status-card">
+                        {% if deadlines and deadlines.thursday %}
+                        <div class="status-card {% if deadline_status.thursday.passed %}deadline-passed{% endif %}">
                             <h4>Thursday Night</h4>
-                            <p>Picks due Thursday 8:00 PM AST</p>
+                            <p>Picks due {{ deadlines.thursday.strftime('%A %-I:%M %p AST') }}</p>
+                            {% if deadline_status.thursday.passed %}
+                                <span class="status-indicator">Deadline Passed</span>
+                            {% elif deadline_status.thursday.hours_until < 2 %}
+                                <span class="status-indicator urgent">{{ deadline_status.thursday.hours_until|round(1) }} hours left</span>
+                            {% endif %}
                         </div>
-                        <div class="status-card">
+                        {% endif %}
+                        
+                        {% if deadlines and deadlines.sunday %}
+                        <div class="status-card {% if deadline_status.sunday.passed %}deadline-passed{% endif %}">
                             <h4>Sunday Games</h4>
-                            <p>Picks due Sunday 1:00 PM AST</p>
+                            <p>Picks due {{ deadlines.sunday.strftime('%A %-I:%M %p AST') }}</p>
+                            {% if deadline_status.sunday.passed %}
+                                <span class="status-indicator">Deadline Passed</span>
+                            {% elif deadline_status.sunday.hours_until < 2 %}
+                                <span class="status-indicator urgent">{{ deadline_status.sunday.hours_until|round(1) }} hours left</span>
+                            {% endif %}
                         </div>
+                        {% endif %}
+                        
+                        {% if deadlines and deadlines.monday %}
                         <div class="status-card">
                             <h4>Monday Night</h4>
                             <p>Score prediction required</p>
+                            <p>Picks due {{ deadlines.monday.strftime('%A %-I:%M %p AST') }}</p>
                         </div>
+                        {% endif %}
+                        
+                        {% if not deadlines or (not deadlines.thursday and not deadlines.sunday and not deadlines.monday) %}
+                        <div class="status-card">
+                            <h4>No Games</h4>
+                            <p>No games scheduled this week</p>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -130,21 +156,5 @@
             </div>
         </main>
     </div>
-</body>
-</html>
-        // Load game status information
-        document.addEventListener('DOMContentLoaded', function() {
-            loadGameStatus();
-        });
-
-        function loadGameStatus() {
-            // Simulate loading game status
-            setTimeout(() => {
-                document.getElementById('tnf-status').textContent = 'Picks due Thursday 8:00 PM';
-                document.getElementById('sunday-status').textContent = 'Picks due Sunday 1:00 PM';
-                document.getElementById('mnf-status').textContent = 'Score prediction required';
-            }, 500);
-        }
-    </script>
 </body>
 </html>

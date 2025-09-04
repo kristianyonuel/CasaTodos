@@ -1418,3 +1418,48 @@ body {
 .admin-form-actions .btn {
     margin: 0 10px;
 }
+
+/* Deadline status indicators */
+.status-card.deadline-passed {
+    background-color: #fdf2f8;
+    border-left: 4px solid #ef4444;
+}
+
+.status-indicator {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-top: 4px;
+}
+
+.status-indicator.urgent {
+    background-color: #fef3c7;
+    color: #d97706;
+}
+
+.status-card.deadline-passed .status-indicator {
+    background-color: #fee2e2;
+    color: #dc2626;
+}
+
+/* Game deadline warnings */
+.game-card.deadline-passed {
+    opacity: 0.6;
+    background-color: #f9fafb;
+}
+
+.game-card.deadline-passed .team-option {
+    pointer-events: none;
+}
+
+.deadline-warning {
+    background-color: #fef3c7;
+    color: #d97706;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    margin-bottom: 12px;
+    text-align: center;
+}
