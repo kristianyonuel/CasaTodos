@@ -63,12 +63,14 @@ class DeadlineManager:
             
             for game in games:
                 try:
-                    # Parse game time - ensure we handle it as UTC first
+                    # Parse game time - FIXED: The database stores times in AST format already
                     if isinstance(game[0], str):
                         game_time = datetime.strptime(game[0], '%Y-%m-%d %H:%M:%S')
-                        # Assume stored times are in UTC, then convert to AST
-                        game_time_utc = game_time.replace(tzinfo=pytz.UTC)
-                        game_time_ast = game_time_utc.astimezone(self.ast_tz)
+                        
+                        # The stored times are already in AST, so treat them as such
+                        # This fixes the 3.5 hour offset issue where UTC conversion was double-converting
+                        game_time_ast = game_time.replace(tzinfo=self.ast_tz)
+                        
                     else:
                         game_time_ast = convert_to_ast(game[0])
                     
@@ -92,6 +94,7 @@ class DeadlineManager:
             if thursday_games:
                 game, game_time_ast = thursday_games[0]  # Usually only one Thursday game
                 deadline = game_time_ast - timedelta(minutes=self.deadline_offsets['thursday_night'])
+                
                 deadlines['thursday_night'] = {
                     'game_time': game_time_ast,
                     'deadline': deadline,

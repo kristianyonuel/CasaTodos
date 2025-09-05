@@ -33,6 +33,7 @@ La Casa de Todos is a comprehensive NFL fantasy league platform featuring modern
 - **🧭 Navigation Fixes**: All template navigation updated and verified (no broken 'dashboard' references)
 - **📊 Leaderboard System**: Weekly and season leaderboards fully implemented and tested
 - **👥 Post-Deadline Pick Visibility**: Users can see everyone's picks after deadlines pass for transparency
+- **🕐 Timezone Fix**: Corrected AST deadline calculations to show proper game times and deadlines
 
 ## 🏈 Game Rules & Scoring
 
@@ -284,6 +285,15 @@ python setup_database.py --reset
 
 # Verify database integrity
 python verify_app_running.py
+```
+
+**Timezone/Deadline Issues**
+```bash
+# Test deadline calculations
+python test_deadline_fix.py
+
+# Debug timezone conversions
+python debug_timezone_issue.py
 ```
 
 **Network Access Problems**
