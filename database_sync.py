@@ -239,6 +239,9 @@ def update_live_scores(week: int, year: int = 2025) -> int:
         # Trigger scoring update if any games were newly finalized
         if games_newly_finalized > 0:
             try:
+                # Update is_correct field for picks on newly finalized games
+                update_pick_correctness(week, year)
+                
                 from scoring_updater import ScoringUpdater
                 updater = ScoringUpdater()
                 updater.trigger_scoring_update_after_game_finalization(week, year)
@@ -250,4 +253,93 @@ def update_live_scores(week: int, year: int = 2025) -> int:
         
     except Exception as e:
         logger.error(f"Live scores update error: {e}")
+        return 0
+
+def update_pick_correctness(week: int, year: int = 2025) -> int:
+    """
+    Update the is_correct field for all picks when games are finalized
+    This is crucial for the leaderboard to show correct scoring
+    """
+    try:
+        conn = sqlite3.connect('nfl_fantasy.db')
+        cursor = conn.cursor()
+        
+        # Get all final games for this week
+        cursor.execute('''
+            SELECT id, home_team, away_team, home_score, away_score
+            FROM nfl_games 
+            WHERE week = ? AND year = ? AND is_final = 1
+        ''', (week, year))
+        
+        final_games = cursor.fetchall()
+        updated_picks = 0
+        
+        for game in final_games:
+            game_id, home_team, away_team, home_score, away_score = game
+            
+            # Determine the winner
+            if home_score is None or away_score is None:
+                continue
+                
+            if home_score > away_score:
+                winning_team = home_team
+            elif away_score > home_score:
+                winning_team = away_team
+            else:
+                # Tie game - handle as needed (NFL doesn't have ties in regular games usually)
+                winning_team = None
+            
+            if winning_team:
+                # Update is_correct for picks that match the winning team
+                cursor.execute('''
+                    UPDATE user_picks 
+                    SET is_correct = CASE 
+                        WHEN selected_team = ? THEN 1 
+                        ELSE 0 
+                    END
+                    WHERE game_id = ?
+                ''', (winning_team, game_id))
+                
+                updated_picks += cursor.rowcount
+        
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Updated is_correct for {updated_picks} picks in Week {week}, {year}")
+        return updated_picks
+        
+    except Exception as e:
+        logger.error(f"Error updating pick correctness for Week {week}, {year}: {e}")
+        return 0
+
+def recalculate_all_pick_correctness() -> int:
+    """
+    Recalculate is_correct for all picks on all final games
+    Use this to fix any missing correctness data
+    """
+    try:
+        conn = sqlite3.connect('nfl_fantasy.db')
+        cursor = conn.cursor()
+        
+        # Get all distinct weeks with final games
+        cursor.execute('''
+            SELECT DISTINCT week, year 
+            FROM nfl_games 
+            WHERE is_final = 1
+            ORDER BY year, week
+        ''')
+        
+        weeks_with_final_games = cursor.fetchall()
+        conn.close()
+        
+        total_updated = 0
+        for week, year in weeks_with_final_games:
+            updated = update_pick_correctness(week, year)
+            total_updated += updated
+        
+        logger.info(f"Recalculated is_correct for {total_updated} total picks across all weeks")
+        return total_updated
+        
+    except Exception as e:
+        logger.error(f"Error recalculating all pick correctness: {e}")
         return 0

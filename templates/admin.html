@@ -50,6 +50,7 @@
                     <button onclick="showImportPicks()" class="btn btn-info">📥 Import Picks CSV</button>
                     <button onclick="loadDeadlineOverrides()" class="btn btn-danger">Deadline Overrides</button>
                     <button onclick="checkAPIStatus()" class="btn btn-info">📊 API Status</button>
+                    <button onclick="fixPickCorrectness()" class="btn btn-danger">🔧 Fix Pick Correctness</button>
                     <button onclick="updateWeekScoring()" class="btn btn-primary">📊 Update Week Scoring</button>
                     <button onclick="recalculateAllScoring()" class="btn btn-warning">🔄 Recalculate All Scoring</button>
                     <button onclick="emergencyDeadlineExtension()" class="btn btn-danger" style="background-color: #dc2626;">🚨 Emergency Extension</button>
@@ -1580,6 +1581,31 @@
             } catch (error) {
                 console.error('Error recalculating all scoring:', error);
                 alert(`Error recalculating scoring: ${error.message}`);
+            }
+        }
+
+        async function fixPickCorrectness() {
+            try {
+                const confirmed = confirm('🔧 Fix Pick Correctness\n\nThis will recalculate which picks are correct based on final game scores.\nUse this if the leaderboard shows 0 points when users should have won games.\n\nContinue?');
+                if (!confirmed) return;
+                
+                const response = await fetch('/admin/fix_pick_correctness', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`✅ ${result.message}\nPicks Updated: ${result.picks_updated}\n\nNow run "Recalculate All Scoring" to update the leaderboard!`);
+                } else {
+                    alert(`❌ Error: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('Error fixing pick correctness:', error);
+                alert(`Error fixing pick correctness: ${error.message}`);
             }
         }
 
