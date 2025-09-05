@@ -527,17 +527,31 @@ def leaderboard():
     
     conn = get_db_legacy()
     cursor = conn.cursor()
+    
+    # Calculate leaderboard directly from picks and games (like weekly leaderboard)
+    # This ensures it shows current data even if weekly_results isn't populated
     cursor.execute('''
-        SELECT u.username, 
-               COUNT(CASE WHEN wr.is_winner = 1 THEN 1 END) as weekly_wins,
-               SUM(COALESCE(wr.correct_picks, 0)) as total_games_won,
-               COUNT(DISTINCT wr.week) as weeks_played,
-               ROUND(AVG(COALESCE(wr.correct_picks, 0)), 1) as avg_games_won_per_week
+        SELECT u.username,
+               COUNT(DISTINCT CASE WHEN wr.is_winner = 1 THEN wr.week || '-' || wr.year END) as weekly_wins,
+               SUM(CASE WHEN p.is_correct = 1 THEN 1 ELSE 0 END) as total_games_won,
+               COUNT(DISTINCT CASE WHEN g.is_final = 1 THEN g.week || '-' || g.year END) as weeks_played,
+               COUNT(CASE WHEN g.is_final = 1 THEN 1 END) as total_games_played,
+               ROUND(
+                   CASE 
+                       WHEN COUNT(DISTINCT CASE WHEN g.is_final = 1 THEN g.week || '-' || g.year END) > 0
+                       THEN CAST(SUM(CASE WHEN p.is_correct = 1 THEN 1 ELSE 0 END) AS FLOAT) / 
+                            COUNT(DISTINCT CASE WHEN g.is_final = 1 THEN g.week || '-' || g.year END)
+                       ELSE 0 
+                   END, 1
+               ) as avg_games_won_per_week
         FROM users u
+        LEFT JOIN user_picks p ON u.id = p.user_id
+        LEFT JOIN nfl_games g ON p.game_id = g.id
         LEFT JOIN weekly_results wr ON u.id = wr.user_id
         WHERE u.is_admin = 0
         GROUP BY u.id, u.username
-        ORDER BY weekly_wins DESC, total_games_won DESC, avg_games_won_per_week DESC
+        HAVING COUNT(CASE WHEN g.is_final = 1 THEN 1 END) > 0 OR COUNT(CASE WHEN wr.is_winner = 1 THEN 1 END) > 0
+        ORDER BY weekly_wins DESC, total_games_won DESC, avg_games_won_per_week DESC, u.username
     ''')
     
     leaderboard_data = []
@@ -547,7 +561,12 @@ def leaderboard():
             'weekly_wins': row[1] or 0,
             'total_games_won': row[2] or 0,
             'weeks_played': row[3] or 0,
-            'avg_games_won_per_week': row[4] or 0.0
+            'total_games_played': row[4] or 0,
+            'avg_games_won_per_week': row[5] or 0.0,
+            # Map to template expected names
+            'wins': row[1] or 0,  # weekly wins
+            'avg_correct': row[5] or 0.0,  # avg games won per week
+            'total_points': row[2] or 0  # total games won (1 point per game)
         })
     
     conn.close()

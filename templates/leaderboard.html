@@ -31,9 +31,9 @@
                         <tr>
                             <th>Rank</th>
                             <th>Player</th>
-                            <th>Wins</th>
-                            <th>Avg Correct</th>
-                            <th>Total Points</th>
+                            <th>Weekly Wins</th>
+                            <th>Total Games Won</th>
+                            <th>Avg Per Week</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -42,8 +42,8 @@
                             <td>{{ loop.index }}</td>
                             <td>{{ player.username }}</td>
                             <td>{{ player.wins }}</td>
-                            <td>{{ player.avg_correct }}</td>
                             <td>{{ player.total_points }}</td>
+                            <td>{{ player.avg_correct }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
