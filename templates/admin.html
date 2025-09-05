@@ -49,6 +49,9 @@
                     <button onclick="exportUserPicks()" class="btn btn-success">📤 Export Picks CSV</button>
                     <button onclick="showImportPicks()" class="btn btn-info">📥 Import Picks CSV</button>
                     <button onclick="loadDeadlineOverrides()" class="btn btn-danger">Deadline Overrides</button>
+                    <button onclick="checkAPIStatus()" class="btn btn-info">📊 API Status</button>
+                    <button onclick="updateWeekScoring()" class="btn btn-primary">📊 Update Week Scoring</button>
+                    <button onclick="recalculateAllScoring()" class="btn btn-warning">🔄 Recalculate All Scoring</button>
                     <button onclick="emergencyDeadlineExtension()" class="btn btn-danger" style="background-color: #dc2626;">🚨 Emergency Extension</button>
                     <button onclick="syncSeason()" class="btn btn-secondary">Sync NFL Season</button>
                 </div>
@@ -1514,6 +1517,129 @@
                 document.getElementById('admin-content').innerHTML = 
                     `<p class="error">Error loading simple picks: ${error.message}</p>
                      <p>This helps us diagnose if the issue is with the database or the complex query.</p>`;
+            }
+        }
+
+        // Scoring update functions
+        async function updateWeekScoring() {
+            try {
+                const week = document.getElementById('admin-week').value;
+                const year = document.getElementById('admin-year').value;
+                
+                if (!week) {
+                    alert('Please select a week');
+                    return;
+                }
+                
+                const confirmed = confirm(`Update scoring for Week ${week}, ${year}?`);
+                if (!confirmed) return;
+                
+                const response = await fetch('/admin/update_scoring', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        week: parseInt(week),
+                        year: parseInt(year)
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(result.message);
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('Error updating week scoring:', error);
+                alert(`Error updating week scoring: ${error.message}`);
+            }
+        }
+
+        async function recalculateAllScoring() {
+            try {
+                const confirmed = confirm('Recalculate scoring for ALL completed weeks? This may take a moment.');
+                if (!confirmed) return;
+                
+                const response = await fetch('/admin/recalculate_all_scoring', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`${result.message}\n\nLeaderboard has been updated!`);
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('Error recalculating all scoring:', error);
+                alert(`Error recalculating scoring: ${error.message}`);
+            }
+        }
+
+        // API Rate Limiting Functions
+        async function checkAPIStatus() {
+            try {
+                const response = await fetch('/api_status');
+                const data = await response.json();
+                
+                let statusHtml = `
+                    <div class="api-status">
+                        <h3>📊 API Rate Limit Status</h3>
+                        <p><strong>Calls Remaining:</strong> ${data.calls_remaining}/5 per hour</p>
+                        <p><strong>Can Make Call:</strong> ${data.can_make_call ? '✅ Yes' : '❌ No'}</p>
+                `;
+                
+                if (data.next_available_call) {
+                    const nextTime = new Date(data.next_available_call);
+                    statusHtml += `<p><strong>Next Available:</strong> ${nextTime.toLocaleString()}</p>`;
+                }
+                
+                statusHtml += `
+                        <div class="api-actions">
+                            <button onclick="updateScoresWithRateLimit()" class="btn btn-primary" ${!data.can_make_call ? 'disabled' : ''}>
+                                🔄 Update Live Scores
+                            </button>
+                            <button onclick="checkAPIStatus()" class="btn btn-secondary">
+                                🔍 Refresh Status
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('admin-content').innerHTML = statusHtml;
+            } catch (error) {
+                console.error('Error checking API status:', error);
+                document.getElementById('admin-content').innerHTML = 
+                    `<p class="error">Error checking API status: ${error.message}</p>`;
+            }
+        }
+
+        async function updateScoresWithRateLimit() {
+            const week = document.getElementById('admin-week').value;
+            const year = document.getElementById('admin-year').value;
+            
+            try {
+                const response = await fetch(`/update_scores/${week}/${year}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert(`✅ Success!\n${data.message}\nGames Updated: ${data.games_updated}\nAPI Calls Remaining: ${data.calls_remaining}`);
+                } else {
+                    alert(`❌ ${data.message || data.error}\nAPI Calls Remaining: ${data.calls_remaining || 0}`);
+                }
+                
+                // Refresh API status
+                await checkAPIStatus();
+            } catch (error) {
+                console.error('Error updating scores:', error);
+                alert(`Error updating scores: ${error.message}`);
             }
         }
     </script>

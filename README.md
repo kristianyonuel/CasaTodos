@@ -80,10 +80,17 @@ python run-externally-managed.py
 python run-port-443.py  # Requires SSL certificates
 ```
 
+#### Option 5: Ubuntu Production Service
+```bash
+# See UBUNTU_SERVICE_SETUP.md for complete setup
+sudo systemctl start lacasadetodos
+```
+
 ### 🌐 Access URLs
 - **Local**: http://127.0.0.1:5000
 - **Network**: http://[YOUR-IP]:5000
 - **HTTPS**: https://[YOUR-DOMAIN]:443 (with SSL setup)
+- **Ubuntu Service**: See `UBUNTU_SERVICE_SETUP.md` for production deployment
 
 ## 🎮 How to Play
 
@@ -178,7 +185,8 @@ La Casa de Todos/
     ├── ADMIN_FIXES_COMPLETE.md
     ├── CSV_IMPORT_EXPORT_GUIDE.md
     ├── DEADLINE_SYSTEM_GUIDE.md
-    └── MULTI_PORT_SETUP.md
+    ├── MULTI_PORT_SETUP.md
+    └── UBUNTU_SERVICE_SETUP.md  # Ubuntu production deployment
 ```
 
 ## 💾 Database Schema

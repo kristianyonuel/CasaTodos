@@ -55,6 +55,14 @@ def initialize_app():
         setup_complete_database()
     else:
         print("Database exists, ready to run")
+    
+    # Ensure weekly_results table exists and is up to date
+    try:
+        from scoring_updater import create_weekly_results_table_if_not_exists
+        create_weekly_results_table_if_not_exists()
+        print("Weekly results table verified")
+    except Exception as e:
+        logger.error(f"Error initializing weekly results table: {e}")
 
 def get_dashboard_data(user_id: int, week: int, year: int) -> Dict[str, int]:
     """Get dashboard data with accurate game counts"""
@@ -237,12 +245,38 @@ def admin_generate_week():
 
 @app.route('/update_scores/<int:week>/<int:year>')
 def update_scores(week, year):
-    """Update live scores - can be called by anyone"""
+    """Update live scores - can be called by anyone but respects rate limits"""
+    from api_rate_limiter import check_api_rate_limit, get_api_calls_remaining
+    
+    if not check_api_rate_limit():
+        return jsonify({
+            'error': 'API rate limit exceeded',
+            'calls_remaining': get_api_calls_remaining(),
+            'message': f'Please wait before making another API call. Calls remaining: {get_api_calls_remaining()}'
+        }), 429
+    
     games_updated = update_live_scores(week, year)
+    remaining_calls = get_api_calls_remaining()
+    
     return jsonify({
         'success': True,
         'games_updated': games_updated,
-        'message': f'Updated {games_updated} games with live scores'
+        'calls_remaining': remaining_calls,
+        'message': f'Updated {games_updated} games with live scores. API calls remaining: {remaining_calls}'
+    })
+
+@app.route('/api_status')
+def api_status():
+    """Check API rate limit status"""
+    from api_rate_limiter import get_api_calls_remaining, get_next_api_call_time
+    
+    remaining = get_api_calls_remaining()
+    next_call_time = get_next_api_call_time()
+    
+    return jsonify({
+        'calls_remaining': remaining,
+        'next_available_call': next_call_time.isoformat() if next_call_time else None,
+        'can_make_call': remaining > 0
     })
 
 @app.route('/games')
@@ -253,8 +287,8 @@ def games():
     week = request.args.get('week', 1, type=int)
     year = request.args.get('year', 2025, type=int)
     
-    # Auto-update live scores on page load
-    update_live_scores(week, year)
+    # DON'T auto-update live scores on every page load to avoid hitting API rate limits
+    # Admin can manually trigger updates using the update_scores endpoint
     
     with get_db() as conn:
         cursor = conn.cursor()
@@ -962,6 +996,61 @@ def admin_delete_user():
         
     except Exception as e:
         logger.error(f"Admin delete user error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/update_scoring', methods=['POST'])
+def admin_update_scoring():
+    """Admin endpoint to manually trigger scoring updates"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        week = data.get('week')
+        year = data.get('year', 2025)
+        
+        if not week:
+            return jsonify({'error': 'Week number required'}), 400
+        
+        from scoring_updater import ScoringUpdater
+        updater = ScoringUpdater()
+        
+        success = updater.update_weekly_results(week, year)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Scoring updated for Week {week}, {year}'
+            })
+        else:
+            return jsonify({
+                'error': f'Failed to update scoring for Week {week}, {year}'
+            }), 500
+    
+    except Exception as e:
+        logger.error(f"Admin scoring update error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/recalculate_all_scoring', methods=['POST'])
+def admin_recalculate_all_scoring():
+    """Admin endpoint to recalculate scoring for all completed weeks"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        from scoring_updater import ScoringUpdater
+        updater = ScoringUpdater()
+        
+        updated_count = updater.update_all_completed_weeks()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Recalculated scoring for {updated_count} completed weeks',
+            'weeks_updated': updated_count
+        })
+    
+    except Exception as e:
+        logger.error(f"Admin recalculate all scoring error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.errorhandler(404)
