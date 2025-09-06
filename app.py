@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, make_response
 import sqlite3
 import os
 import logging
+import csv
+from io import StringIO
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -2284,6 +2286,87 @@ def import_weekly_picks():
     except Exception as e:
         logger.error(f"Import error: {e}")
         return jsonify({'error': f'Import failed: {str(e)}'}), 500
+
+@app.route('/export_all_users_picks_csv')
+def export_all_users_picks_csv():
+    """Export all users' picks in CSV format with usernames as headers"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    if not session.get('is_admin'):
+        flash('Admin access required', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        week = request.args.get('week', 1, type=int)
+        year = request.args.get('year', 2025, type=int)
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Get all users
+            cursor.execute('SELECT id, username FROM users ORDER BY username')
+            users = cursor.fetchall()
+            
+            if not users:
+                flash('No users found', 'error')
+                return redirect(url_for('admin'))
+            
+            # Get all games for the week
+            cursor.execute('''
+                SELECT id, home_team, away_team, game_date 
+                FROM nfl_games 
+                WHERE week = ? AND year = ? 
+                ORDER BY game_date
+            ''', (week, year))
+            games = cursor.fetchall()
+            
+            if not games:
+                flash(f'No games found for Week {week}, {year}', 'error')
+                return redirect(url_for('admin'))
+            
+            # Create CSV content
+            output = StringIO()
+            writer = csv.writer(output)
+            
+            # Header row: usernames
+            usernames = [user[1] for user in users]
+            writer.writerow(usernames)
+            
+            # Data rows: each game's picks
+            for game in games:
+                game_id = game[0]
+                home_team = game[1]
+                away_team = game[2]
+                
+                picks_row = []
+                for user in users:
+                    user_id = user[0]
+                    
+                    # Get user's pick for this game
+                    cursor.execute('''
+                        SELECT selected_team 
+                        FROM user_picks 
+                        WHERE user_id = ? AND game_id = ?
+                    ''', (user_id, game_id))
+                    
+                    pick = cursor.fetchone()
+                    picks_row.append(pick[0] if pick else '')
+                
+                writer.writerow(picks_row)
+            
+            # Prepare response
+            output.seek(0)
+            response = make_response(output.getvalue())
+            response.headers['Content-Type'] = 'text/csv'
+            response.headers['Content-Disposition'] = f'attachment; filename=all_users_picks_week_{week}_{year}.csv'
+            
+            return response
+            
+    except Exception as e:
+        logger.error(f"Export all users picks error: {e}")
+        flash(f'Export failed: {str(e)}', 'error')
+        return redirect(url_for('admin'))
 
 if __name__ == '__main__':
     import os

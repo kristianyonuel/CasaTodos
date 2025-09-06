@@ -1616,6 +1616,30 @@
                 alert(`Error updating scores: ${error.message}`);
             }
         }
+
+        // Export all users' picks with usernames as headers
+        function exportAllUsersPicks() {
+            const week = prompt('Enter week number (1-18):', '1');
+            if (!week || isNaN(week) || week < 1 || week > 18) {
+                alert('Please enter a valid week number (1-18)');
+                return;
+            }
+            
+            const year = prompt('Enter year:', '2025');
+            if (!year || isNaN(year)) {
+                alert('Please enter a valid year');
+                return;
+            }
+            
+            // Create download link
+            const url = `/export_all_users_picks_csv?week=${week}&year=${year}`;
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `all_users_picks_week_${week}_${year}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     </script>
 </body>
 </html>
