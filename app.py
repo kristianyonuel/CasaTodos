@@ -2390,25 +2390,42 @@ if __name__ == '__main__':
     def setup_ssl_context():
         """Setup SSL context using existing certificates"""
         try:
-            # Look for standard SSL certificate files
-            cert_files = [
-                ('cert.pem', 'key.pem'),
+            # Look for standard SSL certificate files in current directory and common paths
+            cert_paths = [
+                # Current directory
                 ('certificate.crt', 'private.key'),
+                ('cert.pem', 'key.pem'),
                 ('ssl_cert.pem', 'ssl_key.pem'),
-                ('fullchain.pem', 'privkey.pem')  # Let's Encrypt format
+                ('fullchain.pem', 'privkey.pem'),  # Let's Encrypt format
+                # Common SSL paths
+                ('/etc/ssl/certs/certificate.crt', '/etc/ssl/private/private.key'),
+                ('/etc/letsencrypt/live/casadetodos.eastus.cloudapp.azure.com/fullchain.pem', 
+                 '/etc/letsencrypt/live/casadetodos.eastus.cloudapp.azure.com/privkey.pem'),
             ]
             
-            for cert_file, key_file in cert_files:
+            print("🔍 Looking for SSL certificates...")
+            for cert_file, key_file in cert_paths:
+                print(f"   Checking: {cert_file} & {key_file}")
                 if os.path.exists(cert_file) and os.path.exists(key_file):
+                    print(f"✅ Found SSL certificates: {cert_file}, {key_file}")
                     logger.info(f"Using SSL certificates: {cert_file}, {key_file}")
+                    
                     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
                     context.load_cert_chain(cert_file, key_file)
+                    print("✅ SSL context created successfully")
                     return context
+                else:
+                    print(f"❌ Not found: {cert_file} or {key_file}")
             
+            print("⚠️ No SSL certificates found. HTTPS will not be available.")
+            print("💡 To enable HTTPS, place your SSL files as:")
+            print("   - certificate.crt (your SSL certificate)")
+            print("   - private.key (your private key)")
             logger.warning("No SSL certificates found. HTTPS will not be available.")
             return None
             
         except Exception as e:
+            print(f"❌ SSL setup error: {e}")
             logger.error(f"Error setting up SSL: {e}")
             return None
     
