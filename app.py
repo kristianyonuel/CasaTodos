@@ -167,14 +167,23 @@ def login():
         try:
             with get_db() as conn:
                 cursor = conn.cursor()
-                cursor.execute('SELECT id, password_hash, is_admin FROM users WHERE username = ?', (username,))
+                # Case-insensitive username lookup using LOWER()
+                cursor.execute('SELECT id, username, password_hash, is_admin FROM users WHERE LOWER(username) = LOWER(?)', (username,))
                 user = cursor.fetchone()
             
-            if user and check_password_hash(user[1], password):
+            if user and check_password_hash(user[2], password):
                 session['user_id'] = user[0]
-                session['username'] = username
-                session['is_admin'] = bool(user[2])
-                logger.info(f"Successful login for user: {username}")
+                session['username'] = user[1]  # Use the actual username from database (preserves original case)
+                session['is_admin'] = bool(user[3])
+                
+                # Update last_login timestamp
+                try:
+                    cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now(), user[0]))
+                    conn.commit()
+                except Exception as e:
+                    logger.warning(f"Failed to update last_login for user {user[1]}: {e}")
+                
+                logger.info(f"Successful login for user: {user[1]} (entered as: {username})")
                 flash('Successfully logged in!', 'success')
                 return redirect(url_for('index'))
             else:
@@ -482,10 +491,11 @@ def register():
             with get_db() as conn:
                 cursor = conn.cursor()
                 
-                # Check if username already exists
-                cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
-                if cursor.fetchone():
-                    flash('Username already exists. Please choose a different one.', 'error')
+                # Check if username already exists (case-insensitive)
+                cursor.execute('SELECT username FROM users WHERE LOWER(username) = LOWER(?)', (username,))
+                existing_user = cursor.fetchone()
+                if existing_user:
+                    flash(f'Username already exists as "{existing_user[0]}". Please choose a different one.', 'error')
                     return render_template('register.html')
                 
                 # Check if email already exists (if provided)
@@ -851,10 +861,11 @@ def admin_create_user():
         with get_db() as conn:
             cursor = conn.cursor()
             
-            # Check if username exists
-            cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
-            if cursor.fetchone():
-                return jsonify({'error': 'Username already exists'}), 400
+            # Check if username exists (case-insensitive)
+            cursor.execute('SELECT username FROM users WHERE LOWER(username) = LOWER(?)', (username,))
+            existing_user = cursor.fetchone()
+            if existing_user:
+                return jsonify({'error': f'Username already exists as "{existing_user[0]}"'}), 400
             
             password_hash = generate_password_hash(password)
             cursor.execute('''
@@ -966,6 +977,12 @@ def admin_modify_user():
         
         with get_db() as conn:
             cursor = conn.cursor()
+            
+            # Check if username already exists for a different user (case-insensitive)
+            cursor.execute('SELECT id, username FROM users WHERE LOWER(username) = LOWER(?) AND id != ?', (username, user_id))
+            existing_user = cursor.fetchone()
+            if existing_user:
+                return jsonify({'error': f'Username already exists as "{existing_user[1]}" for another user'}), 400
             
             if new_password:
                 password_hash = generate_password_hash(new_password)
@@ -2116,6 +2133,45 @@ def my_picks_export():
         logger.error(f"Error loading export page: {e}")
         flash('Error loading export page', 'error')
         return redirect(url_for('index'))
+
+@app.route('/admin/reset_password', methods=['POST'])
+def admin_reset_password():
+    """Admin endpoint to reset a user's password without modifying other fields"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        new_password = data.get('new_password')
+        
+        if not user_id or not new_password:
+            return jsonify({'error': 'User ID and new password are required'}), 400
+        
+        if len(new_password) < 6:
+            return jsonify({'error': 'Password must be at least 6 characters long'}), 400
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Verify user exists
+            cursor.execute('SELECT username FROM users WHERE id = ?', (user_id,))
+            user = cursor.fetchone()
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+            
+            # Update only the password
+            password_hash = generate_password_hash(new_password)
+            cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?', (password_hash, user_id))
+            conn.commit()
+            
+            logger.info(f"Admin {session['username']} reset password for user: {user[0]}")
+        
+        return jsonify({'success': True, 'message': 'Password reset successfully'})
+        
+    except Exception as e:
+        logger.error(f"Admin password reset error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     import os

@@ -242,8 +242,13 @@
             const newPassword = prompt('Enter new password:');
             if (!newPassword) return;
             
+            if (newPassword.length < 6) {
+                alert('Password must be at least 6 characters long');
+                return;
+            }
+            
             try {
-                const response = await fetch('/admin/modify_user', {
+                const response = await fetch('/admin/reset_password', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
