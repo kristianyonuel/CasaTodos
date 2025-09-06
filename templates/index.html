@@ -223,7 +223,7 @@
             
             // Create a temporary link to download the CSV
             const link = document.createElement('a');
-            link.href = `{{ url_for('export_all_picks_csv') }}?week=${week}&year=${year}`;
+            link.href = `{{ url_for('export_all_users_picks_csv') }}?week=${week}&year=${year}`;
             link.download = `all_picks_week_${week}_${year}.csv`;
             document.body.appendChild(link);
             link.click();

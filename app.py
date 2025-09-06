@@ -173,24 +173,24 @@ def login():
                 cursor.execute('SELECT id, username, password_hash, is_admin FROM users WHERE LOWER(username) = LOWER(?)', (username,))
                 user = cursor.fetchone()
             
-            if user and check_password_hash(user[2], password):
-                session['user_id'] = user[0]
-                session['username'] = user[1]  # Use the actual username from database (preserves original case)
-                session['is_admin'] = bool(user[3])
-                
-                # Update last_login timestamp
-                try:
-                    cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now(), user[0]))
-                    conn.commit()
-                except Exception as e:
-                    logger.warning(f"Failed to update last_login for user {user[1]}: {e}")
-                
-                logger.info(f"Successful login for user: {user[1]} (entered as: {username})")
-                flash('Successfully logged in!', 'success')
-                return redirect(url_for('index'))
-            else:
-                logger.warning(f"Failed login attempt for username: {username} from IP: {request.remote_addr}")
-                flash('Invalid username or password', 'error')
+                if user and check_password_hash(user[2], password):
+                    session['user_id'] = user[0]
+                    session['username'] = user[1]  # Use the actual username from database (preserves original case)
+                    session['is_admin'] = bool(user[3])
+                    
+                    # Update last_login timestamp within the same transaction
+                    try:
+                        cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now(), user[0]))
+                        conn.commit()
+                    except Exception as e:
+                        logger.warning(f"Failed to update last_login for user {user[1]}: {e}")
+                    
+                    logger.info(f"Successful login for user: {user[1]} (entered as: {username})")
+                    flash('Successfully logged in!', 'success')
+                    return redirect(url_for('index'))
+                else:
+                    logger.warning(f"Failed login attempt for username: {username} from IP: {request.remote_addr}")
+                    flash('Invalid username or password', 'error')
                 
         except sqlite3.Error as e:
             logger.error(f"Database error during login: {e}")
@@ -2367,6 +2367,16 @@ def export_all_users_picks_csv():
         logger.error(f"Export all users picks error: {e}")
         flash(f'Export failed: {str(e)}', 'error')
         return redirect(url_for('admin'))
+
+@app.route('/weekly_results')
+def weekly_results():
+    """Display weekly results (redirect to leaderboard for now)"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # For now, redirect to leaderboard as they serve similar purpose
+    # TODO: Create dedicated weekly results page if needed
+    return redirect(url_for('leaderboard'))
 
 if __name__ == '__main__':
     import os
