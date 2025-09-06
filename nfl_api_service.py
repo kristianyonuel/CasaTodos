@@ -6,9 +6,23 @@ import requests
 from datetime import datetime
 from typing import List, Dict
 import logging
+import os
+import ssl
 from utils.timezone_utils import convert_to_ast
 
 logger = logging.getLogger(__name__)
+
+# SSL configuration - secure by default, with fallback for development
+def get_ssl_verify():
+    """Get SSL verification setting - secure by default"""
+    # In production/Ubuntu, use proper SSL verification
+    # Only disable for local development on Windows if needed
+    if os.environ.get('DISABLE_SSL_VERIFY', '').lower() == 'true':
+        logger.warning("SSL verification disabled - DEVELOPMENT ONLY")
+        return False
+    return True
+
+SSL_VERIFY = get_ssl_verify()
 
 # BallDontLie NFL API configuration
 BALLDONTLIE_BASE = "https://api.balldontlie.io/nfl/v1"
@@ -49,7 +63,7 @@ def get_week_games(week: int, year: int = 2025) -> List[Dict]:
             'per_page': 100
         }
         
-        response = requests.get(url, headers=HEADERS, params=params, timeout=15)
+        response = requests.get(url, headers=HEADERS, params=params, timeout=15, verify=SSL_VERIFY)
         response.raise_for_status()
         
         data = response.json()
@@ -72,7 +86,7 @@ def get_teams() -> List[Dict]:
     try:
         url = f"{BALLDONTLIE_BASE}/teams"
         
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        response = requests.get(url, headers=HEADERS, timeout=10, verify=SSL_VERIFY)
         response.raise_for_status()
         
         data = response.json()
@@ -95,7 +109,7 @@ def get_games_by_date(date: str, year: int = 2025) -> List[Dict]:
             'per_page': 100
         }
         
-        response = requests.get(url, headers=HEADERS, params=params, timeout=15)
+        response = requests.get(url, headers=HEADERS, params=params, timeout=15, verify=SSL_VERIFY)
         response.raise_for_status()
         
         data = response.json()

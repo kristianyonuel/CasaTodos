@@ -275,6 +275,9 @@
                             <button type="submit" class="btn btn-primary btn-large">
                                 Submit All Picks
                             </button>
+                            <button type="button" onclick="exportMyPicks()" class="btn btn-secondary btn-large">
+                                📤 Export My Picks
+                            </button>
                             <p class="picks-info">
                                 You have selected <span id="selected-count">0</span> out of {{ total_games }} games
                             </p>
@@ -371,6 +374,20 @@
                 alert('Error submitting picks: ' + error.message);
             });
         });
+
+        // Export user picks function
+        function exportMyPicks() {
+            const week = '{{ current_week }}';
+            const year = '{{ current_year }}';
+            
+            // Create a temporary link to download the CSV
+            const link = document.createElement('a');
+            link.href = `{{ url_for('export_my_picks_csv') }}?week=${week}&year=${year}`;
+            link.download = `{{ username }}_picks_week_${week}_${year}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     </script>
 </body>
 </html>

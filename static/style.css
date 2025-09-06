@@ -596,6 +596,10 @@ body {
     border-radius: 10px;
 }
 
+.submit-section .btn-large {
+    margin: 0 10px 15px 10px;
+}
+
 .btn-large {
     padding: 15px 40px;
     font-size: 1.2em;

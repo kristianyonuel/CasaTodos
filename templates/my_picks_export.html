@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export My Picks - La Casa de Todos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>📤 Export My Picks</h1>
+            <nav class="nav">
+                <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('games') }}" class="nav-link">Make Picks</a>
+                <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
+                <a href="{{ url_for('rules') }}" class="nav-link">Rules</a>
+                {% if session.get('is_admin') %}
+                <a href="{{ url_for('admin') }}" class="nav-link admin">Admin</a>
+                {% endif %}
+                <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="export-container">
+                <div class="export-header">
+                    <h2>Export Your Weekly Picks</h2>
+                    <p>Download your picks as a CSV file to save or share your selections.</p>
+                </div>
+
+                <div class="export-form">
+                    <div class="form-group">
+                        <label for="week-year-select">Select Week to Export:</label>
+                        <select id="week-year-select" class="form-control">
+                            {% for week_data in available_weeks %}
+                            <option value="{{ week_data.week }}-{{ week_data.year }}">
+                                Week {{ week_data.week }}, {{ week_data.year }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="export-actions">
+                        <button onclick="exportSelectedWeek()" class="btn btn-primary btn-large">
+                            📤 Export Selected Week
+                        </button>
+                        <button onclick="exportCurrentWeek()" class="btn btn-secondary btn-large">
+                            📤 Export Current Week
+                        </button>
+                    </div>
+                </div>
+
+                <div class="export-info">
+                    <h3>What's included in the export:</h3>
+                    <ul>
+                        <li><strong>Week Information:</strong> Week number and year</li>
+                        <li><strong>Game Details:</strong> Away team @ Home team matchups</li>
+                        <li><strong>Your Picks:</strong> Team selections for each game</li>
+                        <li><strong>Score Predictions:</strong> Monday Night score predictions (if any)</li>
+                        <li><strong>User-Friendly Format:</strong> Easy to read and share</li>
+                    </ul>
+                </div>
+
+                <div class="csv-preview">
+                    <h3>CSV Format Preview:</h3>
+                    <div class="preview-table">
+                        <table class="preview">
+                            <thead>
+                                <tr>
+                                    <th>Week</th>
+                                    <th>Game</th>
+                                    <th>Away Team</th>
+                                    <th>Home Team</th>
+                                    <th>{{ username }} Pick</th>
+                                    <th>Home Score Prediction</th>
+                                    <th>Away Score Prediction</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Week 1</td>
+                                    <td>Bills @ Chiefs</td>
+                                    <td>Bills</td>
+                                    <td>Chiefs</td>
+                                    <td>Chiefs</td>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                                <tr>
+                                    <td>Week 1</td>
+                                    <td>Cowboys @ Giants</td>
+                                    <td>Cowboys</td>
+                                    <td>Giants</td>
+                                    <td>Cowboys</td>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                                <tr>
+                                    <td>Week 1</td>
+                                    <td>Packers @ Bears</td>
+                                    <td>Packers</td>
+                                    <td>Bears</td>
+                                    <td>Packers</td>
+                                    <td>24</td>
+                                    <td>17</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function exportSelectedWeek() {
+            const selector = document.getElementById('week-year-select');
+            const [week, year] = selector.value.split('-');
+            
+            // Create a temporary link to download the CSV
+            const link = document.createElement('a');
+            link.href = `{{ url_for('export_my_picks_csv') }}?week=${week}&year=${year}`;
+            link.download = `{{ username }}_picks_week_${week}_${year}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function exportCurrentWeek() {
+            // Create a temporary link to download the CSV for current week
+            const link = document.createElement('a');
+            link.href = `{{ url_for('export_my_picks_csv') }}`;
+            link.download = `{{ username }}_picks_current_week.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+
+    <style>
+        .export-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .export-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .export-header h2 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .export-form {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        .export-actions {
+            text-align: center;
+        }
+
+        .export-actions .btn {
+            margin: 0 10px;
+        }
+
+        .export-info {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .export-info h3 {
+            color: #1976d2;
+            margin-bottom: 15px;
+        }
+
+        .export-info ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+
+        .export-info li {
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .export-info li:before {
+            content: "✓";
+            color: #4caf50;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        .csv-preview {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .csv-preview h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .preview-table {
+            overflow-x: auto;
+        }
+
+        .preview {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .preview th,
+        .preview td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .preview th {
+            background-color: #f5f5f5;
+            font-weight: 600;
+        }
+
+        .preview tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        @media (max-width: 768px) {
+            .export-actions .btn {
+                display: block;
+                width: 100%;
+                margin: 10px 0;
+            }
+            
+            .preview {
+                font-size: 12px;
+            }
+            
+            .preview th,
+            .preview td {
+                padding: 6px;
+            }
+        }
+    </style>
+</body>
+</html>

@@ -1994,6 +1994,129 @@ def debug_leaderboard():
     except Exception as e:
         return f'<pre>Error in debug: {str(e)}</pre>'
 
+@app.route('/export_my_picks_csv')
+def export_my_picks_csv():
+    """Export current user's picks for a specific week as CSV"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Login required'}), 401
+    
+    try:
+        week = request.args.get('week', type=int)
+        year = request.args.get('year', type=int)
+        
+        # If no week/year specified, use current week
+        if not week or not year:
+            # Get current week from deadline manager or default
+            try:
+                deadline_manager = DeadlineManager()
+                week = deadline_manager.get_current_week()
+                year = deadline_manager.get_current_year()
+            except:
+                from datetime import datetime
+                now = datetime.now()
+                week = 1  # Default fallback
+                year = now.year
+        
+        user_id = session['user_id']
+        username = session['username']
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Get all games for the week
+            cursor.execute('''
+                SELECT id, away_team, home_team, game_date, is_monday_night
+                FROM nfl_games 
+                WHERE week = ? AND year = ?
+                ORDER BY game_date
+            ''', (week, year))
+            
+            games = [dict(row) for row in cursor.fetchall()]
+            
+            if not games:
+                return jsonify({'error': f'No games found for Week {week}, {year}'}), 404
+            
+            # Get user's picks for this week
+            cursor.execute('''
+                SELECT up.game_id, up.selected_team, 
+                       up.predicted_home_score, up.predicted_away_score
+                FROM user_picks up
+                JOIN nfl_games g ON up.game_id = g.id
+                WHERE up.user_id = ? AND g.week = ? AND g.year = ?
+            ''', (user_id, week, year))
+            
+            user_picks = {}
+            for row in cursor.fetchall():
+                user_picks[row['game_id']] = {
+                    'selected_team': row['selected_team'],
+                    'predicted_home_score': row['predicted_home_score'],
+                    'predicted_away_score': row['predicted_away_score']
+                }
+        
+        # Create CSV content
+        output = io.StringIO()
+        fieldnames = ['Week', 'Game', 'Away Team', 'Home Team', f'{username} Pick', 
+                     'Home Score Prediction', 'Away Score Prediction']
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        
+        writer.writeheader()
+        
+        # Write a row for each game
+        for game in games:
+            pick_data = user_picks.get(game['id'], {})
+            
+            row = {
+                'Week': f'Week {week}',
+                'Game': f"{game['away_team']} @ {game['home_team']}",
+                'Away Team': game['away_team'],
+                'Home Team': game['home_team'],
+                f'{username} Pick': pick_data.get('selected_team', 'No Pick Made'),
+                'Home Score Prediction': pick_data.get('predicted_home_score', ''),
+                'Away Score Prediction': pick_data.get('predicted_away_score', '')
+            }
+            writer.writerow(row)
+        
+        # Prepare response
+        csv_content = output.getvalue()
+        output.close()
+        
+        response = app.response_class(
+            csv_content,
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={username}_picks_week_{week}_{year}.csv'}
+        )
+        
+        logger.info(f"User {username} exported their picks CSV for Week {week}, {year}")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error exporting user picks CSV: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/my_picks_export')
+def my_picks_export():
+    """Show export page for user's picks"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        # Get available weeks
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT DISTINCT week, year FROM nfl_games 
+                ORDER BY year DESC, week DESC
+            ''')
+            available_weeks = cursor.fetchall()
+        
+        return render_template('my_picks_export.html', 
+                               username=session['username'],
+                               available_weeks=available_weeks)
+    except Exception as e:
+        logger.error(f"Error loading export page: {e}")
+        flash('Error loading export page', 'error')
+        return redirect(url_for('index'))
+
 if __name__ == '__main__':
     import os
     import ssl

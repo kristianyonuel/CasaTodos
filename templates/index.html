@@ -85,6 +85,9 @@
                         <a href="{{ url_for('rules') }}" class="action-btn secondary">
                             📋 Read Rules
                         </a>
+                        <a href="{{ url_for('my_picks_export') }}" class="action-btn secondary">
+                            📤 Export My Picks
+                        </a>
                         {% if session.get('is_admin') %}
                         <a href="{{ url_for('admin') }}" class="action-btn admin">
                             ⚙️ Admin Panel
@@ -194,5 +197,21 @@
             </div>
         </main>
     </div>
+    
+    <script>
+        // Export user picks function
+        function exportMyPicks() {
+            const week = '{{ current_week or 1 }}';
+            const year = '{{ current_year or 2025 }}';
+            
+            // Create a temporary link to download the CSV
+            const link = document.createElement('a');
+            link.href = `{{ url_for('export_my_picks_csv') }}?week=${week}&year=${year}`;
+            link.download = `{{ username }}_picks_week_${week}_${year}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
 </body>
 </html>
