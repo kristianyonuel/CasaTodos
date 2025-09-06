@@ -259,7 +259,7 @@ def update_scores(week, year):
     """Update live scores - can be called by anyone but respects rate limits"""
     from api_rate_limiter import check_api_rate_limit, get_api_calls_remaining
     
-    if not check_api_rate_limit():
+    if not check_api_rate_limiter():
         return jsonify({
             'error': 'API rate limit exceeded',
             'calls_remaining': get_api_calls_remaining(),
@@ -2287,9 +2287,9 @@ def import_weekly_picks():
         logger.error(f"Import error: {e}")
         return jsonify({'error': f'Import failed: {str(e)}'}), 500
 
-@app.route('/export_all_users_picks_csv')
-def export_all_users_picks_csv():
-    """Export all users' picks in CSV format with usernames as headers"""
+@app.route('/export_all_users_picks_csv_safe')
+def export_all_users_picks_csv_safe():
+    """Safe CSV export that bypasses SSL issues - serves via HTTP only"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
@@ -2309,8 +2309,7 @@ def export_all_users_picks_csv():
             users = cursor.fetchall()
             
             if not users:
-                flash('No users found', 'error')
-                return redirect(url_for('admin'))
+                return jsonify({'error': 'No users found'}), 400
             
             # Get all games for the week
             cursor.execute('''
@@ -2322,8 +2321,7 @@ def export_all_users_picks_csv():
             games = cursor.fetchall()
             
             if not games:
-                flash(f'No games found for Week {week}, {year}', 'error')
-                return redirect(url_for('admin'))
+                return jsonify({'error': f'No games found for Week {week}, {year}'}), 400
             
             # Create CSV content
             output = StringIO()
@@ -2336,8 +2334,6 @@ def export_all_users_picks_csv():
             # Data rows: each game's picks
             for game in games:
                 game_id = game[0]
-                home_team = game[1]
-                away_team = game[2]
                 
                 picks_row = []
                 for user in users:
@@ -2355,7 +2351,7 @@ def export_all_users_picks_csv():
                 
                 writer.writerow(picks_row)
             
-            # Return as plain text to avoid browser SSL issues
+            # Return as octet-stream to avoid browser SSL issues
             output.seek(0)
             csv_content = output.getvalue()
             
