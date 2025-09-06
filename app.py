@@ -2287,9 +2287,9 @@ def import_weekly_picks():
         logger.error(f"Import error: {e}")
         return jsonify({'error': f'Import failed: {str(e)}'}), 500
 
-@app.route('/export_all_users_picks_csv_safe')
-def export_all_users_picks_csv_safe():
-    """Safe CSV export that bypasses SSL issues - serves via HTTP only"""
+@app.route('/export_all_users_picks_csv')
+def export_all_users_picks_csv():
+    """Export all users' picks in CSV format with usernames as headers"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
@@ -2309,7 +2309,8 @@ def export_all_users_picks_csv_safe():
             users = cursor.fetchall()
             
             if not users:
-                return jsonify({'error': 'No users found'}), 400
+                flash('No users found', 'error')
+                return redirect(url_for('admin'))
             
             # Get all games for the week
             cursor.execute('''
@@ -2321,7 +2322,8 @@ def export_all_users_picks_csv_safe():
             games = cursor.fetchall()
             
             if not games:
-                return jsonify({'error': f'No games found for Week {week}, {year}'}), 400
+                flash(f'No games found for Week {week}, {year}', 'error')
+                return redirect(url_for('admin'))
             
             # Create CSV content
             output = StringIO()
@@ -2351,22 +2353,34 @@ def export_all_users_picks_csv_safe():
                 
                 writer.writerow(picks_row)
             
-            # Return as octet-stream to avoid browser SSL issues
+            # Prepare response with better headers for download reliability
             output.seek(0)
             csv_content = output.getvalue()
             
             response = make_response(csv_content)
-            response.headers['Content-Type'] = 'application/octet-stream'
-            response.headers['Content-Disposition'] = f'attachment; filename="all_users_picks_week_{week}_{year}.csv"'
-            response.headers['Content-Transfer-Encoding'] = 'binary'
-            response.headers['Cache-Control'] = 'must-revalidate, post-check=0, pre-check=0'
-            response.headers['Pragma'] = 'public'
+            response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+            response.headers['Content-Disposition'] = f'attachment; filename=all_users_picks_week_{week}_{year}.csv'
+            
+            # Add headers to prevent SSL/HTTPS download issues
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            response.headers['Content-Length'] = str(len(csv_content.encode('utf-8')))
+            
+            # Add CORS headers to prevent mixed content issues
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Methods'] = 'GET'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+            
+            # Force download by ensuring proper MIME type
+            response.headers['X-Content-Type-Options'] = 'nosniff'
             
             return response
             
     except Exception as e:
-        logger.error(f"Safe export error: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Export all users picks error: {e}")
+        flash(f'Export failed: {str(e)}', 'error')
+        return redirect(url_for('admin'))
 
 @app.route('/weekly_results')
 def weekly_results():
