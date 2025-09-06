@@ -2090,7 +2090,7 @@ def export_my_picks_csv():
                 'Game': f"{game['away_team']} @ {game['home_team']}",
                 'Away Team': game['away_team'],
                 'Home Team': game['home_team'],
-                f'{username} Pick': pick_data.get('selected_team', 'No Pick Made'),
+                'Selected Team': pick_data.get('selected_team', 'No Pick Made'),
                 'Home Score Prediction': pick_data.get('predicted_home_score', ''),
                 'Away Score Prediction': pick_data.get('predicted_away_score', '')
             }
@@ -2355,18 +2355,22 @@ def export_all_users_picks_csv():
                 
                 writer.writerow(picks_row)
             
-            # Prepare response
+            # Return as plain text to avoid browser SSL issues
             output.seek(0)
-            response = make_response(output.getvalue())
-            response.headers['Content-Type'] = 'text/csv'
-            response.headers['Content-Disposition'] = f'attachment; filename=all_users_picks_week_{week}_{year}.csv'
+            csv_content = output.getvalue()
+            
+            response = make_response(csv_content)
+            response.headers['Content-Type'] = 'application/octet-stream'
+            response.headers['Content-Disposition'] = f'attachment; filename="all_users_picks_week_{week}_{year}.csv"'
+            response.headers['Content-Transfer-Encoding'] = 'binary'
+            response.headers['Cache-Control'] = 'must-revalidate, post-check=0, pre-check=0'
+            response.headers['Pragma'] = 'public'
             
             return response
             
     except Exception as e:
-        logger.error(f"Export all users picks error: {e}")
-        flash(f'Export failed: {str(e)}', 'error')
-        return redirect(url_for('admin'))
+        logger.error(f"Safe export error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/weekly_results')
 def weekly_results():
@@ -2440,6 +2444,13 @@ if __name__ == '__main__':
         print("💡 Press Ctrl+C to stop")
         print("=" * 50)
         app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+    
+    elif mode == 'http' or mode == 'http-only':
+        print("🌐 HTTP-Only Mode")
+        print("📍 Access at: http://localhost:8080")
+        print("💡 Press Ctrl+C to stop")
+        print("=" * 50)
+        app.run(debug=False, host='0.0.0.0', port=8080, threaded=True)
         
     else:
         # Production mode - HTTP on 80, HTTPS on 443 if certificates available

@@ -53,6 +53,7 @@
                     <button onclick="recalculateAllScoring()" class="btn btn-warning">🔄 Recalculate All Scoring</button>
                     <button onclick="syncSeason()" class="btn btn-secondary">Sync NFL Season</button>
                     <button onclick="exportAllUsersPicks()" class="btn btn-primary">📊 Export All Users' Picks</button>
+                    <button onclick="exportAllUsersPicksSafe()" class="btn btn-success">📊 Export (SSL-Safe)</button>
                     <button onclick="importPicksFile()" class="btn btn-secondary">📥 Import Picks from CSV</button>
                 </div>
                 
@@ -1367,7 +1368,7 @@
                 return;
             }
             
-            // Create download link
+            // Try normal download first
             const url = `/export_all_users_picks_csv?week=${week}&year=${year}`;
             const link = document.createElement('a');
             link.href = url;
@@ -1375,6 +1376,33 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            
+            // If the download seems stuck, offer alternative
+            setTimeout(() => {
+                if (confirm('Download stuck or resuming? Try SSL-safe download method?')) {
+                    const safeUrl = `/export_all_users_picks_csv_safe?week=${week}&year=${year}`;
+                    window.open(safeUrl, '_blank');
+                }
+            }, 3000);
+        }
+        
+        // Alternative export function that forces HTTP
+        function exportAllUsersPicksSafe() {
+            const week = prompt('Enter week number (1-18):', '1');
+            if (!week || isNaN(week) || week < 1 || week > 18) {
+                alert('Please enter a valid week number (1-18)');
+                return;
+            }
+            
+            const year = prompt('Enter year:', '2025');
+            if (!year || isNaN(year)) {
+                alert('Please enter a valid year');
+                return;
+            }
+            
+            // Use safe download method
+            const safeUrl = `/export_all_users_picks_csv_safe?week=${week}&year=${year}`;
+            window.open(safeUrl, '_blank');
         }
     </script>
 </body>
