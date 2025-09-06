@@ -1953,6 +1953,7 @@ def debug_leaderboard():
         debug_info.append(f"Completed games: {completed_games}")
         
         # Check picks table
+       
         cursor.execute('SELECT COUNT(*) FROM user_picks')
         total_picks = cursor.fetchone()[0]
         debug_info.append(f"Total picks: {total_picks}")
@@ -2172,6 +2173,117 @@ def admin_reset_password():
     except Exception as e:
         logger.error(f"Admin password reset error: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/import_weekly_picks', methods=['POST'])
+def import_weekly_picks():
+    """Import picks from CSV with username headers format"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Login required'}), 401
+    
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not file.filename.endswith('.csv'):
+            return jsonify({'error': 'File must be a CSV'}), 400
+        
+        content = file.read().decode('utf-8')
+        lines = [line.strip() for line in content.split('\n') if line.strip()]
+        
+        if len(lines) < 2:
+            return jsonify({'error': 'Invalid CSV format - need at least header and one data row'}), 400
+        
+        # Parse header row (usernames)
+        usernames = [name.strip() for name in lines[0].split(',') if name.strip()]
+        
+        if not usernames:
+            return jsonify({'error': 'No usernames found in header row'}), 400
+        
+        imported_count = 0
+        error_messages = []
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Get user IDs for usernames (case-insensitive)
+            user_map = {}
+            for username in usernames:
+                cursor.execute('SELECT id, username FROM users WHERE LOWER(username) = LOWER(?)', (username,))
+                user_data = cursor.fetchone()
+                if user_data:
+                    user_map[username] = {'id': user_data[0], 'actual_name': user_data[1]}
+                else:
+                    error_messages.append(f"User '{username}' not found")
+            
+            # Process each data row (picks for games)
+            for row_num, line in enumerate(lines[1:], 2):
+                picks = [pick.strip() for pick in line.split(',')]
+                
+                if len(picks) != len(usernames):
+                    error_messages.append(f"Row {row_num}: Expected {len(usernames)} picks, got {len(picks)}")
+                    continue
+                
+                # Try to find the game for this row
+                # For now, assume rows correspond to games in chronological order
+                cursor.execute('''
+                    SELECT id, home_team, away_team, week, year 
+                    FROM nfl_games 
+                    ORDER BY game_date, id 
+                    LIMIT 1 OFFSET ?
+                ''', (row_num - 2,))
+                game = cursor.fetchone()
+                
+                if not game:
+                    error_messages.append(f"Row {row_num}: No game found for this row")
+                    continue
+                
+                game_id, home_team, away_team, week, year = game
+                
+                # Process each pick in this row
+                for username, pick in zip(usernames, picks):
+                    if username not in user_map or not pick:
+                        continue
+                    
+                    user_id = user_map[username]['id']
+                    
+                    # Validate pick is either home or away team
+                    if pick.upper() not in [home_team.upper(), away_team.upper()]:
+                        error_messages.append(f"Row {row_num}: Invalid pick '{pick}' for user '{username}' (game: {away_team} @ {home_team})")
+                        continue
+                    
+                    # Insert or update pick
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO user_picks (user_id, game_id, selected_team, created_at)
+                        VALUES (?, ?, ?, ?)
+                    ''', (user_id, game_id, pick, datetime.now()))
+                    
+                    imported_count += 1
+            
+            conn.commit()
+        
+        result = {
+            'success': True,
+            'message': f'Successfully imported {imported_count} picks',
+            'imported_count': imported_count
+        }
+        
+        if error_messages:
+            result['warnings'] = error_messages[:10]  # Limit to first 10 errors
+            if len(error_messages) > 10:
+                result['warnings'].append(f"... and {len(error_messages) - 10} more errors")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Import error: {e}")
+        return jsonify({'error': f'Import failed: {str(e)}'}), 500
 
 if __name__ == '__main__':
     import os

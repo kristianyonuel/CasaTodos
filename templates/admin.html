@@ -55,6 +55,8 @@
                     <button onclick="recalculateAllScoring()" class="btn btn-warning">🔄 Recalculate All Scoring</button>
                     <button onclick="emergencyDeadlineExtension()" class="btn btn-danger" style="background-color: #dc2626;">🚨 Emergency Extension</button>
                     <button onclick="syncSeason()" class="btn btn-secondary">Sync NFL Season</button>
+                    <button onclick="exportAllUsersPicks()" class="btn btn-primary">📊 Export All Users' Picks</button>
+                    <button onclick="importPicksFile()" class="btn btn-secondary">📥 Import Picks from CSV</button>
                 </div>
                 
                 <div id="admin-content">
@@ -1429,104 +1431,45 @@
             }
         }
 
-        // Add missing functions for pick management
-        async function updatePick(pickId) {
-            try {
-                const pickRow = document.querySelector(`tr[data-pick-id="${pickId}"]`);
-                const selectedTeam = pickRow.querySelector('.pick-select').value;
-                const awayScore = pickRow.querySelector('.score-input[data-type="away"]')?.value || null;
-                const homeScore = pickRow.querySelector('.score-input[data-type="home"]')?.value || null;
+        // Import picks from CSV file
+        function importPicksFile() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.csv';
+            input.onchange = async function(event) {
+                const file = event.target.files[0];
+                if (!file) return;
                 
-                const response = await fetch('/admin/update_pick', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        pick_id: pickId,
-                        selected_team: selectedTeam,
-                        predicted_away_score: awayScore,
-                        predicted_home_score: homeScore
-                    })
-                });
+                const formData = new FormData();
+                formData.append('file', file);
                 
-                if (response.ok) {
-                    alert('✅ Pick updated successfully');
-                    loadAllPicks(); // Refresh the picks
-                } else {
-                    alert('❌ Error updating pick');
-                }
-            } catch (error) {
-                console.error('Error updating pick:', error);
-                alert('❌ Error updating pick');
-            }
-        }
-
-        async function deletePick(pickId) {
-            if (!confirm('Are you sure you want to delete this pick?')) return;
-            
-            try {
-                const response = await fetch('/admin/delete_pick', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pick_id: pickId })
-                });
-                
-                if (response.ok) {
-                    alert('✅ Pick deleted successfully');
-                    loadAllPicks(); // Refresh the picks
-                } else {
-                    alert('❌ Error deleting pick');
-                }
-            } catch (error) {
-                console.error('Error deleting pick:', error);
-                alert('❌ Error deleting pick');
-            }
-        }
-
-        async function loadSimplePicks() {
-            try {
-                document.getElementById('admin-content').innerHTML = '<p>Loading simple picks...</p>';
-                
-                const response = await fetch('/admin/simple_picks');
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const picks = await response.json();
-                console.log('Simple picks received:', picks);
-                
-                let html = `<h3>Simple Picks View</h3>`;
-                html += `<p><em>Showing last ${picks.length} picks (simplified view)</em></p>`;
-                
-                if (picks.length > 0) {
-                    html += '<table class="admin-picks-table">';
-                    html += '<thead><tr><th>Pick ID</th><th>Username</th><th>Game ID</th><th>Selected Team</th><th>Pick Time</th></tr></thead><tbody>';
-                    
-                    picks.forEach(pick => {
-                        html += `<tr>
-                            <td>${pick.pick_id}</td>
-                            <td>${pick.username}</td>
-                            <td>${pick.game_id}</td>
-                            <td>${pick.selected_team}</td>
-                            <td>${pick.pick_time || 'N/A'}</td>
-                        </tr>`;
+                try {
+                    const response = await fetch('/import_weekly_picks', {
+                        method: 'POST',
+                        body: formData
                     });
                     
-                    html += '</tbody></table>';
-                } else {
-                    html += '<p>No picks found in database.</p>';
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        let message = `✅ ${result.message}`;
+                        if (result.warnings && result.warnings.length > 0) {
+                            message += '\n\n⚠️ Warnings:\n' + result.warnings.join('\n');
+                        }
+                        alert(message);
+                        // Refresh the page to show updated data
+                        location.reload();
+                    } else {
+                        alert('❌ Import failed: ' + (result.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Import error:', error);
+                    alert('❌ Import failed: ' + error.message);
                 }
-                
-                document.getElementById('admin-content').innerHTML = html;
-            } catch (error) {
-                console.error('Error loading simple picks:', error);
-                document.getElementById('admin-content').innerHTML = 
-                    `<p class="error">Error loading simple picks: ${error.message}</p>
-                     <p>This helps us diagnose if the issue is with the database or the complex query.</p>`;
-            }
+            };
+            input.click();
         }
 
-        // Scoring update functions
         async function updateWeekScoring() {
             try {
                 const week = document.getElementById('admin-week').value;
