@@ -259,7 +259,7 @@ def update_scores(week, year):
     """Update live scores - can be called by anyone but respects rate limits"""
     from api_rate_limiter import check_api_rate_limit, get_api_calls_remaining
     
-    if not check_api_rate_limiter():
+    if not check_api_rate_limit():
         return jsonify({
             'error': 'API rate limit exceeded',
             'calls_remaining': get_api_calls_remaining(),
