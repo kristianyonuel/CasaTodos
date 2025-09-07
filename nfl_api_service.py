@@ -22,6 +22,27 @@ def get_ssl_verify():
         return False
     return True
 
+def make_api_request(url, params=None, timeout=15):
+    """Make API request with SSL fallback handling"""
+    try:
+        # Try with SSL verification first
+        response = requests.get(url, headers=HEADERS, params=params, timeout=timeout, verify=True)
+        response.raise_for_status()
+        return response
+    except requests.exceptions.SSLError as ssl_error:
+        logger.warning(f"SSL verification failed, trying without verification: {ssl_error}")
+        try:
+            # Fallback: disable SSL verification for this request
+            response = requests.get(url, headers=HEADERS, params=params, timeout=timeout, verify=False)
+            response.raise_for_status()
+            return response
+        except Exception as fallback_error:
+            logger.error(f"API request failed even without SSL verification: {fallback_error}")
+            raise fallback_error
+    except Exception as e:
+        logger.error(f"API request failed: {e}")
+        raise e
+
 SSL_VERIFY = get_ssl_verify()
 
 # BallDontLie NFL API configuration
@@ -63,7 +84,7 @@ def get_week_games(week: int, year: int = 2025) -> List[Dict]:
             'per_page': 100
         }
         
-        response = requests.get(url, headers=HEADERS, params=params, timeout=15, verify=SSL_VERIFY)
+        response = make_api_request(url, params=params, timeout=15)
         response.raise_for_status()
         
         data = response.json()
@@ -86,7 +107,7 @@ def get_teams() -> List[Dict]:
     try:
         url = f"{BALLDONTLIE_BASE}/teams"
         
-        response = requests.get(url, headers=HEADERS, timeout=10, verify=SSL_VERIFY)
+        response = make_api_request(url, timeout=10)
         response.raise_for_status()
         
         data = response.json()

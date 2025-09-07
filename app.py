@@ -18,6 +18,8 @@ from deadline_override_manager import DeadlineOverrideManager
 import csv
 import io
 from werkzeug.utils import secure_filename
+from background_updater import start_background_updater, stop_background_updater, get_updater_status
+import atexit
 
 # Configure logging for better debugging
 logging.basicConfig(
@@ -259,7 +261,7 @@ def update_scores(week, year):
     """Update live scores - can be called by anyone but respects rate limits"""
     from api_rate_limiter import check_api_rate_limit, get_api_calls_remaining
     
-    if not check_api_rate_limit():
+    if not check_api_rate_limiter():
         return jsonify({
             'error': 'API rate limit exceeded',
             'calls_remaining': get_api_calls_remaining(),
@@ -1524,7 +1526,7 @@ def admin_export_picks_csv():
         
     except Exception as e:
         logger.error(f"Error exporting picks CSV: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e)}, 500)
 
 @app.route('/admin/import_picks_csv', methods=['POST'])
 def admin_import_picks_csv():
@@ -1749,7 +1751,6 @@ def admin_simple_picks():
                 LIMIT 50
             ''')
             
-            picks = []
             for row in cursor.fetchall():
                 picks.append({
                     'pick_id': row['id'],
@@ -1950,7 +1951,7 @@ def debug_leaderboard():
         total_games = cursor.fetchone()[0]
         debug_info.append(f"Total games: {total_games}")
         
-        cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE is_final = 1')
+        cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE is_final =  1')
         completed_games = cursor.fetchone()[0]
         debug_info.append(f"Completed games: {completed_games}")
         
@@ -2392,6 +2393,59 @@ def weekly_results():
     # TODO: Create dedicated weekly results page if needed
     return redirect(url_for('leaderboard'))
 
+@app.route('/admin/background_updater_status')
+def admin_background_updater_status():
+    """Get status of the background game updater"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        status = get_updater_status()
+        return jsonify({
+            'success': True,
+            'status': status,
+            'message': 'Background updater running' if status['running'] else 'Background updater stopped'
+        })
+    except Exception as e:
+        logger.error(f"Error getting background updater status: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/admin/control_background_updater', methods=['POST'])
+def admin_control_background_updater():
+    """Start or stop the background game updater"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        action = data.get('action', '').lower()
+        
+        if action == 'start':
+            start_background_updater()
+            logger.info(f"Admin {session.get('username')} started background updater")
+            return jsonify({'success': True, 'message': 'Background updater started'})
+        elif action == 'stop':
+            stop_background_updater()
+            logger.info(f"Admin {session.get('username')} stopped background updater")
+            return jsonify({'success': True, 'message': 'Background updater stopped'})
+        else:
+            return jsonify({'success': False, 'error': 'Invalid action. Use "start" or "stop"'})
+            
+    except Exception as e:
+        logger.error(f"Error controlling background updater: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+        
+# Register shutdown handler to stop background updater
+def shutdown_handler():
+    """Clean shutdown of background services"""
+    try:
+        stop_background_updater()
+        logger.info("Background updater stopped on shutdown")
+    except Exception as e:
+        logger.error(f"Error stopping background updater: {e}")
+
+atexit.register(shutdown_handler)
+
 if __name__ == '__main__':
     import os
     import ssl
@@ -2399,6 +2453,13 @@ if __name__ == '__main__':
     
     # Initialize the database on startup
     initialize_app()
+    
+    # Start background game updater (every 15 minutes)
+    try:
+        start_background_updater()
+        logger.info("✅ Background game updater started (updates every 15 minutes)")
+    except Exception as e:
+        logger.error(f"❌ Failed to start background updater: {e}")
     
     # Simple SSL context setup for existing certificates
     def setup_ssl_context():

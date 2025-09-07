@@ -1899,3 +1899,45 @@ body {
         padding: 15px;
     }
 }
+
+/* Background Updater Status Styles */
+.admin-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.admin-section h3 {
+    margin-bottom: 15px;
+    color: #2c3e50;
+    font-size: 1.3rem;
+}
+
+.status-display {
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border-left: 4px solid #3498db;
+}
+
+.status-info p {
+    margin: 8px 0;
+    font-size: 14px;
+}
+
+.status-info strong {
+    color: #2c3e50;
+}
+
+.status-display .error {
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+.status-display .success {
+    color: #27ae60;
+    font-weight: 600;
+}

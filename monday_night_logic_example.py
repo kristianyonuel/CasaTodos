@@ -45,21 +45,21 @@ def monday_night_logic_example():
     shared_deadline = first_sunday_game - timedelta(minutes=30)  # 12:30 PM AST on Sunday
     
     print(f"Thursday Night: Chiefs @ Bills")
-    print(f"  Game Time: {thursday_game_time.strftime('%A %B %d at %-I:%M %p AST')}")
-    print(f"  Deadline:  {thursday_deadline.strftime('%A %B %d at %-I:%M %p AST')} (Individual)")
+    print(f"  Game Time: {thursday_game_time.strftime('%A %B %d at %I:%M %p AST')}")
+    print(f"  Deadline:  {thursday_deadline.strftime('%A %B %d at %I:%M %p AST')} (Individual)")
     print()
     
     print(f"Sunday Games:")
-    print(f"  Early Game:  Saints @ Panthers   - {sunday_early_game.strftime('%-I:%M %p AST')}")
-    print(f"  Late Game:   Cowboys @ Giants     - {sunday_late_game.strftime('%-I:%M %p AST')}")
-    print(f"  Night Game:  Packers @ Bears      - {sunday_night_game.strftime('%-I:%M %p AST')}")
-    print(f"  Shared Deadline: {shared_deadline.strftime('%A %B %d at %-I:%M %p AST')}")
+    print(f"  Early Game:  Saints @ Panthers   - {sunday_early_game.strftime('%I:%M %p AST')}")
+    print(f"  Late Game:   Cowboys @ Giants     - {sunday_late_game.strftime('%I:%M %p AST')}")
+    print(f"  Night Game:  Packers @ Bears      - {sunday_night_game.strftime('%I:%M %p AST')}")
+    print(f"  Shared Deadline: {shared_deadline.strftime('%A %B %d at %I:%M %p AST')}")
     print("  (30 minutes before FIRST Sunday game)")
     print()
     
     print(f"Monday Night: Jets @ Dolphins")
-    print(f"  Game Time: {monday_game_time.strftime('%A %B %d at %-I:%M %p AST')}")
-    print(f"  Deadline:  {shared_deadline.strftime('%A %B %d at %-I:%M %p AST')} (SAME as Sunday)")
+    print(f"  Game Time: {monday_game_time.strftime('%A %B %d at %I:%M %p AST')}")
+    print(f"  Deadline:  {shared_deadline.strftime('%A %B %d at %I:%M %p AST')} (SAME as Sunday)")
     print("  (Uses Sunday deadline, NOT individual deadline)")
     print()
     

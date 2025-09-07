@@ -57,6 +57,19 @@
                     <button onclick="importPicksFile()" class="btn btn-secondary">📥 Import Picks from CSV</button>
                 </div>
                 
+                <!-- Background Updater Status -->
+                <div class="admin-section">
+                    <h3>🔄 Background Game Updater</h3>
+                    <div id="updater-status" class="status-display">
+                        <p>Loading status...</p>
+                    </div>
+                    <div class="admin-actions">
+                        <button onclick="checkUpdaterStatus()" class="btn btn-info">🔍 Check Status</button>
+                        <button onclick="startUpdater()" class="btn btn-success">▶️ Start Updater</button>
+                        <button onclick="stopUpdater()" class="btn btn-danger">⏹️ Stop Updater</button>
+                    </div>
+                </div>
+                
                 <div id="admin-content">
                     <p>Select an action above to manage the league.</p>
                 </div>
@@ -1404,6 +1417,91 @@
             const safeUrl = `/export_all_users_picks_csv_safe?week=${week}&year=${year}`;
             window.open(safeUrl, '_blank');
         }
+        
+        // Background Updater Functions
+        async function checkUpdaterStatus() {
+            try {
+                const response = await fetch('/admin/background_updater_status');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const status = result.status;
+                    const statusHtml = `
+                        <div class="status-info">
+                            <p><strong>Status:</strong> ${status.running ? '🟢 Running' : '🔴 Stopped'}</p>
+                            <p><strong>Update Interval:</strong> ${status.update_interval_minutes} minutes</p>
+                            <p><strong>Current NFL Week:</strong> ${status.current_week || 'N/A'}</p>
+                            ${status.running ? '<p><strong>Auto-updating game scores every 15 minutes</strong></p>' : ''}
+                        </div>
+                    `;
+                    document.getElementById('updater-status').innerHTML = statusHtml;
+                } else {
+                    document.getElementById('updater-status').innerHTML = 
+                        `<p class="error">❌ Error: ${result.error}</p>`;
+                }
+            } catch (error) {
+                console.error('Error checking updater status:', error);
+                document.getElementById('updater-status').innerHTML = 
+                    `<p class="error">❌ Failed to check status: ${error.message}</p>`;
+            }
+        }
+        
+        async function startUpdater() {
+            try {
+                const response = await fetch('/admin/control_background_updater', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ action: 'start' })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ Background updater started successfully!');
+                    checkUpdaterStatus(); // Refresh status
+                } else {
+                    alert(`❌ Failed to start updater: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('Error starting updater:', error);
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        async function stopUpdater() {
+            if (!confirm('Are you sure you want to stop the background game updater?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/admin/control_background_updater', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ action: 'stop' })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('⏹️ Background updater stopped successfully!');
+                    checkUpdaterStatus(); // Refresh status
+                } else {
+                    alert(`❌ Failed to stop updater: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('Error stopping updater:', error);
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        // Auto-check updater status on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            checkUpdaterStatus();
+        });
     </script>
 </body>
 </html>

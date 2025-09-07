@@ -112,8 +112,8 @@ def test_deadline_logic():
     if deadlines.get('thursday_night'):
         thursday_info = deadlines['thursday_night']
         print(f"📅 Thursday Night: {thursday_info['matchup']}")
-        print(f"   Game Time: {thursday_info['game_time'].strftime('%A %B %d, %Y at %-I:%M %p AST')}")
-        print(f"   Deadline:  {thursday_info['deadline'].strftime('%A %B %d, %Y at %-I:%M %p AST')}")
+        print(f"   Game Time: {thursday_info['game_time'].strftime('%A %B %d, %Y at %I:%M %p AST')}")
+        print(f"   Deadline:  {thursday_info['deadline'].strftime('%A %B %d, %Y at %I:%M %p AST')}")
         print()
     
     # Friday Games (Individual deadlines)
@@ -122,8 +122,8 @@ def test_deadline_logic():
         print(f"📅 Friday Games ({len(friday_games)} games with individual deadlines):")
         for i, friday_info in enumerate(friday_games, 1):
             print(f"   Game {i}: {friday_info['matchup']}")
-            print(f"   Game Time: {friday_info['game_time'].strftime('%A %B %d, %Y at %-I:%M %p AST')}")
-            print(f"   Deadline:  {friday_info['deadline'].strftime('%A %B %d, %Y at %-I:%M %p AST')}")
+            print(f"   Game Time: {friday_info['game_time'].strftime('%A %B %d, %Y at %I:%M %p AST')}")
+            print(f"   Deadline:  {friday_info['deadline'].strftime('%A %B %d, %Y at %I:%M %p AST')}")
         print()
     
     # Saturday Games (Individual deadlines)
@@ -132,24 +132,24 @@ def test_deadline_logic():
         print(f"📅 Saturday Games ({len(saturday_games)} games with individual deadlines):")
         for i, saturday_info in enumerate(saturday_games, 1):
             print(f"   Game {i}: {saturday_info['matchup']}")
-            print(f"   Game Time: {saturday_info['game_time'].strftime('%A %B %d, %Y at %-I:%M %p AST')}")
-            print(f"   Deadline:  {saturday_info['deadline'].strftime('%A %B %d, %Y at %-I:%M %p AST')}")
+            print(f"   Game Time: {saturday_info['game_time'].strftime('%A %B %d, %Y at %I:%M %p AST')}")
+            print(f"   Deadline:  {saturday_info['deadline'].strftime('%A %B %d, %Y at %I:%M %p AST')}")
         print()
     
     # Sunday Games (Shared deadline)
     if deadlines.get('sunday_games'):
         sunday_info = deadlines['sunday_games']
         print(f"📅 Sunday Games (shared deadline): {sunday_info['matchup']}")
-        print(f"   First Game Time: {sunday_info['game_time'].strftime('%A %B %d, %Y at %-I:%M %p AST')}")
-        print(f"   Shared Deadline: {sunday_info['deadline'].strftime('%A %B %d, %Y at %-I:%M %p AST')}")
+        print(f"   First Game Time: {sunday_info['game_time'].strftime('%A %B %d, %Y at %I:%M %p AST')}")
+        print(f"   Shared Deadline: {sunday_info['deadline'].strftime('%A %B %d, %Y at %I:%M %p AST')}")
         print()
     
     # Monday Night (Uses Sunday deadline)
     if deadlines.get('monday_night'):
         monday_info = deadlines['monday_night']
         print(f"📅 Monday Night (uses Sunday deadline): {monday_info['matchup']}")
-        print(f"   Game Time: {monday_info['game_time'].strftime('%A %B %d, %Y at %-I:%M %p AST')}")
-        print(f"   Deadline:  {monday_info['deadline'].strftime('%A %B %d, %Y at %-I:%M %p AST')}")
+        print(f"   Game Time: {monday_info['game_time'].strftime('%A %B %d, %Y at %I:%M %p AST')}")
+        print(f"   Deadline:  {monday_info['deadline'].strftime('%A %B %d, %Y at %I:%M %p AST')}")
         print()
     
     # Verification Tests

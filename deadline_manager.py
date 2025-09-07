@@ -365,7 +365,7 @@ class DeadlineManager:
                                     'hours_remaining': hours_remaining,
                                     'passed': hours_remaining <= 0,
                                     'matchup': info.get('matchup', ''),
-                                    'formatted_time': deadline.strftime('%A %-I:%M %p AST'),
+                                    'formatted_time': deadline.strftime('%A %I:%M %p AST'),
                                     'urgency': 'critical' if 0 < hours_remaining <= 2 else 'warning' if 0 < hours_remaining <= 24 else 'normal'
                                 }
                                 game_summaries.append(game_summary)
@@ -391,7 +391,7 @@ class DeadlineManager:
                         'hours_remaining': hours_remaining,
                         'passed': hours_remaining <= 0,
                         'matchup': deadline_info.get('matchup', ''),
-                        'formatted_time': deadline.strftime('%A %-I:%M %p AST'),
+                        'formatted_time': deadline.strftime('%A %I:%M %p AST'),
                         'urgency': 'critical' if 0 < hours_remaining <= 2 else 'warning' if 0 < hours_remaining <= 24 else 'normal'
                     }
                     
@@ -459,7 +459,7 @@ class DeadlineManager:
                                         'deadline': effective_deadline,
                                         'hours_remaining': hours_remaining,
                                         'passed': hours_remaining <= 0,
-                                        'formatted_time': effective_deadline.strftime('%A %-I:%M %p AST'),
+                                        'formatted_time': effective_deadline.strftime('%A %I:%M %p AST'),
                                         'urgency': 'critical' if 0 < hours_remaining <= 2 else 'warning' if 0 < hours_remaining <= 24 else 'normal',
                                         'is_override': True
                                     })
@@ -490,7 +490,7 @@ class DeadlineManager:
                             'deadline': effective_deadline,
                             'hours_remaining': hours_remaining,
                             'passed': hours_remaining <= 0,
-                            'formatted_time': effective_deadline.strftime('%A %-I:%M %p AST'),
+                            'formatted_time': effective_deadline.strftime('%A %I:%M %p AST'),
                             'urgency': 'critical' if 0 < hours_remaining <= 2 else 'warning' if 0 < hours_remaining <= 24 else 'normal',
                             'is_override': True
                         })
