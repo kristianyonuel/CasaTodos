@@ -2290,7 +2290,7 @@ def import_weekly_picks():
 
 @app.route('/export_all_users_picks_csv')
 def export_all_users_picks_csv():
-    """Export all users' picks in CSV format with usernames as headers"""
+    """Export all users' picks in CSV format with usernames as headers (Fantasy League Format)"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
@@ -2305,17 +2305,18 @@ def export_all_users_picks_csv():
         with get_db() as conn:
             cursor = conn.cursor()
             
-            # Get all users
-            cursor.execute('SELECT id, username FROM users ORDER BY username')
+            # Get all users (excluding admin) ordered by username
+            cursor.execute('SELECT id, username FROM users WHERE is_admin = 0 ORDER BY username')
             users = cursor.fetchall()
             
             if not users:
                 flash('No users found', 'error')
                 return redirect(url_for('admin'))
             
-            # Get all games for the week
+            # Get all games for the week ordered by game_date
             cursor.execute('''
-                SELECT id, home_team, away_team, game_date 
+                SELECT id, home_team, away_team, game_date, is_monday_night,
+                       home_score, away_score
                 FROM nfl_games 
                 WHERE week = ? AND year = ? 
                 ORDER BY game_date
@@ -2330,13 +2331,17 @@ def export_all_users_picks_csv():
             output = StringIO()
             writer = csv.writer(output)
             
-            # Header row: usernames
+            # Header row: usernames (Fantasy League Format)
             usernames = [user[1] for user in users]
             writer.writerow(usernames)
             
-            # Data rows: each game's picks
+            # Data rows: each game's picks (one row per game)
+            regular_games = []
+            monday_night_games = []
+            
             for game in games:
                 game_id = game[0]
+                is_monday_night = game[4]
                 
                 picks_row = []
                 for user in users:
@@ -2352,7 +2357,58 @@ def export_all_users_picks_csv():
                     pick = cursor.fetchone()
                     picks_row.append(pick[0] if pick else '')
                 
+                if is_monday_night:
+                    monday_night_games.append((game, picks_row))
+                else:
+                    regular_games.append((game, picks_row))
+            
+            # Write regular games first
+            for game, picks_row in regular_games:
                 writer.writerow(picks_row)
+            
+            # Write Monday Night games
+            for game, picks_row in monday_night_games:
+                writer.writerow(picks_row)
+            
+            # Add Monday Night total scores row
+            monday_scores_row = []
+            for user in users:
+                user_id = user[0]
+                
+                # Get user's Monday Night total prediction
+                cursor.execute('''
+                    SELECT predicted_home_score + predicted_away_score as total_score
+                    FROM user_picks up
+                    JOIN nfl_games g ON up.game_id = g.id
+                    WHERE up.user_id = ? AND g.week = ? AND g.year = ? 
+                    AND g.is_monday_night = 1
+                    LIMIT 1
+                ''', (user_id, week, year))
+                
+                total_prediction = cursor.fetchone()
+                if total_prediction:
+                    # Format as "home_score–away_score" (using en-dash)
+                    cursor.execute('''
+                        SELECT predicted_home_score, predicted_away_score
+                        FROM user_picks up
+                        JOIN nfl_games g ON up.game_id = g.id
+                        WHERE up.user_id = ? AND g.week = ? AND g.year = ? 
+                        AND g.is_monday_night = 1
+                        LIMIT 1
+                    ''', (user_id, week, year))
+                    
+                    scores = cursor.fetchone()
+                    if scores:
+                        home_score = scores[0] or 0
+                        away_score = scores[1] or 0
+                        monday_scores_row.append(f"{home_score}–{away_score}")
+                    else:
+                        monday_scores_row.append("")
+                else:
+                    monday_scores_row.append("")
+            
+            # Write Monday Night scores row
+            writer.writerow(monday_scores_row)
             
             # Prepare response with better headers for download reliability
             output.seek(0)
@@ -2360,7 +2416,7 @@ def export_all_users_picks_csv():
             
             response = make_response(csv_content)
             response.headers['Content-Type'] = 'text/csv; charset=utf-8'
-            response.headers['Content-Disposition'] = f'attachment; filename=all_users_picks_week_{week}_{year}.csv'
+            response.headers['Content-Disposition'] = f'attachment; filename=fantasy_league_picks_week_{week}_{year}.csv'
             
             # Add headers to prevent SSL/HTTPS download issues
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
