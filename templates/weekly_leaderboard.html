@@ -107,6 +107,23 @@
             <p>Week {{ current_week }}, {{ current_year }} - With Monday Night Tiebreakers</p>
         </header>
         
+        {% if winner_prediction %}
+        <div class="predictable-winner-section" style="background: #e3f2fd; border: 2px solid #2196f3; border-radius: 8px; padding: 15px; margin: 20px 0;">
+            <h3 style="color: #1976d2; margin: 0 0 10px 0;">🎯 Winner Prediction Analysis</h3>
+            <p style="font-size: 16px; font-weight: 500; margin: 0; color: #0d47a1;">{{ winner_prediction }}</p>
+            
+            {% if winner_analysis and winner_analysis.special_case %}
+            <div style="margin-top: 10px; padding: 10px; background: #fff3e0; border-radius: 5px; border-left: 4px solid #ff9800;">
+                <strong>{{ winner_analysis.special_case.description }}</strong><br>
+                <small style="color: #666;">
+                    ✅ If correct: {{ winner_analysis.special_case.if_correct }}<br>
+                    ❌ If wrong: {{ winner_analysis.special_case.if_wrong }}
+                </small>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
         <div class="navigation-links">
             <a href="{{ url_for('index') }}">← Back to Dashboard</a>
             <a href="{{ url_for('games') }}">🎯 Make Picks</a>

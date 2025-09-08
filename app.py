@@ -21,6 +21,9 @@ from werkzeug.utils import secure_filename
 from background_updater import start_background_updater, stop_background_updater, get_updater_status
 import atexit
 
+# Import predictable winner analysis
+from predictable_winner import get_winner_prediction_summary, analyze_predictable_winners
+
 # Configure logging for better debugging
 logging.basicConfig(
     level=logging.INFO,
@@ -1914,7 +1917,25 @@ def weekly_leaderboard(week=None, year=None):
         # Update ranks after sorting
         for i, user in enumerate(leaderboard_data, 1):
             user['rank'] = i
-            user['is_winner'] = i == 1
+            # Only mark as winner if:
+            # 1. They have more correct picks than others, OR
+            # 2. Monday Night game is final and they're ranked first
+            if i == 1:
+                # Check if this user is actually ahead or tied
+                if len(leaderboard_data) > 1:
+                    second_place_score = leaderboard_data[1]['correct_picks']
+                    user_score = user['correct_picks']
+                    
+                    # Check if Monday Night game is final
+                    mnf_is_final = user['monday_tiebreaker'].get('is_final', False)
+                    
+                    # Only mark as winner if clearly ahead OR MNF is final and properly sorted
+                    user['is_winner'] = (user_score > second_place_score) or mnf_is_final
+                else:
+                    # Only one user, they win
+                    user['is_winner'] = True
+            else:
+                user['is_winner'] = False
         
         # Get available weeks for navigation
         cursor.execute('''
@@ -1927,11 +1948,22 @@ def weekly_leaderboard(week=None, year=None):
         available_weeks = cursor.fetchall()
         conn.close()
         
+        # Get predictable winner analysis for Monday Night
+        try:
+            winner_prediction = get_winner_prediction_summary(week, year)
+            winner_analysis = analyze_predictable_winners(week, year)
+        except Exception as e:
+            logger.error(f"Error getting winner prediction: {e}")
+            winner_prediction = None
+            winner_analysis = None
+        
         return render_template('weekly_leaderboard.html', 
                              leaderboard=leaderboard_data,
                              current_week=week,
                              current_year=year,
-                             available_weeks=available_weeks)
+                             available_weeks=available_weeks,
+                             winner_prediction=winner_prediction,
+                             winner_analysis=winner_analysis)
     
     except Exception as e:
         logger.error(f"Error in weekly leaderboard: {e}")
@@ -2552,7 +2584,7 @@ def admin_background_updater_status():
         })
     except Exception as e:
         logger.error(f"Error getting background updater status: {e}")
-       
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/admin/control_background_updater', methods=['POST'])
 def admin_control_background_updater():
