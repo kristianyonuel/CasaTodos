@@ -551,6 +551,28 @@ body {
     background: #f8f9fa;
 }
 
+.team label .team-abbrev {
+    display: block;
+    font-size: 1.1em;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.team label .team-name {
+    display: block;
+    font-size: 0.9em;
+    color: #666;
+    font-weight: normal;
+}
+
+.team input[type="radio"]:checked + label .team-abbrev {
+    color: #fff;
+}
+
+.team input[type="radio"]:checked + label .team-name {
+    color: #e0e0e0;
+}
+
 .team input[type="radio"]:checked + label {
     background: #28a745;
     color: white;

@@ -766,7 +766,11 @@ def admin_schedule():
         
         games = []
         for row in cursor.fetchall():
-            games.append(dict(row))
+            game_dict = dict(row)
+            # Add team names for admin interface
+            game_dict['away_team_name'] = get_team_name(game_dict['away_team'])
+            game_dict['home_team_name'] = get_team_name(game_dict['home_team'])
+            games.append(game_dict)
     
     return jsonify(games)
 
@@ -2621,6 +2625,60 @@ def shutdown_handler():
         logger.error(f"Error stopping background updater: {e}")
 
 atexit.register(shutdown_handler)
+
+# NFL team name mappings
+NFL_TEAM_NAMES = {
+    'ARI': 'Arizona Cardinals',
+    'ATL': 'Atlanta Falcons', 
+    'BAL': 'Baltimore Ravens',
+    'BUF': 'Buffalo Bills',
+    'CAR': 'Carolina Panthers',
+    'CHI': 'Chicago Bears',
+    'CIN': 'Cincinnati Bengals',
+    'CLE': 'Cleveland Browns',
+    'DAL': 'Dallas Cowboys',
+    'DEN': 'Denver Broncos',
+    'DET': 'Detroit Lions',
+    'GB': 'Green Bay Packers',
+    'HOU': 'Houston Texans',
+    'IND': 'Indianapolis Colts',
+    'JAX': 'Jacksonville Jaguars',
+    'KC': 'Kansas City Chiefs',
+    'LAC': 'Los Angeles Chargers',
+    'LAR': 'Los Angeles Rams',
+    'LV': 'Las Vegas Raiders',
+    'MIA': 'Miami Dolphins',
+    'MIN': 'Minnesota Vikings',
+    'NE': 'New England Patriots',
+    'NO': 'New Orleans Saints',
+    'NYG': 'New York Giants',
+    'NYJ': 'New York Jets',
+    'PHI': 'Philadelphia Eagles',
+    'PIT': 'Pittsburgh Steelers',
+    'SF': 'San Francisco 49ers',
+    'SEA': 'Seattle Seahawks',
+    'TB': 'Tampa Bay Buccaneers',
+    'TEN': 'Tennessee Titans',
+    'WAS': 'Washington Commanders'
+}
+
+def get_team_name(abbreviation):
+    """Get full team name from abbreviation"""
+    return NFL_TEAM_NAMES.get(abbreviation, abbreviation)
+
+def get_team_display(abbreviation):
+    """Get team display as 'ABB - Full Name'"""
+    full_name = NFL_TEAM_NAMES.get(abbreviation, abbreviation)
+    return f"{abbreviation} - {full_name}"
+
+# Add team names to template context
+@app.context_processor
+def inject_team_names():
+    return {
+        'get_team_name': get_team_name,
+        'get_team_display': get_team_display,
+        'nfl_team_names': NFL_TEAM_NAMES
+    }
 
 if __name__ == '__main__':
     import os

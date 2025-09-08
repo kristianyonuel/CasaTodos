@@ -408,9 +408,13 @@
                         html += `<tr data-game-id="${game.id}">
                             <td>${game.game_id}</td>
                             <td>
-                                <input type="text" class="game-away-team" value="${game.away_team}" data-game-id="${game.id}" style="width:60px">
-                                @
-                                <input type="text" class="game-home-team" value="${game.home_team}" data-game-id="${game.id}" style="width:60px">
+                                <div style="margin-bottom: 5px;">
+                                    <input type="text" class="game-away-team" value="${game.away_team}" data-game-id="${game.id}" style="width:60px">
+                                    <span style="font-size: 0.9em; color: #666;"> - ${game.away_team_name}</span>
+                                    @
+                                    <input type="text" class="game-home-team" value="${game.home_team}" data-game-id="${game.id}" style="width:60px">
+                                    <span style="font-size: 0.9em; color: #666;"> - ${game.home_team_name}</span>
+                                </div>
                             </td>
                             <td>
                                 <input type="datetime-local" class="game-date" value="${game.game_date ? game.game_date.slice(0,16) : ''}" data-game-id="${game.id}">
@@ -478,7 +482,7 @@
                                      game.away_score > game.home_score ? game.away_team : 'TIE';
                         
                         html += `<tr>
-                            <td>${game.away_team} @ ${game.home_team}</td>
+                            <td>${game.away_team} - ${game.away_team_name} @ ${game.home_team} - ${game.home_team_name}</td>
                             <td>${game.away_score || 0} - ${game.home_score || 0}</td>
                             <td><strong>${winner}</strong></td>
                             <td>${game.total_picks || 0}</td>
@@ -698,17 +702,17 @@
                     
                     html += `<div class="admin-game-card" data-game-id="${game.id}">
                         <div class="game-header">
-                            <strong>${game.away_team} @ ${game.home_team}</strong>
+                            <strong>${game.away_team} - ${game.away_team_name} @ ${game.home_team} - ${game.home_team_name}</strong>
                             <span class="game-type-badge">${gameType}</span>
                         </div>
                         <div class="pick-options">
                             <label>
                                 <input type="radio" name="game_${game.id}" value="${game.away_team}">
-                                ${game.away_team}
+                                ${game.away_team} - ${game.away_team_name}
                             </label>
                             <label>
                                 <input type="radio" name="game_${game.id}" value="${game.home_team}">
-                                ${game.home_team}
+                                ${game.home_team} - ${game.home_team_name}
                             </label>
                         </div>`;
                     
