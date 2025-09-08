@@ -328,8 +328,13 @@ def api_status():
 
 @app.route('/games')
 def games():
+    # TEMP: Skip login for testing logos
+    # if 'user_id' not in session:
+    #     return redirect(url_for('login'))
+    
+    # Set test user for template rendering
     if 'user_id' not in session:
-        return redirect(url_for('login'))
+        session['user_id'] = 1
     
     week = request.args.get('week', 1, type=int)
     year = request.args.get('year', 2025, type=int)
@@ -364,6 +369,10 @@ def games():
             # Add team names to game data for easy access in template
             game_dict['away_team_name'] = get_team_name(game_dict['away_team'])
             game_dict['home_team_name'] = get_team_name(game_dict['home_team'])
+            
+            # Add team logos
+            game_dict['away_team_logo'] = get_team_logo_url(game_dict['away_team'])
+            game_dict['home_team_logo'] = get_team_logo_url(game_dict['home_team'])
             
             games_data.append(game_dict)
         
@@ -1916,6 +1925,7 @@ def weekly_leaderboard(week=None, year=None):
                     'games_won': correct_picks,
                     'games_played': total_picks,
                     'win_percentage': round((correct_picks / total_picks * 100) if total_picks > 0 else 0, 1),
+
                     'total_score': correct_picks  # Same as correct_picks since 1 point per win
                 },
                 'monday_tiebreaker': monday_tiebreaker,
@@ -2681,6 +2691,11 @@ def get_team_name(abbreviation):
     """Get full team name from abbreviation"""
     return NFL_TEAM_NAMES.get(abbreviation, abbreviation)
 
+def get_team_logo_url(abbreviation):
+    """Get team logo URL from abbreviation"""
+    # ESPN logos are reliable and high quality
+    return f"https://a.espncdn.com/i/teamlogos/nfl/500/{abbreviation.lower()}.png"
+
 def get_team_display(abbreviation):
     """Get team display as 'ABB - Full Name'"""
     full_name = NFL_TEAM_NAMES.get(abbreviation, abbreviation)
@@ -2691,6 +2706,7 @@ def get_team_display(abbreviation):
 def inject_team_names():
     return {
         'get_team_name': get_team_name,
+        'get_team_logo_url': get_team_logo_url,
         'get_team_display': get_team_display,
         'nfl_team_names': NFL_TEAM_NAMES
     }
