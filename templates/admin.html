@@ -55,6 +55,7 @@
                     <button onclick="exportAllUsersPicks()" class="btn btn-primary">📊 Export All Users' Picks</button>
                     <button onclick="exportAllUsersPicksSafe()" class="btn btn-success">📊 Export (SSL-Safe)</button>
                     <button onclick="importPicksFile()" class="btn btn-secondary">📥 Import Picks from CSV</button>
+                    <button onclick="exportWeeklyDashboardPDF()" class="btn btn-info">📄 Export Weekly Dashboard PDF</button>
                 </div>
                 
                 <!-- Background Updater Status -->
@@ -1416,6 +1417,32 @@
             // Use safe download method
             const safeUrl = `/export_all_users_picks_csv_safe?week=${week}&year=${year}`;
             window.open(safeUrl, '_blank');
+        }
+        
+        // Export Weekly Dashboard PDF
+        function exportWeeklyDashboardPDF() {
+            const week = prompt('Enter week number (1-18):', currentWeek || '1');
+            if (!week || isNaN(week) || week < 1 || week > 18) {
+                alert('Please enter a valid week number (1-18)');
+                return;
+            }
+            
+            const year = prompt('Enter year:', currentYear || '2025');
+            if (!year || isNaN(year)) {
+                alert('Please enter a valid year');
+                return;
+            }
+            
+            // Generate PDF URL
+            const pdfUrl = `/export_weekly_dashboard_pdf?week=${week}&year=${year}`;
+            
+            // Create temporary download link
+            const link = document.createElement('a');
+            link.href = pdfUrl;
+            link.download = `weekly_dashboard_week_${week}_${year}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
         
         // Background Updater Functions

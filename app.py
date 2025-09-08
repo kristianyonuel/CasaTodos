@@ -2076,7 +2076,7 @@ def export_my_picks_csv():
         
         # Create CSV content
         output = io.StringIO()
-        fieldnames = ['Week', 'Game', 'Away Team', 'Home Team', f'{username} Pick', 
+        fieldnames = ['Week', 'Game', 'Away Team', 'Home Team', 'Selected Team', 
                      'Home Score Prediction', 'Away Score Prediction']
         writer = csv.DictWriter(output, fieldnames=fieldnames)
         
@@ -2288,6 +2288,46 @@ def import_weekly_picks():
         logger.error(f"Import error: {e}")
         return jsonify({'error': f'Import failed: {str(e)}'}), 500
 
+@app.route('/export_weekly_dashboard_pdf')
+def export_weekly_dashboard_pdf():
+    """Export weekly dashboard as PDF"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    if not session.get('is_admin'):
+        flash('Admin access required', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        week = request.args.get('week', 1, type=int)
+        year = request.args.get('year', 2025, type=int)
+        
+        # Import PDF generator
+        from pdf_generator import generate_weekly_dashboard_pdf
+        
+        # Generate PDF
+        pdf_bytes = generate_weekly_dashboard_pdf(week, year, DATABASE_PATH)
+        
+        # Create response
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=weekly_dashboard_week_{week}_{year}.pdf'
+        response.headers['Content-Length'] = str(len(pdf_bytes))
+        
+        # Add cache control headers
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        logger.info(f"Admin {session['username']} exported weekly dashboard PDF for Week {week}, {year}")
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error generating weekly dashboard PDF: {e}")
+        flash(f'PDF generation failed: {str(e)}', 'error')
+        return redirect(url_for('admin'))
+
 @app.route('/export_all_users_picks_csv')
 def export_all_users_picks_csv():
     """Export all users' picks in CSV format with usernames as headers (Fantasy League Format)"""
@@ -2464,7 +2504,7 @@ def admin_background_updater_status():
         })
     except Exception as e:
         logger.error(f"Error getting background updater status: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+       
 
 @app.route('/admin/control_background_updater', methods=['POST'])
 def admin_control_background_updater():
