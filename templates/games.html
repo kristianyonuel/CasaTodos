@@ -69,7 +69,7 @@
                 <div class="deadline-info">
                     {% if deadline_status.thursday and deadline_status.thursday.hours_until < 24 %}
                         <div class="deadline-warning">
-                            ⏰ Thursday Night Game deadline: {{ deadlines.thursday.strftime('%A %-I:%M %p AST') }}
+                            ⏰ Thursday Night Game deadline: {{ deadlines.thursday.strftime('%A %I:%M %p AST') }}
                             {% if deadline_status.thursday.passed %}
                                 (Deadline passed)
                             {% else %}
@@ -80,7 +80,7 @@
                     
                     {% if deadline_status.sunday and deadline_status.sunday.hours_until < 24 %}
                         <div class="deadline-warning">
-                            ⏰ Sunday Games deadline: {{ deadlines.sunday.strftime('%A %-I:%M %p AST') }}
+                            ⏰ Sunday Games deadline: {{ deadlines.sunday.strftime('%A %I:%M %p AST') }}
                             {% if deadline_status.sunday.passed %}
                                 (Deadline passed)
                             {% else %}
