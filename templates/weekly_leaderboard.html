@@ -1,10 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weekly Leaderboard - La Casa de Todos</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% extends "base.html" %}
+
+{% block title %}Weekly Leaderboard - La Casa de Todos{% endblock %}
+
+{% block head %}
     <style>
         .weekly-leaderboard {
             max-width: 1200px;
@@ -48,67 +46,103 @@
         }
         
         .rank-2 {
-            background: #f8f9fa;
+            background: #e2e3e5;
             border-left: 4px solid #6c757d;
         }
         
         .rank-3 {
-            background: #fff5f5;
+            background: #f8d7da;
             border-left: 4px solid #dc3545;
         }
         
-        .score-breakdown {
-            font-size: 0.9em;
-            color: #6c757d;
+        .monday-night-prediction {
+            font-style: italic;
+            color: #007bff;
         }
         
-        .monday-tiebreaker {
-            font-size: 0.8em;
-            color: #495057;
-            margin-top: 5px;
-        }
-        
-        .tiebreaker-details {
-            background: #e9ecef;
-            padding: 8px;
-            border-radius: 4px;
-            margin-top: 5px;
-        }
-        
-        .medal {
-            font-size: 1.2em;
-            margin-right: 8px;
-        }
-        
-        .navigation-links {
-            margin-bottom: 20px;
+        .winner-section {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
             text-align: center;
         }
         
-        .navigation-links a {
-            display: inline-block;
-            margin: 0 10px;
+        .winner-section h3 {
+            color: #155724;
+            margin: 0 0 10px 0;
+        }
+        
+        .predictable-winner-section {
+            background: #e3f2fd;
+            border: 2px solid #2196f3;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .games-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        .games-table th,
+        .games-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .games-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        .game-final {
+            background: #d4edda;
+        }
+        
+        .game-live {
+            background: #fff3cd;
+        }
+        
+        .game-upcoming {
+            background: #f8f9fa;
+        }
+        
+        .btn {
             padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 5px;
+        }
+        
+        .btn-primary {
             background: #007bff;
             color: white;
-            text-decoration: none;
-            border-radius: 4px;
         }
         
-        .navigation-links a:hover {
-            background: #0056b3;
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
         }
     </style>
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     <div class="weekly-leaderboard">
-        <header>
-            <h1>🏈 Weekly Leaderboard</h1>
+        <div class="page-header">
+            <h2>🏈 Weekly Leaderboard</h2>
             <p>Week {{ current_week }}, {{ current_year }} - With Monday Night Tiebreakers</p>
-        </header>
+        </div>
         
         {% if winner_prediction %}
-        <div class="predictable-winner-section" style="background: #e3f2fd; border: 2px solid #2196f3; border-radius: 8px; padding: 15px; margin: 20px 0;">
+        <div class="predictable-winner-section">
             <h3 style="color: #1976d2; margin: 0 0 10px 0;">🎯 Winner Prediction Analysis</h3>
             <p style="font-size: 16px; font-weight: 500; margin: 0; color: #0d47a1;">{{ winner_prediction }}</p>
             
@@ -124,27 +158,33 @@
         </div>
         {% endif %}
         
-        <div class="navigation-links">
-            <a href="{{ url_for('index') }}">← Back to Dashboard</a>
-            <a href="{{ url_for('games') }}">🎯 Make Picks</a>
-            <a href="{{ url_for('leaderboard') }}">Season Leaderboard</a>
+        {% if leaderboard and leaderboard[0].is_winner %}
+        <div class="winner-section">
+            <h3>🏆 Weekly Winner</h3>
+            <p><strong>{{ leaderboard[0].username }}</strong> wins Week {{ current_week }} with {{ leaderboard[0].correct_picks }} correct picks!</p>
+            {% if leaderboard[0].monday_tiebreaker.has_pick %}
+            <p class="monday-night-prediction">
+                <strong>Monday Night Pick:</strong> {{ leaderboard[0].monday_tiebreaker.selected_team or 'Unknown' }}<br>
+                <strong>Score Prediction:</strong> {{ leaderboard[0].monday_tiebreaker.away_team }} {{ leaderboard[0].monday_tiebreaker.predicted_away }} - {{ leaderboard[0].monday_tiebreaker.predicted_home }} {{ leaderboard[0].monday_tiebreaker.home_team }}
+            </p>
+            {% endif %}
         </div>
+        {% endif %}
         
         <div class="week-selector">
-            <h3>Select Week:</h3>
-            {% for week_data in available_weeks %}
-                {% if week_data[0] == current_week and week_data[1] == current_year %}
-                    <a href="{{ url_for('weekly_leaderboard', week=week_data[0], year=week_data[1]) }}"
-                       style="margin: 0 5px; padding: 5px 10px; background: #007bff; color: white; text-decoration: none; border-radius: 3px;">
-                        Week {{ week_data[0] }} ({{ week_data[1] }})
-                    </a>
-                {% else %}
-                    <a href="{{ url_for('weekly_leaderboard', week=week_data[0], year=week_data[1]) }}"
-                       style="margin: 0 5px; padding: 5px 10px; background: #6c757d; color: white; text-decoration: none; border-radius: 3px;">
-                        Week {{ week_data[0] }} ({{ week_data[1] }})
-                    </a>
-                {% endif %}
-            {% endfor %}
+            <label for="week-select">Select Week:</label>
+            <select id="week-select" onchange="changeWeek()">
+                {% for week_num in range(1, 19) %}
+                <option value="{{ week_num }}" {% if week_num == current_week %}selected{% endif %}>Week {{ week_num }}</option>
+                {% endfor %}
+            </select>
+            
+            <label for="year-select" style="margin-left: 20px;">Year:</label>
+            <select id="year-select" onchange="changeWeek()">
+                <option value="2024" {% if current_year == 2024 %}selected{% endif %}>2024</option>
+                <option value="2025" {% if current_year == 2025 %}selected{% endif %}>2025</option>
+                <option value="2026" {% if current_year == 2026 %}selected{% endif %}>2026</option>
+            </select>
         </div>
         
         {% if leaderboard %}
@@ -152,251 +192,92 @@
             <thead>
                 <tr>
                     <th>Rank</th>
-                    <th>User</th>
-                    <th>Picks</th>
-                    <th>Score Breakdown</th>
-                    <th>Monday Night Tiebreaker</th>
+                    <th>Player</th>
+                    <th>Correct Picks</th>
+                    <th>Wrong Picks</th>
+                    <th>Win %</th>
+                    <th>Monday Night Prediction</th>
                 </tr>
             </thead>
             <tbody>
-                {% for user in leaderboard %}
-                <tr class="{% if user.rank == 1 %}rank-1{% elif user.rank == 2 %}rank-2{% elif user.rank == 3 %}rank-3{% endif %}">
+                {% for player in leaderboard %}
+                <tr class="{% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% endif %}">
                     <td>
-                        <span class="medal">
-                            {% if user.rank == 1 %}🥇
-                            {% elif user.rank == 2 %}🥈
-                            {% elif user.rank == 3 %}🥉
-                            {% else %}{{ user.rank }}.
+                        {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}{{ loop.index }}{% endif %}
+                    </td>
+                    <td><strong>{{ player.username }}</strong></td>
+                    <td>{{ player.correct_picks }}</td>
+                    <td>{{ player.total_picks - player.correct_picks }}</td>
+                    <td>{{ player.breakdown.win_percentage }}%</td>
+                    <td class="monday-night-prediction">
+                        {% if player.monday_tiebreaker.has_pick %}
+                            <strong>Picked: {{ player.monday_tiebreaker.selected_team or 'Unknown' }}</strong><br>
+                            <small>Score Prediction: {{ player.monday_tiebreaker.away_team }} {{ player.monday_tiebreaker.predicted_away }} - {{ player.monday_tiebreaker.predicted_home }} {{ player.monday_tiebreaker.home_team }}</small>
+                            {% if player.monday_tiebreaker.is_final %}
+                                <br><small style="color: #666;">(Actual: {{ player.monday_tiebreaker.away_team }} {{ player.monday_tiebreaker.actual_away }} - {{ player.monday_tiebreaker.actual_home }} {{ player.monday_tiebreaker.home_team }})</small>
                             {% endif %}
-                        </span>
-                    </td>
-                    <td>
-                        <strong>{{ user.username }}</strong>
-                        {% if user.is_winner %}
-                            <span style="color: #28a745; font-weight: bold;">👑 WINNER</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <strong>{{ user.correct_picks }}/{{ user.total_picks }}</strong> games won<br>
-                        <span style="font-size: 0.9em; color: #6c757d;">{{ user.total_score }} points (1 pt per win)</span>
-                    </td>
-                    <td>
-                        <div class="score-breakdown">
-                            {% if user.breakdown %}
-                                Games Won: {{ user.breakdown.games_won }}/{{ user.breakdown.games_played }}<br>
-                                Win Rate: {{ user.breakdown.win_percentage }}%<br>
-                                Total Points: {{ user.breakdown.total_score }} (1 pt per win)
-                            {% endif %}
-                        </div>
-                    </td>
-                    <td>
-                        {% if user.monday_tiebreaker.has_pick %}
-                            <div class="monday-tiebreaker">
-                                <strong>{{ user.monday_tiebreaker.home_team }} vs {{ user.monday_tiebreaker.away_team }}</strong><br>
-                                Predicted: {{ user.monday_tiebreaker.predicted_home }} - {{ user.monday_tiebreaker.predicted_away }}<br>
-                                {% if user.monday_tiebreaker.is_final %}
-                                    Actual: {{ user.monday_tiebreaker.actual_home }} - {{ user.monday_tiebreaker.actual_away }}
-                                    <div class="tiebreaker-details">
-                                        Home Diff: {{ user.monday_tiebreaker.home_diff }}<br>
-                                        Away Diff: {{ user.monday_tiebreaker.away_diff }}<br>
-                                        Total Diff: {{ user.monday_tiebreaker.total_diff }}
-                                    </div>
-                                {% else %}
-                                    <em>Game in progress...</em>
-                                {% endif %}
-                            </div>
                         {% else %}
-                            <em>No Monday pick</em>
+                            <span style="color: #999;">No prediction</span>
                         {% endif %}
-                    </td>
-                </tr>
-                
-                <!-- Expandable row for all picks -->
-                <tr class="picks-detail-row" style="display: none;" id="picks-{{ user.username }}">
-                    <td colspan="6">
-                        <div class="all-picks-container">
-                            <h4>{{ user.username }}'s All Picks for Week {{ current_week }}</h4>
-                            <div class="picks-grid">
-                                {% for pick in user.picks_detail %}
-                                <div class="pick-card {% if pick.is_correct == 1 %}correct{% elif pick.is_correct == 0 %}incorrect{% else %}pending{% endif %}">
-                                    <div class="teams">
-                                        <strong>{{ pick.away_team }} @ {{ pick.home_team }}</strong>
-                                    </div>
-                                    <div class="pick-info">
-                                        <span class="selected">Picked: {{ pick.selected_team }}</span>
-                                        {% if pick.predicted_home or pick.predicted_away %}
-                                        <span class="score-prediction">
-                                            Score: {{ pick.predicted_home }} - {{ pick.predicted_away }}
-                                        </span>
-                                        {% endif %}
-                                    </div>
-                                    <div class="result">
-                                        {% if pick.is_final %}
-                                            <span class="actual-score">Final: {{ pick.actual_home }} - {{ pick.actual_away }}</span>
-                                            <span class="result-badge {% if pick.is_correct == 1 %}win{% elif pick.is_correct == 0 %}loss{% endif %}">
-                                                {% if pick.is_correct == 1 %}✓ WIN{% elif pick.is_correct == 0 %}✗ LOSS{% endif %}
-                                            </span>
-                                        {% else %}
-                                            <span class="pending-result">Game pending</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        </div>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        
-        <script>
-        // Add click handlers to show/hide detailed picks
-        document.addEventListener('DOMContentLoaded', function() {
-            const rows = document.querySelectorAll('.leaderboard-table tbody tr:not(.picks-detail-row)');
-            rows.forEach(row => {
-                row.style.cursor = 'pointer';
-                row.addEventListener('click', function() {
-                    const username = this.querySelector('td:nth-child(2)').textContent.trim();
-                    const detailRow = document.getElementById('picks-' + username);
-                    if (detailRow) {
-                        detailRow.style.display = detailRow.style.display === 'none' ? 'table-row' : 'none';
-                    }
-                });
-            });
-        });
-        </script>
-        
-        <style>
-        .picks-detail-row {
-            background: #f8f9fa;
-        }
-        
-        .all-picks-container {
-            padding: 20px;
-        }
-        
-        .picks-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-        
-        .pick-card {
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            padding: 15px;
-            background: white;
-        }
-        
-        .pick-card.correct {
-            border-color: #28a745;
-            background: #f8fff9;
-        }
-        
-        .pick-card.incorrect {
-            border-color: #dc3545;
-            background: #fff8f8;
-        }
-        
-        .pick-card.pending {
-            border-color: #ffc107;
-            background: #fffbf0;
-        }
-        
-        .teams {
-            font-size: 16px;
-            margin-bottom: 10px;
-        }
-        
-        .pick-info {
-            margin-bottom: 10px;
-        }
-        
-        .selected {
-            display: block;
-            font-weight: 600;
-            color: #007bff;
-        }
-        
-        .score-prediction {
-            display: block;
-            font-size: 14px;
-            color: #6c757d;
-        }
-        
-        .result {
-            border-top: 1px solid #dee2e6;
-            padding-top: 10px;
-        }
-        
-        .actual-score {
-            display: block;
-            font-weight: 600;
-        }
-        
-        .result-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-top: 5px;
-        }
-        
-        .result-badge.win {
-            background: #28a745;
-            color: white;
-        }
-        
-        .result-badge.loss {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .pending-result {
-            color: #ffc107;
-            font-style: italic;
-        }
-        
-        .leaderboard-table tbody tr:not(.picks-detail-row):hover {
-            background: #f8f9fa;
-        }
-        </style>
-        
-        <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-            <h4>🏈 Scoring Rules:</h4>
-            <p><strong>Simple Scoring System:</strong></p>
-            <ul>
-                <li><strong>1 point for each game won</strong> (including Monday Night Football)</li>
-                <li><strong>No bonus points</strong> - just 1 point per correct pick</li>
-                <li><strong>All games are equal</strong> - Thursday, Sunday, and Monday games all worth 1 point</li>
-            </ul>
-            
-            <h4>🔧 Tiebreaker Rules:</h4>
-            <p>When users have the same number of games won, ties are broken using Monday Night Football predictions:</p>
-            <ol>
-                <li><strong>Closest to Home Team Score</strong> (either higher or lower)</li>
-                <li><strong>Closest to Away Team Score</strong></li>
-                <li><strong>Closest to Total Combined Score</strong></li>
-                <li><strong>Alphabetical Order</strong> (if still tied)</li>
-            </ol>
-            <p><em>Monday Night predictions are the key tiebreaker when users win the same number of games!</em></p>
-        </div>
-        
         {% else %}
-        <div style="text-align: center; padding: 40px; background: #f8f9fa; border-radius: 8px;">
-            <h3>📊 No Data Available</h3>
-            {% if no_data_message %}
-                <p>{{ no_data_message }}</p>
-            {% else %}
-                <p>No completed games found for Week {{ current_week }}, {{ current_year }}</p>
-            {% endif %}
-            <p>Try selecting a different week from the options above, or check back after games are completed and scored.</p>
-            <a href="{{ url_for('index') }}" style="display: inline-block; margin-top: 15px; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">Back to Dashboard</a>
+        <div class="no-data">
+            <p>No leaderboard data available for this week yet.</p>
+            <a href="{{ url_for('games') }}" class="btn btn-primary">Make Your Picks</a>
+        </div>
+        {% endif %}
+        
+        {% if games %}
+        <div class="games-section" style="margin-top: 40px;">
+            <h3>Week {{ current_week }} Games</h3>
+            <table class="games-table">
+                <thead>
+                    <tr>
+                        <th>Game</th>
+                        <th>Date/Time</th>
+                        <th>Status</th>
+                        <th>Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for game in games %}
+                    <tr class="{% if game.is_final %}game-final{% elif game.away_score or game.home_score %}game-live{% else %}game-upcoming{% endif %}">
+                        <td>{{ game.away_team }} @ {{ game.home_team }}</td>
+                        <td>{{ game.game_date.strftime('%a %m/%d %I:%M %p') if game.game_date else 'TBD' }}</td>
+                        <td>
+                            {% if game.is_final %}FINAL
+                            {% elif game.away_score or game.home_score %}LIVE
+                            {% else %}{{ game.game_date.strftime('%I:%M %p') if game.game_date else 'TBD' }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if game.away_score is not none and game.home_score is not none %}
+                                {{ game.away_team }} {{ game.away_score }} - {{ game.home_score }} {{ game.home_team }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
         {% endif %}
     </div>
-</body>
-</html>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        function changeWeek() {
+            const weekSelect = document.getElementById('week-select');
+            const yearSelect = document.getElementById('year-select');
+            const selectedWeek = weekSelect.value;
+            const selectedYear = yearSelect.value;
+            window.location.href = `{{ url_for('weekly_leaderboard') }}?week=${selectedWeek}&year=${selectedYear}`;
+        }
+    </script>
+{% endblock %}

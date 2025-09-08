@@ -1,27 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rules - La Casa de Todos</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <header class="header">
-            <h1>📋 Official Rules</h1>
-            <nav class="nav">
-                <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
-                <a href="{{ url_for('games') }}" class="nav-link">Make Picks</a>
-                <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
-                {% if session.get('is_admin') %}
-                <a href="{{ url_for('admin') }}" class="nav-link admin">Admin</a>
-                {% endif %}
-                <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
-            </nav>
-        </header>
+{% extends "base.html" %}
 
-        <main class="main-content">
+{% block title %}Rules - La Casa de Todos{% endblock %}
+
+{% block content %}
             <div class="rules-container">
                 <h2>🏈 La Casa de Todos NFL Fantasy League Rules</h2>
                 
@@ -77,7 +58,4 @@
                     <p>Elimination format is used during elimination weeks. Before the weekly games begin, team selections must be submitted to participate. <strong>If no selection is submitted, the participant is eliminated.</strong></p>
                 </div>
             </div>
-        </main>
-    </div>
-</body>
-</html>
+{% endblock %}

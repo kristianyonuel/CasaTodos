@@ -1,62 +1,403 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leaderboard - La Casa de Todos</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <header class="header">
-            <h1>🏆 Leaderboard</h1>
-            <nav class="nav">
-                <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
-                <a href="{{ url_for('games') }}" class="nav-link">Make Picks</a>
-                <a href="{{ url_for('rules') }}" class="nav-link">Rules</a>
-                {% if session.get('is_admin') %}
-                <a href="{{ url_for('admin') }}" class="nav-link admin">Admin</a>
-                {% endif %}
-                <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
-            </nav>
-        </header>
+{% extends "base.html" %}
 
-        <main class="main-content">
-            <div class="leaderboard-container">
-                <h2>Family League Standings</h2>
-                
-                {% if leaderboard %}
-                <table class="leaderboard-table">
-                    <thead>
-                        <tr>
-                            <th>Rank</th>
-                            <th>Player</th>
-                            <th>Weekly Wins</th>
-                            <th>Total Games Won</th>
-                            <th>Avg Per Week</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for player in leaderboard %}
-                        <tr>
-                            <td>{{ loop.index }}</td>
-                            <td>{{ player.username }}</td>
-                            <td>{{ player.wins }}</td>
-                            <td>{{ player.total_points }}</td>
-                            <td>{{ player.avg_correct }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <div class="no-results">
-                    <h3>No results yet</h3>
-                    <p>Complete some weeks to see the leaderboard!</p>
-                    <a href="{{ url_for('games') }}" class="btn btn-primary">Make Your Picks</a>
-                </div>
-                {% endif %}
+{% block title %}Season Leaderboard - La Casa de Todos{% endblock %}
+
+{% block head %}
+<style>
+/* Olympic Podium Design */
+.champions-podium {
+    display: flex;
+    justify-content: center;
+    align-items: end;
+    margin: 40px 0;
+    gap: 20px;
+    perspective: 1000px;
+}
+
+.podium-position {
+    text-align: center;
+    transition: transform 0.3s ease;
+    animation: podiumRise 1s ease-out;
+}
+
+.podium-position:hover {
+    transform: translateY(-10px) scale(1.05);
+}
+
+@keyframes podiumRise {
+    from { opacity: 0; transform: translateY(50px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.podium-first {
+    order: 2;
+    z-index: 3;
+}
+
+.podium-second {
+    order: 1;
+    z-index: 2;
+}
+
+.podium-third {
+    order: 3;
+    z-index: 1;
+}
+
+.champion-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    margin: 0 auto 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: white;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.champion-avatar::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.3), transparent);
+    transform: rotate(45deg);
+    animation: shine 3s infinite;
+}
+
+@keyframes shine {
+    0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+    50% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+    100% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+}
+
+.first-place .champion-avatar {
+    background: linear-gradient(135deg, #FFD700, #FFA500, #FF6347);
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+    width: 120px;
+    height: 120px;
+    font-size: 3rem;
+}
+
+.second-place .champion-avatar {
+    background: linear-gradient(135deg, #C0C0C0, #A9A9A9, #808080);
+    box-shadow: 0 0 25px rgba(192, 192, 192, 0.6);
+}
+
+.third-place .champion-avatar {
+    background: linear-gradient(135deg, #CD7F32, #B87333, #A0522D);
+    box-shadow: 0 0 20px rgba(205, 127, 50, 0.6);
+}
+
+.champion-medal {
+    font-size: 4rem;
+    margin-bottom: 10px;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+    animation: medalFloat 2s ease-in-out infinite;
+}
+
+.first-place .champion-medal {
+    font-size: 5rem;
+}
+
+@keyframes medalFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+.champion-name {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+
+.first-place .champion-name {
+    font-size: 1.5rem;
+    color: #FF6347;
+}
+
+.champion-stats {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 15px;
+    padding: 15px;
+    margin-top: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.stat-item {
+    margin: 5px 0;
+    font-weight: 500;
+}
+
+.stat-value {
+    color: #3498db;
+    font-weight: bold;
+}
+
+/* Motivational Header */
+.season-header {
+    text-align: center;
+    margin-bottom: 40px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.season-title {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.season-subtitle {
+    font-size: 1.2rem;
+    opacity: 0.9;
+    margin-bottom: 20px;
+}
+
+.season-stats {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-top: 20px;
+}
+
+.season-stat {
+    text-align: center;
+}
+
+.season-stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+    display: block;
+}
+
+.season-stat-label {
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+/* Full Leaderboard Table */
+.full-leaderboard {
+    margin-top: 50px;
+}
+
+.leaderboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.leaderboard-table th {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    padding: 15px;
+    font-weight: 600;
+    text-align: left;
+    font-size: 1.1rem;
+}
+
+.leaderboard-table td {
+    padding: 15px;
+    border-bottom: 1px solid #ecf0f1;
+    transition: background-color 0.2s ease;
+}
+
+.leaderboard-table tr:hover {
+    background-color: #f8f9fa;
+}
+
+.rank-cell {
+    font-weight: bold;
+    font-size: 1.2rem;
+    text-align: center;
+    width: 80px;
+}
+
+.player-cell {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.top-3-row {
+    background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+    border-left: 4px solid #f39c12;
+}
+
+.motivational-message {
+    text-align: center;
+    margin: 30px 0;
+    padding: 20px;
+    background: linear-gradient(135deg, #ff7675, #fd79a8);
+    color: white;
+    border-radius: 15px;
+    font-size: 1.2rem;
+    font-weight: 500;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.no-results {
+    text-align: center;
+    padding: 60px 20px;
+    background: linear-gradient(135deg, #74b9ff, #0984e3);
+    color: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.no-results h3 {
+    font-size: 2rem;
+    margin-bottom: 15px;
+}
+
+.no-results p {
+    font-size: 1.2rem;
+    margin-bottom: 25px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #00b894, #00a085);
+    color: white;
+    padding: 12px 30px;
+    border: none;
+    border-radius: 25px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-block;
+    transition: transform 0.2s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="leaderboard-container">
+    <div class="season-header">
+        <h1 class="season-title">🏆 La Casa de Todos Championship</h1>
+        <p class="season-subtitle">2025 NFL Fantasy Season • Family League Champions</p>
+        <div class="season-stats">
+            <div class="season-stat">
+                <span class="season-stat-value">{{ leaderboard|length if leaderboard else 0 }}</span>
+                <span class="season-stat-label">Players</span>
             </div>
-        </main>
+            <div class="season-stat">
+                <span class="season-stat-value">18</span>
+                <span class="season-stat-label">Weeks</span>
+            </div>
+            <div class="season-stat">
+                <span class="season-stat-value">272</span>
+                <span class="season-stat-label">Total Games</span>
+            </div>
+        </div>
     </div>
-</body>
-</html>
+    
+    {% if leaderboard and leaderboard|length >= 3 %}
+    <!-- Olympic Podium for Top 3 -->
+    <div class="champions-podium">
+        <!-- 2nd Place -->
+        <div class="podium-position podium-second second-place">
+            <div class="champion-medal">🥈</div>
+            <div class="champion-avatar">{{ leaderboard[1].username[0].upper() }}</div>
+            <div class="champion-name">{{ leaderboard[1].username }}</div>
+            <div class="champion-stats">
+                <div class="stat-item">Weekly Wins: <span class="stat-value">{{ leaderboard[1].wins }}</span></div>
+                <div class="stat-item">Total Points: <span class="stat-value">{{ leaderboard[1].total_points }}</span></div>
+                <div class="stat-item">Average: <span class="stat-value">{{ leaderboard[1].avg_correct }}</span></div>
+            </div>
+        </div>
+        
+        <!-- 1st Place -->
+        <div class="podium-position podium-first first-place">
+            <div class="champion-medal">🏆</div>
+            <div class="champion-avatar">{{ leaderboard[0].username[0].upper() }}</div>
+            <div class="champion-name">👑 {{ leaderboard[0].username }}</div>
+            <div class="champion-stats">
+                <div class="stat-item">Weekly Wins: <span class="stat-value">{{ leaderboard[0].wins }}</span></div>
+                <div class="stat-item">Total Points: <span class="stat-value">{{ leaderboard[0].total_points }}</span></div>
+                <div class="stat-item">Average: <span class="stat-value">{{ leaderboard[0].avg_correct }}</span></div>
+            </div>
+        </div>
+        
+        <!-- 3rd Place -->
+        <div class="podium-position podium-third third-place">
+            <div class="champion-medal">🥉</div>
+            <div class="champion-avatar">{{ leaderboard[2].username[0].upper() }}</div>
+            <div class="champion-name">{{ leaderboard[2].username }}</div>
+            <div class="champion-stats">
+                <div class="stat-item">Weekly Wins: <span class="stat-value">{{ leaderboard[2].wins }}</span></div>
+                <div class="stat-item">Total Points: <span class="stat-value">{{ leaderboard[2].total_points }}</span></div>
+                <div class="stat-item">Average: <span class="stat-value">{{ leaderboard[2].avg_correct }}</span></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="motivational-message">
+        🔥 The competition is fierce! Every week counts in the race to the championship! 🔥
+    </div>
+    {% endif %}
+    
+    {% if leaderboard %}
+    <!-- Full Leaderboard Table -->
+    <div class="full-leaderboard">
+        <h3 style="text-align: center; color: #2c3e50; margin-bottom: 25px; font-size: 1.8rem;">
+            📊 Complete Season Standings
+        </h3>
+        <table class="leaderboard-table">
+            <thead>
+                <tr>
+                    <th>Position</th>
+                    <th>Champion</th>
+                    <th>Weekly Victories</th>
+                    <th>Total Points</th>
+                    <th>Average Performance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in leaderboard %}
+                <tr class="{% if loop.index <= 3 %}top-3-row{% endif %}">
+                    <td class="rank-cell">
+                        {% if loop.index == 1 %}🏆 1st
+                        {% elif loop.index == 2 %}🥈 2nd  
+                        {% elif loop.index == 3 %}🥉 3rd
+                        {% else %}{{ loop.index }}{% endif %}
+                    </td>
+                    <td class="player-cell">
+                        {% if loop.index == 1 %}👑 {% endif %}{{ player.username }}
+                        {% if loop.index == 1 %} 👑{% endif %}
+                    </td>
+                    <td><strong>{{ player.wins }}</strong> wins</td>
+                    <td><strong>{{ player.total_points }}</strong> points</td>
+                    <td>{{ player.avg_correct }} per week</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="no-results">
+        <h3>🚀 Season Starting Soon!</h3>
+        <p>Be the first to claim your spot on the championship podium!</p>
+        <a href="{{ url_for('games') }}" class="btn btn-primary">🏈 Start Playing Now</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

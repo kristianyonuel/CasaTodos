@@ -1,25 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel - La Casa de Todos</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <header class="header">
-            <h1>⚙️ Admin Panel</h1>
-            <nav class="nav">
-                <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
-                <a href="{{ url_for('games') }}" class="nav-link">Make Picks</a>
-                <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
-                <a href="{{ url_for('rules') }}" class="nav-link">Rules</a>
-                <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
-            </nav>
-        </header>
+{% extends "base.html" %}
 
-        <main class="main-content">
+{% block title %}Admin Panel - La Casa de Todos{% endblock %}
+
+{% block content %}
             <div class="admin-container">
                 <h2>League Administration</h2>
                 
@@ -72,9 +55,9 @@
                     <p>Select an action above to manage the league.</p>
                 </div>
             </div>
-        </main>
-    </div>
+{% endblock %}
 
+{% block scripts %}
     <script>
         let currentWeek = 1;
         let currentYear = 2025;
@@ -1491,5 +1474,4 @@
             checkUpdaterStatus();
         });
     </script>
-</body>
-</html>
+{% endblock %}

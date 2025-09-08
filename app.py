@@ -1850,7 +1850,8 @@ def weekly_leaderboard(week=None, year=None):
             # Get Monday Night pick data for this user (remove is_final requirement)
             cursor.execute('''
                 SELECT p.predicted_home_score, p.predicted_away_score,
-                       g.home_score, g.away_score, g.home_team, g.away_team, g.is_final
+                       g.home_score, g.away_score, g.home_team, g.away_team, g.is_final,
+                       p.selected_team
                 FROM user_picks p
                 JOIN nfl_games g ON p.game_id = g.id
                 WHERE p.user_id = ? AND g.week = ? AND g.year = ? 
@@ -1880,19 +1881,23 @@ def weekly_leaderboard(week=None, year=None):
                 pred_away = monday_pick[1] or 0
                 actual_home = monday_pick[2] or 0
                 actual_away = monday_pick[3] or 0
-                is_final = monday_pick[6]
+                home_team = monday_pick[4] or ''
+                away_team = monday_pick[5] or ''
+                is_final = monday_pick[6] or False
+                selected_team = monday_pick[7] if len(monday_pick) > 7 else None
                 
                 monday_tiebreaker = {
                     'has_pick': True,
                     'home_diff': abs(pred_home - actual_home) if is_final and actual_home is not None else None,
                     'away_diff': abs(pred_away - actual_away) if is_final and actual_away is not None else None,
                     'total_diff': abs((pred_home + pred_away) - (actual_home + actual_away)) if is_final and actual_home is not None and actual_away is not None else None,
-                    'home_team': monday_pick[4] or '',
-                    'away_team': monday_pick[5] or '',
+                    'home_team': home_team,
+                    'away_team': away_team,
                     'predicted_home': pred_home,
                     'predicted_away': pred_away,
                     'actual_home': actual_home,
                     'actual_away': actual_away,
+                    'selected_team': selected_team,
                     'is_final': is_final
                 }
             

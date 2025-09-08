@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TEST TEMPLATE - Make Picks</title>
+    <style>
+        .team-logo {
+            width: 32px !important;
+            height: 32px !important;
+            margin-right: 8px !important;
+            vertical-align: middle !important;
+            border: 2px solid red !important;
+            background-color: yellow !important;
+        }
+        .game-card {
+            border: 1px solid black;
+            margin: 10px;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🏈 TEST TEMPLATE - Team Logos</h1>
+    
+    {% for game in games %}
+    <div class="game-card">
+        <h3>Game {{ game.id }}: {{ game.away_team }} @ {{ game.home_team }}</h3>
+        
+        <div>
+            <p>Away Team Logo URL: {{ game.away_team_logo }}</p>
+            <img src="{{ game.away_team_logo }}" alt="{{ game.away_team }}" class="team-logo">
+            <span>{{ game.away_team }} - {{ game.away_team_name }}</span>
+        </div>
+        
+        <div>
+            <p>Home Team Logo URL: {{ game.home_team_logo }}</p>
+            <img src="{{ game.home_team_logo }}" alt="{{ game.home_team }}" class="team-logo">
+            <span>{{ game.home_team }} - {{ game.home_team_name }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</body>
+</html>
