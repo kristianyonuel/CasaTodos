@@ -188,6 +188,162 @@
         </div>
         
         {% if leaderboard %}
+        
+        <!-- Special Monday Night Tiebreaker Analysis for Week 1, 2025 -->
+        {% if current_week == 1 and current_year == 2025 %}
+        {% set tied_leaders = [] %}
+        {% set monday_night_finished = false %}
+        {% for player in leaderboard %}
+            {% if player.correct_picks == 12 %}
+                {% set _ = tied_leaders.append(player) %}
+                {% if player.monday_tiebreaker.has_pick and player.monday_tiebreaker.is_final %}
+                    {% set monday_night_finished = true %}
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+        
+        {% if tied_leaders|length >= 2 and not monday_night_finished %}
+        <div class="tiebreaker-analysis" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+            <h3 style="margin: 0 0 20px 0; text-align: center; font-size: 24px;">🏈 MONDAY NIGHT TIEBREAKER BREAKDOWN</h3>
+            <p style="text-align: center; margin-bottom: 25px; font-size: 16px; opacity: 0.9;">
+                {{ tied_leaders|length }} players tied with 12 correct picks! Only those who pick the WINNING team can win the week.
+            </p>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+                {% for player in tied_leaders %}
+                <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 10px; backdrop-filter: blur(10px);">
+                    <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 18px;">
+                        🏆 {{ player.username.upper() }}
+                    </h4>
+                    
+                    {% if player.monday_tiebreaker.has_pick %}
+                        {% set picked_team = player.monday_tiebreaker.selected_team %}
+                        {% set pred_away = player.monday_tiebreaker.predicted_away %}
+                        {% set pred_home = player.monday_tiebreaker.predicted_home %}
+                        
+                        <p style="margin: 5px 0; font-weight: bold;">
+                            Picked: <span style="color: #ffd700;">{{ picked_team }}</span> to win
+                        </p>
+                        <p style="margin: 5px 0; font-size: 14px;">
+                            Prediction: MIN {{ pred_away }} - {{ pred_home }} CHI
+                        </p>
+                        
+                        <div style="margin-top: 15px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                            <p style="margin: 0; font-weight: bold; color: #ffd700; font-size: 14px;">
+                                💡 WINS IF:
+                            </p>
+                            {% if picked_team == 'CHI' %}
+                                <p style="margin: 8px 0 0 0; font-size: 13px; line-height: 1.4;">
+                                    ✅ Chicago beats Minnesota (ANY score)<br>
+                                    🎯 Optimal: MIN 19 - CHI 22<br>
+                                    📈 <strong>50% chance</strong> - HUGE advantage!
+                                </p>
+                            {% elif picked_team == 'MIN' %}
+                                {% if pred_away == 21 and pred_home >= 25 %}
+                                    <p style="margin: 8px 0 0 0; font-size: 13px; line-height: 1.4;">
+                                        ✅ Minnesota beats Chicago<br>
+                                        🎯 High-scoring MIN win (close to MIN 21)<br>
+                                        📈 <strong>~10% chance</strong>
+                                    </p>
+                                {% elif pred_away == 21 and pred_home < 25 %}
+                                    <p style="margin: 8px 0 0 0; font-size: 13px; line-height: 1.4;">
+                                        ✅ Minnesota beats Chicago<br>
+                                        🎯 Very specific score (MIN 21, CHI ~25)<br>
+                                        📈 <strong>~2% chance</strong> - narrow window
+                                    </p>
+                                {% elif pred_away <= 17 %}
+                                    <p style="margin: 8px 0 0 0; font-size: 13px; line-height: 1.4;">
+                                        ✅ Minnesota beats Chicago<br>
+                                        🎯 Low-scoring MIN win (your specialty!)<br>
+                                        📈 <strong>~38% chance</strong> - great position
+                                    </p>
+                                {% else %}
+                                    <p style="margin: 8px 0 0 0; font-size: 13px; line-height: 1.4;">
+                                        ✅ Minnesota beats Chicago<br>
+                                        🎯 Score close to your prediction<br>
+                                        📈 Depends on actual game score
+                                    </p>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <p style="margin: 5px 0; color: #ffcccb;">No Monday Night prediction</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div style="margin-top: 25px; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 10px; text-align: center;">
+                <h4 style="margin: 0 0 15px 0; color: #ffd700;">🎮 BOTTOM LINE</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 13px;">
+                    {% for player in tied_leaders %}
+                        {% if player.monday_tiebreaker.has_pick %}
+                            {% set picked_team = player.monday_tiebreaker.selected_team %}
+                            <div style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
+                                <strong>{{ player.username }}:</strong><br>
+                                {% if picked_team == 'CHI' %}
+                                    "I just need Chicago to win!"
+                                {% elif player.monday_tiebreaker.predicted_away <= 17 %}
+                                    "I need a low-scoring MIN win"
+                                {% elif player.monday_tiebreaker.predicted_home >= 27 %}
+                                    "I need a high-scoring MIN win" 
+                                {% else %}
+                                    "I need a specific MIN win"
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Show tiebreaker results AFTER Monday Night game finishes -->
+        {% if tied_leaders|length >= 2 and monday_night_finished %}
+        <div class="tiebreaker-results" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 25px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+            <h3 style="margin: 0 0 20px 0; text-align: center; font-size: 24px;">🏆 MONDAY NIGHT TIEBREAKER RESOLVED!</h3>
+            <p style="text-align: center; margin-bottom: 25px; font-size: 16px; opacity: 0.9;">
+                The Monday Night game has finished! Here's how the tiebreaker was decided:
+            </p>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                {% for player in tied_leaders %}
+                {% if player.monday_tiebreaker.has_pick %}
+                <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 10px; backdrop-filter: blur(10px);">
+                    <h4 style="margin: 0 0 15px 0; color: #fff; font-size: 18px;">
+                        {% if loop.index == 1 %}🏆{% else %}{{ loop.index }}.{% endif %} {{ player.username.upper() }}
+                    </h4>
+                    
+                    <p style="margin: 5px 0; font-weight: bold;">
+                        Picked: 
+                        {% if player.monday_tiebreaker.is_correct %}
+                            <span style="color: #90EE90;">{{ player.monday_tiebreaker.selected_team }}</span> ✅
+                        {% else %}
+                            <span style="color: #FFB6C1;">{{ player.monday_tiebreaker.selected_team }}</span> ❌
+                        {% endif %}
+                    </p>
+                    <p style="margin: 5px 0; font-size: 14px;">
+                        Predicted: MIN {{ player.monday_tiebreaker.predicted_away }} - {{ player.monday_tiebreaker.predicted_home }} CHI
+                    </p>
+                    <p style="margin: 5px 0; font-size: 14px;">
+                        Actual: MIN {{ player.monday_tiebreaker.actual_away }} - {{ player.monday_tiebreaker.actual_home }} CHI
+                    </p>
+                    
+                    {% if player.monday_tiebreaker.is_correct %}
+                    <div style="margin-top: 15px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                        <p style="margin: 0; font-size: 13px; line-height: 1.4;">
+                            <strong>Tiebreaker Accuracy:</strong><br>
+                            Home ± {{ player.monday_tiebreaker.home_diff or 0 }}, Away ± {{ player.monday_tiebreaker.away_diff or 0 }}
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
         <table class="leaderboard-table">
             <thead>
                 <tr>
