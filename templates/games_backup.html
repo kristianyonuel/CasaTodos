@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Make Picks - La Casa de Todos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .team-name {
+            display: block !important;
+            font-size: 0.9em !important;
+            color: #666 !important;
+            font-weight: normal !important;
+        }
+        .matchup-header h3 {
+            color: #333 !important;
+            font-size: 1.2em !important;
+            margin: 10px 0 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🏈 Make Your Picks</h1>
+            <nav class="nav">
+                <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
+                <a href="{{ url_for('rules') }}" class="nav-link">Rules</a>
+                {% if session.get('is_admin') %}
+                <a href="{{ url_for('admin') }}" class="nav-link admin">Admin</a>
+                {% endif %}
+                <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="picks-header">
+                <h2>Week {{ current_week }}, {{ current_year }}</h2>
+                <div class="week-selector">
+                    <label for="week-select">Select Week:</label>
+                    <select id="week-select" onchange="changeWeek()">
+                        {% for week_num in available_weeks %}
+                        <option value="{{ week_num }}" {% if week_num == current_week %}selected{% endif %}>
+                            Week {{ week_num }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="picks-summary">
+                    <span>Games this week: {{ total_games }}</span>
+                    <span>Your picks: 0/{{ total_games }}</span>
+                </div>
+            </div>
+
+            <div class="games-container">
+                <form id="picks-form">
+                    {% for game in games %}
+                    <div class="game-card" data-game-id="{{ game.id }}">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>{{ game.away_team_name }} ({{ game.away_team }}) @ {{ game.home_team_name }} ({{ game.home_team }})</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                {% if game.game_date %}
+                                    {% set game_datetime = game.game_date %}
+                                    {{ game_datetime.strftime('%A, %B %d') }}
+                                    <br>
+                                    {{ game_datetime.strftime('%I:%M %p AST') }}
+                                {% else %}
+                                    TBD<br>Time TBD
+                                {% endif %}
+                                
+                                {% if game.is_thursday_night %}
+                                    <span class="game-type tnf">TNF</span>
+                                {% elif game.is_monday_night %}
+                                    <span class="game-type mnf">MNF</span>
+                                {% elif game.is_sunday_night %}
+                                    <span class="game-type snf">SNF</span>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_{{ game.id }}" 
+                                           value="{{ game.away_team }}"
+                                           id="away_{{ game.id }}">
+                                    <label for="away_{{ game.id }}">
+                                        <span class="team-abbrev">{{ game.away_team }}</span>
+                                        <span class="team-name">{{ game.away_team_name }}</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_{{ game.id }}" 
+                                           value="{{ game.home_team }}"
+                                           id="home_{{ game.id }}">
+                                    <label for="home_{{ game.id }}">
+                                        <span class="team-abbrev">{{ game.home_team }}</span>
+                                        <span class="team-name">{{ game.home_team_name }}</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </form>
+                
+                <div class="submit-section">
+                    <button type="button" onclick="submitPicks()" class="submit-btn">Submit Picks</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function changeWeek() {
+            const weekSelect = document.getElementById('week-select');
+            const selectedWeek = weekSelect.value;
+            window.location.href = `{{ url_for('games') }}?week=${selectedWeek}`;
+        }
+
+        function submitPicks() {
+            const form = document.getElementById('picks-form');
+            const formData = new FormData(form);
+            const picks = [];
+            
+            for (let [name, value] of formData.entries()) {
+                if (name.startsWith('game_')) {
+                    const gameId = name.replace('game_', '');
+                    picks.push({
+                        game_id: gameId,
+                        selected_team: value
+                    });
+                }
+            }
+            
+            fetch('/submit_picks', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({picks: picks})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Picks submitted successfully!');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error submitting picks');
+            });
+        }
+    </script>
+</body>
+</html>

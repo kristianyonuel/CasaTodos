@@ -1,0 +1,958 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Make Picks - La Casa de Todos</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .team-name {
+            display: block !important;
+            font-size: 0.9em !important;
+            color: #666 !important;
+            font-weight: normal !important;
+        }
+        .matchup-header h3 {
+            color: #333 !important;
+            font-size: 1.2em !important;
+            margin: 10px 0 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🏈 Make Your Picks</h1>
+            <nav class="nav">
+                <a href="/" class="nav-link">Dashboard</a>
+                <a href="/leaderboard" class="nav-link">Leaderboard</a>
+                <a href="/rules" class="nav-link">Rules</a>
+                
+                <a href="/logout" class="nav-link logout">Logout</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            
+                
+            
+
+            <div class="picks-header">
+                <h2>Week 1, 2025</h2>
+                <div class="week-selector">
+                    <label for="week-select">Select Week:</label>
+                    <select id="week-select" onchange="changeWeek()">
+                        
+                        <option value="1" selected>
+                            Week 1
+                        </option>
+                        
+                        <option value="2" >
+                            Week 2
+                        </option>
+                        
+                        <option value="3" >
+                            Week 3
+                        </option>
+                        
+                        <option value="4" >
+                            Week 4
+                        </option>
+                        
+                        <option value="5" >
+                            Week 5
+                        </option>
+                        
+                        <option value="6" >
+                            Week 6
+                        </option>
+                        
+                        <option value="7" >
+                            Week 7
+                        </option>
+                        
+                        <option value="8" >
+                            Week 8
+                        </option>
+                        
+                        <option value="9" >
+                            Week 9
+                        </option>
+                        
+                        <option value="10" >
+                            Week 10
+                        </option>
+                        
+                        <option value="11" >
+                            Week 11
+                        </option>
+                        
+                        <option value="12" >
+                            Week 12
+                        </option>
+                        
+                        <option value="13" >
+                            Week 13
+                        </option>
+                        
+                        <option value="14" >
+                            Week 14
+                        </option>
+                        
+                        <option value="15" >
+                            Week 15
+                        </option>
+                        
+                        <option value="16" >
+                            Week 16
+                        </option>
+                        
+                        <option value="17" >
+                            Week 17
+                        </option>
+                        
+                        <option value="18" >
+                            Week 18
+                        </option>
+                        
+                    </select>
+                </div>
+                
+                <div class="picks-summary">
+                    <span>Games this week: 16</span>
+                    <span>Your picks: 0/16</span>
+                </div>
+            </div>
+
+            <div class="games-container">
+                <form id="picks-form">
+                    
+                    <div class="game-card" data-game-id="135">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Dallas Cowboys (DAL) @ Philadelphia Eagles (PHI)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Thursday, September 04
+                                    <br>
+                                    04:20 PM AST
+                                
+                                
+                                
+                                    <span class="game-type tnf">TNF</span>
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_135" 
+                                           value="DAL"
+                                           id="away_135">
+                                    <label for="away_135">
+                                        <span class="team-abbrev">DAL</span>
+                                        <span class="team-name">Dallas Cowboys</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_135" 
+                                           value="PHI"
+                                           id="home_135">
+                                    <label for="home_135">
+                                        <span class="team-abbrev">PHI</span>
+                                        <span class="team-name">Philadelphia Eagles</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="136">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Kansas City Chiefs (KC) @ Los Angeles Chargers (LAC)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Friday, September 05
+                                    <br>
+                                    04:00 PM AST
+                                
+                                
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_136" 
+                                           value="KC"
+                                           id="away_136">
+                                    <label for="away_136">
+                                        <span class="team-abbrev">KC</span>
+                                        <span class="team-name">Kansas City Chiefs</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_136" 
+                                           value="LAC"
+                                           id="home_136">
+                                    <label for="home_136">
+                                        <span class="team-abbrev">LAC</span>
+                                        <span class="team-name">Los Angeles Chargers</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="137">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Pittsburgh Steelers (PIT) @ New York Jets (NYJ)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Sunday, September 07
+                                    <br>
+                                    09:00 AM AST
+                                
+                                
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_137" 
+                                           value="PIT"
+                                           id="away_137">
+                                    <label for="away_137">
+                                        <span class="team-abbrev">PIT</span>
+                                        <span class="team-name">Pittsburgh Steelers</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_137" 
+                                           value="NYJ"
+                                           id="home_137">
+                                    <label for="home_137">
+                                        <span class="team-abbrev">NYJ</span>
+                                        <span class="team-name">New York Jets</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="138">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Carolina Panthers (CAR) @ Jacksonville Jaguars (JAX)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Sunday, September 07
+                                    <br>
+                                    09:00 AM AST
+                                
+                                
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_138" 
+                                           value="CAR"
+                                           id="away_138">
+                                    <label for="away_138">
+                                        <span class="team-abbrev">CAR</span>
+                                        <span class="team-name">Carolina Panthers</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_138" 
+                                           value="JAX"
+                                           id="home_138">
+                                    <label for="home_138">
+                                        <span class="team-abbrev">JAX</span>
+                                        <span class="team-name">Jacksonville Jaguars</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="139">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Tampa Bay Buccaneers (TB) @ Atlanta Falcons (ATL)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Sunday, September 07
+                                    <br>
+                                    09:00 AM AST
+                                
+                                
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_139" 
+                                           value="TB"
+                                           id="away_139">
+                                    <label for="away_139">
+                                        <span class="team-abbrev">TB</span>
+                                        <span class="team-name">Tampa Bay Buccaneers</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_139" 
+                                           value="ATL"
+                                           id="home_139">
+                                    <label for="home_139">
+                                        <span class="team-abbrev">ATL</span>
+                                        <span class="team-name">Atlanta Falcons</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="140">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Cincinnati Bengals (CIN) @ Cleveland Browns (CLE)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Sunday, September 07
+                                    <br>
+                                    09:00 AM AST
+                                
+                                
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_140" 
+                                           value="CIN"
+                                           id="away_140">
+                                    <label for="away_140">
+                                        <span class="team-abbrev">CIN</span>
+                                        <span class="team-name">Cincinnati Bengals</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_140" 
+                                           value="CLE"
+                                           id="home_140">
+                                    <label for="home_140">
+                                        <span class="team-abbrev">CLE</span>
+                                        <span class="team-name">Cleveland Browns</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="141">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Miami Dolphins (MIA) @ Indianapolis Colts (IND)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Sunday, September 07
+                                    <br>
+                                    09:00 AM AST
+                                
+                                
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_141" 
+                                           value="MIA"
+                                           id="away_141">
+                                    <label for="away_141">
+                                        <span class="team-abbrev">MIA</span>
+                                        <span class="team-name">Miami Dolphins</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_141" 
+                                           value="IND"
+                                           id="home_141">
+                                    <label for="home_141">
+                                        <span class="team-abbrev">IND</span>
+                                        <span class="team-name">Indianapolis Colts</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="142">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Las Vegas Raiders (LV) @ New England Patriots (NE)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Sunday, September 07
+                                    <br>
+                                    09:00 AM AST
+                                
+                                
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_142" 
+                                           value="LV"
+                                           id="away_142">
+                                    <label for="away_142">
+                                        <span class="team-abbrev">LV</span>
+                                        <span class="team-name">Las Vegas Raiders</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_142" 
+                                           value="NE"
+                                           id="home_142">
+                                    <label for="home_142">
+                                        <span class="team-abbrev">NE</span>
+                                        <span class="team-name">New England Patriots</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="143">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Arizona Cardinals (ARI) @ New Orleans Saints (NO)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Sunday, September 07
+                                    <br>
+                                    09:00 AM AST
+                                
+                                
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_143" 
+                                           value="ARI"
+                                           id="away_143">
+                                    <label for="away_143">
+                                        <span class="team-abbrev">ARI</span>
+                                        <span class="team-name">Arizona Cardinals</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_143" 
+                                           value="NO"
+                                           id="home_143">
+                                    <label for="home_143">
+                                        <span class="team-abbrev">NO</span>
+                                        <span class="team-name">New Orleans Saints</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="144">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>New York Giants (NYG) @ Washington Commanders (WAS)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Sunday, September 07
+                                    <br>
+                                    09:00 AM AST
+                                
+                                
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_144" 
+                                           value="NYG"
+                                           id="away_144">
+                                    <label for="away_144">
+                                        <span class="team-abbrev">NYG</span>
+                                        <span class="team-name">New York Giants</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_144" 
+                                           value="WAS"
+                                           id="home_144">
+                                    <label for="home_144">
+                                        <span class="team-abbrev">WAS</span>
+                                        <span class="team-name">Washington Commanders</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="145">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>San Francisco 49ers (SF) @ Seattle Seahawks (SEA)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Sunday, September 07
+                                    <br>
+                                    12:05 PM AST
+                                
+                                
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_145" 
+                                           value="SF"
+                                           id="away_145">
+                                    <label for="away_145">
+                                        <span class="team-abbrev">SF</span>
+                                        <span class="team-name">San Francisco 49ers</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_145" 
+                                           value="SEA"
+                                           id="home_145">
+                                    <label for="home_145">
+                                        <span class="team-abbrev">SEA</span>
+                                        <span class="team-name">Seattle Seahawks</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="146">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Tennessee Titans (TEN) @ Denver Broncos (DEN)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Sunday, September 07
+                                    <br>
+                                    12:05 PM AST
+                                
+                                
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_146" 
+                                           value="TEN"
+                                           id="away_146">
+                                    <label for="away_146">
+                                        <span class="team-abbrev">TEN</span>
+                                        <span class="team-name">Tennessee Titans</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_146" 
+                                           value="DEN"
+                                           id="home_146">
+                                    <label for="home_146">
+                                        <span class="team-abbrev">DEN</span>
+                                        <span class="team-name">Denver Broncos</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="147">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Detroit Lions (DET) @ Green Bay Packers (GB)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Sunday, September 07
+                                    <br>
+                                    12:25 PM AST
+                                
+                                
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_147" 
+                                           value="DET"
+                                           id="away_147">
+                                    <label for="away_147">
+                                        <span class="team-abbrev">DET</span>
+                                        <span class="team-name">Detroit Lions</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_147" 
+                                           value="GB"
+                                           id="home_147">
+                                    <label for="home_147">
+                                        <span class="team-abbrev">GB</span>
+                                        <span class="team-name">Green Bay Packers</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="148">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Houston Texans (HOU) @ Los Angeles Rams (LAR)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Sunday, September 07
+                                    <br>
+                                    12:25 PM AST
+                                
+                                
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_148" 
+                                           value="HOU"
+                                           id="away_148">
+                                    <label for="away_148">
+                                        <span class="team-abbrev">HOU</span>
+                                        <span class="team-name">Houston Texans</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_148" 
+                                           value="LAR"
+                                           id="home_148">
+                                    <label for="home_148">
+                                        <span class="team-abbrev">LAR</span>
+                                        <span class="team-name">Los Angeles Rams</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="149">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Baltimore Ravens (BAL) @ Buffalo Bills (BUF)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Sunday, September 07
+                                    <br>
+                                    04:20 PM AST
+                                
+                                
+                                
+                                    <span class="game-type snf">SNF</span>
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_149" 
+                                           value="BAL"
+                                           id="away_149">
+                                    <label for="away_149">
+                                        <span class="team-abbrev">BAL</span>
+                                        <span class="team-name">Baltimore Ravens</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_149" 
+                                           value="BUF"
+                                           id="home_149">
+                                    <label for="home_149">
+                                        <span class="team-abbrev">BUF</span>
+                                        <span class="team-name">Buffalo Bills</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="game-card" data-game-id="150">
+                        
+                        <!-- Team Matchup Header with Full Names -->
+                        <div class="matchup-header">
+                            <h3>Minnesota Vikings (MIN) @ Chicago Bears (CHI)</h3>
+                        </div>
+                        
+                        <div class="game-info">
+                            <div class="game-date">
+                                
+                                    
+                                    Monday, September 08
+                                    <br>
+                                    04:15 PM AST
+                                
+                                
+                                
+                                    <span class="game-type mnf">MNF</span>
+                                
+                            </div>
+                            
+                            <!-- Pick Interface with Team Names -->
+                            <div class="teams">
+                                <div class="team away-team">
+                                    <input type="radio" 
+                                           name="game_150" 
+                                           value="MIN"
+                                           id="away_150">
+                                    <label for="away_150">
+                                        <span class="team-abbrev">MIN</span>
+                                        <span class="team-name">Minnesota Vikings</span>
+                                    </label>
+                                </div>
+                                
+                                <div class="vs">@</div>
+                                
+                                <div class="team home-team">
+                                    <input type="radio" 
+                                           name="game_150" 
+                                           value="CHI"
+                                           id="home_150">
+                                    <label for="home_150">
+                                        <span class="team-abbrev">CHI</span>
+                                        <span class="team-name">Chicago Bears</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </form>
+                
+                <div class="submit-section">
+                    <button type="button" onclick="submitPicks()" class="submit-btn">Submit Picks</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function changeWeek() {
+            const weekSelect = document.getElementById('week-select');
+            const selectedWeek = weekSelect.value;
+            window.location.href = `/games?week=${selectedWeek}`;
+        }
+
+        function submitPicks() {
+            const form = document.getElementById('picks-form');
+            const formData = new FormData(form);
+            const picks = [];
+            
+            for (let [name, value] of formData.entries()) {
+                if (name.startsWith('game_')) {
+                    const gameId = name.replace('game_', '');
+                    picks.push({
+                        game_id: gameId,
+                        selected_team: value
+                    });
+                }
+            }
+            
+            fetch('/submit_picks', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({picks: picks})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Picks submitted successfully!');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error submitting picks');
+            });
+        }
+    </script>
+</body>
+</html>
