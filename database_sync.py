@@ -39,6 +39,25 @@ def sync_season_from_api(year: int = 2025) -> int:
         # Clear existing games for the year
         conn = sqlite3.connect('nfl_fantasy.db')
         cursor = conn.cursor()
+        
+        # SAFETY CHECK: Count existing picks before deleting games
+        cursor.execute('''
+            SELECT COUNT(*) FROM user_picks up 
+            JOIN nfl_games g ON up.game_id = g.id 
+            WHERE g.year = ?
+        ''', (year,))
+        existing_picks = cursor.fetchone()[0]
+        
+        if existing_picks > 0:
+            logger.warning(f"⚠️  SYNC BLOCKED: Found {existing_picks} user picks for {year}")
+            logger.warning(f"   Syncing would orphan these picks and break the system!")
+            logger.warning(f"   Use 'Update Game Results' for individual updates instead.")
+            conn.close()
+            print(f"❌ Sync blocked: {existing_picks} user picks exist for {year}")
+            print("   Use 'Update Game Results' for safe updates instead.")
+            return 0
+        
+        # Only proceed if no picks exist
         cursor.execute('DELETE FROM nfl_games WHERE year = ?', (year,))
         
         games_added = 0

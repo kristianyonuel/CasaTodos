@@ -304,7 +304,7 @@
         }
 
         async function syncSeason() {
-            if (!confirm('This will sync the complete 2025 NFL schedule from BallDontLie API. Continue?')) return;
+            if (!confirm('⚠️  WARNING: NFL Season Sync\n\nThis will completely replace ALL games for 2025.\nIf users have made picks, this operation will be BLOCKED to prevent data loss.\n\nFor live updates during the season, use "Update Game Results" instead.\n\nContinue with full season sync?')) return;
             
             document.getElementById('admin-content').innerHTML = '<p>Syncing 2025 NFL season from BallDontLie API...</p>';
             

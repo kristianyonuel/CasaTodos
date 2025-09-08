@@ -229,6 +229,27 @@ def sync_season():
             'message': f'Successfully synced {games_added} games from BallDontLie API for {year} season',
             'games_added': games_added
         })
+    elif games_added == 0:
+        # Check if sync was blocked due to existing picks
+        import sqlite3
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT COUNT(*) FROM user_picks up 
+            JOIN nfl_games g ON up.game_id = g.id 
+            WHERE g.year = ?
+        ''', (year,))
+        existing_picks = cursor.fetchone()[0]
+        conn.close()
+        
+        if existing_picks > 0:
+            return jsonify({
+                'error': f'Sync blocked: {existing_picks} user picks exist for {year}. Use "Update Game Results" for safe updates instead.'
+            }), 400
+        else:
+            return jsonify({
+                'error': f'Failed to sync season data from BallDontLie API for {year}. Check API configuration.'
+            }), 500
     else:
         return jsonify({
             'error': f'Failed to sync season data from BallDontLie API for {year}. Check API configuration.'
