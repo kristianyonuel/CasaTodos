@@ -37,6 +37,16 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = 'nfl-fantasy-secret-key-2024'
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+app.jinja_env.auto_reload = True
+app.config['DEBUG'] = True
+
+# Force template cache clearing
+if app.debug:
+    app.jinja_env.cache = {}
+    from jinja2 import FileSystemLoader
+    app.jinja_loader = FileSystemLoader(app.template_folder)
 
 DATABASE_PATH = 'nfl_fantasy.db'
 
@@ -350,6 +360,11 @@ def games():
                         game_dict['game_date'] = convert_to_ast(dt)
                 except (ValueError, TypeError):
                     game_dict['game_date'] = None
+            
+            # Add team names to game data for easy access in template
+            game_dict['away_team_name'] = get_team_name(game_dict['away_team'])
+            game_dict['home_team_name'] = get_team_name(game_dict['home_team'])
+            
             games_data.append(game_dict)
         
         cursor.execute('''
@@ -424,18 +439,18 @@ def games():
         logger.error(f"Error getting deadlines for games page: {e}")
         simple_deadlines = {}
         simple_status = {}
-    
+        
     return render_template('games.html',
-                          games=games_data,
-                          user_picks=user_picks,
-                          all_picks=all_picks,
-                          current_week=week,
-                          current_year=year,
-                          available_weeks=list(range(1, 19)),
-                          current_nfl_week=1,
-                          total_games=len(games_data),
-                          deadlines=simple_deadlines,
-                          deadline_status=simple_status)
+                         games=games_data,
+                         user_picks=user_picks,
+                         all_picks=all_picks,
+                         current_week=week,
+                         current_year=year,
+                         available_weeks=list(range(1, 19)),
+                         current_nfl_week=1,
+                         total_games=len(games_data),
+                         deadlines=simple_deadlines,
+                         deadline_status=simple_status)
 
 @app.route('/submit_picks', methods=['POST'])
 def submit_picks():
