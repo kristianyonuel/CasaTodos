@@ -1,7 +1,7 @@
 # Database files - keep local versions
 nfl_fantasy.db
 *.db
-
+api_rate_limit.json
 # Python cache
 __pycache__/
 *.pyc
