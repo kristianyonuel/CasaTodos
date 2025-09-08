@@ -177,22 +177,176 @@
                             <div class="monday-tiebreaker">
                                 <strong>{{ user.monday_tiebreaker.home_team }} vs {{ user.monday_tiebreaker.away_team }}</strong><br>
                                 Predicted: {{ user.monday_tiebreaker.predicted_home }} - {{ user.monday_tiebreaker.predicted_away }}<br>
-                                Actual: {{ user.monday_tiebreaker.actual_home }} - {{ user.monday_tiebreaker.actual_away }}
-                                
-                                <div class="tiebreaker-details">
-                                    Home Diff: {{ user.monday_tiebreaker.home_diff }}<br>
-                                    Away Diff: {{ user.monday_tiebreaker.away_diff }}<br>
-                                    Total Diff: {{ user.monday_tiebreaker.total_diff }}
-                                </div>
+                                {% if user.monday_tiebreaker.is_final %}
+                                    Actual: {{ user.monday_tiebreaker.actual_home }} - {{ user.monday_tiebreaker.actual_away }}
+                                    <div class="tiebreaker-details">
+                                        Home Diff: {{ user.monday_tiebreaker.home_diff }}<br>
+                                        Away Diff: {{ user.monday_tiebreaker.away_diff }}<br>
+                                        Total Diff: {{ user.monday_tiebreaker.total_diff }}
+                                    </div>
+                                {% else %}
+                                    <em>Game in progress...</em>
+                                {% endif %}
                             </div>
                         {% else %}
                             <em>No Monday pick</em>
                         {% endif %}
                     </td>
                 </tr>
+                
+                <!-- Expandable row for all picks -->
+                <tr class="picks-detail-row" style="display: none;" id="picks-{{ user.username }}">
+                    <td colspan="6">
+                        <div class="all-picks-container">
+                            <h4>{{ user.username }}'s All Picks for Week {{ current_week }}</h4>
+                            <div class="picks-grid">
+                                {% for pick in user.picks_detail %}
+                                <div class="pick-card {% if pick.is_correct == 1 %}correct{% elif pick.is_correct == 0 %}incorrect{% else %}pending{% endif %}">
+                                    <div class="teams">
+                                        <strong>{{ pick.away_team }} @ {{ pick.home_team }}</strong>
+                                    </div>
+                                    <div class="pick-info">
+                                        <span class="selected">Picked: {{ pick.selected_team }}</span>
+                                        {% if pick.predicted_home or pick.predicted_away %}
+                                        <span class="score-prediction">
+                                            Score: {{ pick.predicted_home }} - {{ pick.predicted_away }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="result">
+                                        {% if pick.is_final %}
+                                            <span class="actual-score">Final: {{ pick.actual_home }} - {{ pick.actual_away }}</span>
+                                            <span class="result-badge {% if pick.is_correct == 1 %}win{% elif pick.is_correct == 0 %}loss{% endif %}">
+                                                {% if pick.is_correct == 1 %}✓ WIN{% elif pick.is_correct == 0 %}✗ LOSS{% endif %}
+                                            </span>
+                                        {% else %}
+                                            <span class="pending-result">Game pending</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>
+        
+        <script>
+        // Add click handlers to show/hide detailed picks
+        document.addEventListener('DOMContentLoaded', function() {
+            const rows = document.querySelectorAll('.leaderboard-table tbody tr:not(.picks-detail-row)');
+            rows.forEach(row => {
+                row.style.cursor = 'pointer';
+                row.addEventListener('click', function() {
+                    const username = this.querySelector('td:nth-child(2)').textContent.trim();
+                    const detailRow = document.getElementById('picks-' + username);
+                    if (detailRow) {
+                        detailRow.style.display = detailRow.style.display === 'none' ? 'table-row' : 'none';
+                    }
+                });
+            });
+        });
+        </script>
+        
+        <style>
+        .picks-detail-row {
+            background: #f8f9fa;
+        }
+        
+        .all-picks-container {
+            padding: 20px;
+        }
+        
+        .picks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .pick-card {
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            background: white;
+        }
+        
+        .pick-card.correct {
+            border-color: #28a745;
+            background: #f8fff9;
+        }
+        
+        .pick-card.incorrect {
+            border-color: #dc3545;
+            background: #fff8f8;
+        }
+        
+        .pick-card.pending {
+            border-color: #ffc107;
+            background: #fffbf0;
+        }
+        
+        .teams {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        
+        .pick-info {
+            margin-bottom: 10px;
+        }
+        
+        .selected {
+            display: block;
+            font-weight: 600;
+            color: #007bff;
+        }
+        
+        .score-prediction {
+            display: block;
+            font-size: 14px;
+            color: #6c757d;
+        }
+        
+        .result {
+            border-top: 1px solid #dee2e6;
+            padding-top: 10px;
+        }
+        
+        .actual-score {
+            display: block;
+            font-weight: 600;
+        }
+        
+        .result-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+        
+        .result-badge.win {
+            background: #28a745;
+            color: white;
+        }
+        
+        .result-badge.loss {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .pending-result {
+            color: #ffc107;
+            font-style: italic;
+        }
+        
+        .leaderboard-table tbody tr:not(.picks-detail-row):hover {
+            background: #f8f9fa;
+        }
+        </style>
         
         <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
             <h4>🏈 Scoring Rules:</h4>

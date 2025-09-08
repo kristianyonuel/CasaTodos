@@ -1816,18 +1816,31 @@ def weekly_leaderboard(week=None, year=None):
         leaderboard_data = []
         for i, (user_id, username, total_picks, correct_picks) in enumerate(user_results, 1):
             
-            # Get Monday Night pick data for this user
+            # Get Monday Night pick data for this user (remove is_final requirement)
             cursor.execute('''
                 SELECT p.predicted_home_score, p.predicted_away_score,
-                       g.home_score, g.away_score, g.home_team, g.away_team
+                       g.home_score, g.away_score, g.home_team, g.away_team, g.is_final
                 FROM user_picks p
                 JOIN nfl_games g ON p.game_id = g.id
                 WHERE p.user_id = ? AND g.week = ? AND g.year = ? 
-                  AND g.is_monday_night = 1 AND g.is_final = 1
+                  AND g.is_monday_night = 1
                 LIMIT 1
             ''', (user_id, week, year))
             
             monday_pick = cursor.fetchone()
+            
+            # Get all picks for this user for this week
+            cursor.execute('''
+                SELECT p.selected_team, p.predicted_home_score, p.predicted_away_score,
+                       g.home_team, g.away_team, g.home_score, g.away_score, 
+                       g.is_final, p.is_correct, g.game_date
+                FROM user_picks p
+                JOIN nfl_games g ON p.game_id = g.id
+                WHERE p.user_id = ? AND g.week = ? AND g.year = ?
+                ORDER BY g.game_date
+            ''', (user_id, week, year))
+            
+            all_picks = cursor.fetchall()
             
             # Calculate Monday Night tiebreaker data
             monday_tiebreaker = {'has_pick': False}
@@ -1836,19 +1849,40 @@ def weekly_leaderboard(week=None, year=None):
                 pred_away = monday_pick[1] or 0
                 actual_home = monday_pick[2] or 0
                 actual_away = monday_pick[3] or 0
+                is_final = monday_pick[6]
                 
                 monday_tiebreaker = {
                     'has_pick': True,
-                    'home_diff': abs(pred_home - actual_home),
-                    'away_diff': abs(pred_away - actual_away),
-                    'total_diff': abs((pred_home + pred_away) - (actual_home + actual_away)),
+                    'home_diff': abs(pred_home - actual_home) if is_final and actual_home is not None else None,
+                    'away_diff': abs(pred_away - actual_away) if is_final and actual_away is not None else None,
+                    'total_diff': abs((pred_home + pred_away) - (actual_home + actual_away)) if is_final and actual_home is not None and actual_away is not None else None,
                     'home_team': monday_pick[4] or '',
                     'away_team': monday_pick[5] or '',
                     'predicted_home': pred_home,
                     'predicted_away': pred_away,
                     'actual_home': actual_home,
-                    'actual_away': actual_away
+                    'actual_away': actual_away,
+                    'is_final': is_final
                 }
+            
+            # Format all picks for display
+            picks_detail = []
+            for pick in all_picks:
+                selected_team, pred_home, pred_away, home_team, away_team, actual_home, actual_away, is_final, is_correct, game_date = pick
+                
+                pick_detail = {
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'selected_team': selected_team,
+                    'predicted_home': pred_home or 0,
+                    'predicted_away': pred_away or 0,
+                    'actual_home': actual_home,
+                    'actual_away': actual_away,
+                    'is_final': is_final,
+                    'is_correct': is_correct,
+                    'game_date': game_date
+                }
+                picks_detail.append(pick_detail)
             
             leaderboard_data.append({
                 'rank': i,
@@ -1863,6 +1897,7 @@ def weekly_leaderboard(week=None, year=None):
                     'total_score': correct_picks  # Same as correct_picks since 1 point per win
                 },
                 'monday_tiebreaker': monday_tiebreaker,
+                'picks_detail': picks_detail,  # Add detailed picks
                 'is_winner': i == 1
             })
         
