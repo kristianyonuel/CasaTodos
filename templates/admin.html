@@ -1433,16 +1433,63 @@
                 return;
             }
             
+            // Show loading message
+            const button = event.target;
+            const originalText = button.textContent;
+            button.textContent = '⏳ Generating PDF...';
+            button.disabled = true;
+            
             // Generate PDF URL
             const pdfUrl = `/export_weekly_dashboard_pdf?week=${week}&year=${year}`;
             
-            // Create temporary download link
-            const link = document.createElement('a');
-            link.href = pdfUrl;
-            link.download = `weekly_dashboard_week_${week}_${year}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            // Use fetch to check if PDF generation is successful
+            fetch(pdfUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/pdf'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                // Check if response is actually a PDF
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/pdf')) {
+                    throw new Error('Server did not return a PDF document');
+                }
+                
+                return response.blob();
+            })
+            .then(blob => {
+                if (blob.size === 0) {
+                    throw new Error('PDF file is empty');
+                }
+                
+                // Create download link for the blob
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `weekly_dashboard_week_${week}_${year}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+                
+                // Show success message
+                showMessage('PDF downloaded successfully!', 'success');
+            })
+            .catch(error => {
+                console.error('PDF export error:', error);
+                alert(`Failed to export PDF: ${error.message}\n\nPlease check the browser console for more details.`);
+                showMessage(`PDF export failed: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                // Restore button
+                button.textContent = originalText;
+                button.disabled = false;
+            });
         }
         
         // Background Updater Functions

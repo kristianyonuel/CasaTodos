@@ -2302,16 +2302,39 @@ def export_weekly_dashboard_pdf():
         week = request.args.get('week', 1, type=int)
         year = request.args.get('year', 2025, type=int)
         
+        # Validate parameters
+        if not (1 <= week <= 18):
+            flash('Invalid week number. Must be between 1 and 18.', 'error')
+            return redirect(url_for('admin'))
+        
+        if not (2020 <= year <= 2030):
+            flash('Invalid year. Must be between 2020 and 2030.', 'error')
+            return redirect(url_for('admin'))
+        
+        logger.info(f"Generating PDF for Week {week}, {year}")
+        
         # Import PDF generator
         from pdf_generator import generate_weekly_dashboard_pdf
         
         # Generate PDF
         pdf_bytes = generate_weekly_dashboard_pdf(week, year, DATABASE_PATH)
         
-        # Create response
+        if not pdf_bytes:
+            logger.error("PDF generation returned empty bytes")
+            flash('PDF generation failed: No data generated', 'error')
+            return redirect(url_for('admin'))
+        
+        if len(pdf_bytes) < 100:  # PDF should be at least 100 bytes
+            logger.error(f"PDF generation returned insufficient data: {len(pdf_bytes)} bytes")
+            flash('PDF generation failed: Insufficient data', 'error')
+            return redirect(url_for('admin'))
+        
+        logger.info(f"PDF generated successfully: {len(pdf_bytes)} bytes")
+        
+        # Create response with proper headers
         response = make_response(pdf_bytes)
         response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename=weekly_dashboard_week_{week}_{year}.pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename="weekly_dashboard_week_{week}_{year}.pdf"'
         response.headers['Content-Length'] = str(len(pdf_bytes))
         
         # Add cache control headers
@@ -2319,12 +2342,22 @@ def export_weekly_dashboard_pdf():
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
         
+        # Add CORS headers if needed
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET'
+        
         logger.info(f"Admin {session['username']} exported weekly dashboard PDF for Week {week}, {year}")
         
         return response
         
+    except ImportError as e:
+        logger.error(f"PDF library import error: {e}")
+        flash('PDF generation unavailable: Missing library', 'error')
+        return redirect(url_for('admin'))
     except Exception as e:
         logger.error(f"Error generating weekly dashboard PDF: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         flash(f'PDF generation failed: {str(e)}', 'error')
         return redirect(url_for('admin'))
 

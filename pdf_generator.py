@@ -45,18 +45,18 @@ class WeeklyDashboardPDF:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        # Get weekly leaderboard data
+        # Get weekly leaderboard data - FIXED to only count games from the specified week
         cursor.execute('''
             SELECT u.username,
-                   COUNT(CASE WHEN p.is_correct = 1 THEN 1 END) as games_won,
-                   COUNT(CASE WHEN p.is_correct = 0 THEN 1 END) as games_lost,
-                   COUNT(CASE WHEN g.is_final = 1 THEN 1 END) as games_played,
-                   COUNT(p.id) as total_picks,
+                   COUNT(CASE WHEN p.is_correct = 1 AND g.week = ? AND g.year = ? THEN 1 END) as games_won,
+                   COUNT(CASE WHEN p.is_correct = 0 AND g.week = ? AND g.year = ? THEN 1 END) as games_lost,
+                   COUNT(CASE WHEN g.is_final = 1 AND g.week = ? AND g.year = ? THEN 1 END) as games_played,
+                   COUNT(CASE WHEN g.week = ? AND g.year = ? THEN p.id END) as total_picks,
                    ROUND(
                        CASE 
-                           WHEN COUNT(CASE WHEN g.is_final = 1 THEN 1 END) > 0
-                           THEN CAST(COUNT(CASE WHEN p.is_correct = 1 THEN 1 END) AS FLOAT) * 100.0 / 
-                                COUNT(CASE WHEN g.is_final = 1 THEN 1 END)
+                           WHEN COUNT(CASE WHEN g.is_final = 1 AND g.week = ? AND g.year = ? THEN 1 END) > 0
+                           THEN CAST(COUNT(CASE WHEN p.is_correct = 1 AND g.week = ? AND g.year = ? THEN 1 END) AS FLOAT) * 100.0 / 
+                                COUNT(CASE WHEN g.is_final = 1 AND g.week = ? AND g.year = ? THEN 1 END)
                            ELSE 0 
                        END, 1
                    ) as win_percentage,
@@ -73,12 +73,12 @@ class WeeklyDashboardPDF:
                     AND g2.is_monday_night = 1 LIMIT 1) as monday_score_prediction
             FROM users u
             LEFT JOIN user_picks p ON u.id = p.user_id
-            LEFT JOIN nfl_games g ON p.game_id = g.id AND g.week = ? AND g.year = ?
+            LEFT JOIN nfl_games g ON p.game_id = g.id
             WHERE u.is_admin = 0
             GROUP BY u.id, u.username
-            HAVING COUNT(p.id) > 0
+            HAVING COUNT(CASE WHEN g.week = ? AND g.year = ? THEN p.id END) > 0
             ORDER BY games_won DESC, win_percentage DESC, monday_total_prediction ASC, u.username
-        ''', (week, year, week, year, week, year))
+        ''', (week, year, week, year, week, year, week, year, week, year, week, year, week, year, week, year, week, year, week, year))
         
         leaderboard = [dict(row) for row in cursor.fetchall()]
         
