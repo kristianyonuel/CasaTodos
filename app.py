@@ -568,13 +568,13 @@ def leaderboard():
     cursor.execute('''
         SELECT u.username,
                COUNT(DISTINCT CASE WHEN wr.is_winner = 1 THEN wr.week || '-' || wr.year END) as weekly_wins,
-               SUM(CASE WHEN p.is_correct = 1 THEN 1 ELSE 0 END) as total_games_won,
+               SUM(CASE WHEN p.is_correct = 1 AND g.is_final = 1 THEN 1 ELSE 0 END) as total_games_won,
                COUNT(DISTINCT CASE WHEN g.is_final = 1 THEN g.week || '-' || g.year END) as weeks_played,
                COUNT(CASE WHEN g.is_final = 1 THEN 1 END) as total_games_played,
                ROUND(
                    CASE 
                        WHEN COUNT(DISTINCT CASE WHEN g.is_final = 1 THEN g.week || '-' || g.year END) > 0
-                       THEN CAST(SUM(CASE WHEN p.is_correct = 1 THEN 1 ELSE 0 END) AS FLOAT) / 
+                       THEN CAST(SUM(CASE WHEN p.is_correct = 1 AND g.is_final = 1 THEN 1 ELSE 0 END) AS FLOAT) / 
                             COUNT(DISTINCT CASE WHEN g.is_final = 1 THEN g.week || '-' || g.year END)
                        ELSE 0 
                    END, 1
