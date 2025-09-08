@@ -72,7 +72,7 @@ class ScoringUpdater:
                     'home_diff': 999,
                     'away_diff': 999,
                     'total_diff': 999,
-                    'submission_time': user_row.get('created_at', '9999-12-31 23:59:59')
+                    'submission_time': '9999-12-31 23:59:59'
                 }
                 
                 if monday_pick:
@@ -139,7 +139,7 @@ class ScoringUpdater:
                 
                 cursor.execute('''
                     INSERT INTO weekly_results 
-                    (user_id, week, year, total_picks, correct_picks, is_winner, rank, created_at)
+                    (user_id, week, year, total_picks, correct_picks, is_winner, weekly_rank, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     result['user_id'],

@@ -48,9 +48,6 @@
                     <button onclick="loadGameResults()" class="btn btn-warning">Update Game Results</button>
                     <button onclick="loadDeadlineOverrides()" class="btn btn-danger">Deadline Overrides</button>
                     <button onclick="checkAPIStatus()" class="btn btn-info">📊 API Status</button>
-                    <button onclick="fixPickCorrectness()" class="btn btn-danger">🔧 Fix Pick Correctness</button>
-                    <button onclick="updateWeekScoring()" class="btn btn-primary">📊 Update Week Scoring</button>
-                    <button onclick="recalculateAllScoring()" class="btn btn-warning">🔄 Recalculate All Scoring</button>
                     <button onclick="syncSeason()" class="btn btn-secondary">Sync NFL Season</button>
                     <button onclick="exportAllUsersPicks()" class="btn btn-primary">📊 Export All Users' Picks</button>
                     <button onclick="exportAllUsersPicksSafe()" class="btn btn-success">📊 Export (SSL-Safe)</button>
@@ -1219,93 +1216,6 @@
                 }
             };
             input.click();
-        }
-
-        async function updateWeekScoring() {
-            try {
-                const week = document.getElementById('admin-week').value;
-                const year = document.getElementById('admin-year').value;
-                
-                if (!week) {
-                    alert('Please select a week');
-                    return;
-                }
-                
-                const confirmed = confirm(`Update scoring for Week ${week}, ${year}?`);
-                if (!confirmed) return;
-                
-                const response = await fetch('/admin/update_scoring', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        week: parseInt(week),
-                        year: parseInt(year)
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    alert(result.message);
-                } else {
-                    alert(`Error: ${result.error}`);
-                }
-            } catch (error) {
-                console.error('Error updating week scoring:', error);
-                alert(`Error updating week scoring: ${error.message}`);
-            }
-        }
-
-        async function recalculateAllScoring() {
-            try {
-                const confirmed = confirm('Recalculate scoring for ALL completed weeks? This may take a moment.');
-                if (!confirmed) return;
-                
-                const response = await fetch('/admin/recalculate_all_scoring', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    alert(`${result.message}\n\nLeaderboard has been updated!`);
-                } else {
-                    alert(`Error: ${result.error}`);
-                }
-            } catch (error) {
-                console.error('Error recalculating all scoring:', error);
-                alert(`Error recalculating scoring: ${error.message}`);
-            }
-        }
-
-        async function fixPickCorrectness() {
-            try {
-                const confirmed = confirm('🔧 Fix Pick Correctness\n\nThis will recalculate which picks are correct based on final game scores.\nUse this if the leaderboard shows 0 points when users should have won games.\n\nContinue?');
-                if (!confirmed) return;
-                
-                const response = await fetch('/admin/fix_pick_correctness', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    alert(`✅ ${result.message}\nPicks Updated: ${result.picks_updated}\n\nNow run "Recalculate All Scoring" to update the leaderboard!`);
-                } else {
-                    alert(`❌ Error: ${result.error}`);
-                }
-            } catch (error) {
-                console.error('Error fixing pick correctness:', error);
-                alert(`Error fixing pick correctness: ${error.message}`);
-            }
         }
 
         // API Rate Limiting Functions

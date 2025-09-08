@@ -1052,15 +1052,19 @@ def admin_update_scoring():
         if not week:
             return jsonify({'error': 'Week number required'}), 400
         
+        # First update pick correctness for this week (this was the missing step!)
+        from database_sync import update_pick_correctness
+        picks_updated = update_pick_correctness(week, year)
+        
+        # Then update weekly results
         from scoring_updater import ScoringUpdater
         updater = ScoringUpdater()
-        
         success = updater.update_weekly_results(week, year)
         
         if success:
             return jsonify({
                 'success': True,
-                'message': f'Scoring updated for Week {week}, {year}'
+                'message': f'Scoring updated for Week {week}, {year}. Pick correctness updated for {picks_updated} picks.'
             })
         else:
             return jsonify({
@@ -1071,60 +1075,15 @@ def admin_update_scoring():
         logger.error(f"Admin scoring update error: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/admin/recalculate_all_scoring', methods=['POST'])
-def admin_recalculate_all_scoring():
-    """Admin endpoint to recalculate scoring for all completed weeks"""
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    try:
-        # First, recalculate pick correctness for all final games
-        from database_sync import recalculate_all_pick_correctness
-        picks_updated = recalculate_all_pick_correctness()
-        
-        # Then recalculate weekly results
-        from scoring_updater import ScoringUpdater
-        updater = ScoringUpdater()
-        weeks_updated = updater.update_all_completed_weeks()
-        
-        return jsonify({
-            'success': True,
-            'message': f'Recalculated pick correctness for {picks_updated} picks and scoring for {weeks_updated} weeks',
-            'picks_updated': picks_updated,
-            'weeks_updated': weeks_updated
-        })
-    
-    except Exception as e:
-        logger.error(f"Admin recalculate all scoring error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/admin/fix_pick_correctness', methods=['POST'])
-def admin_fix_pick_correctness():
-    """Admin endpoint to fix pick correctness for all final games"""
-    if 'user_id' not in session or not session.get('is_admin'):
-        return jsonify({'error': 'Admin access required'}), 403
-    
-    try:
-        from database_sync import recalculate_all_pick_correctness
-        picks_updated = recalculate_all_pick_correctness()
-        
-        return jsonify({
-            'success': True,
-            'message': f'Fixed pick correctness for {picks_updated} picks',
-            'picks_updated': picks_updated
-        })
-    
-    except Exception as e:
-        logger.error(f"Admin fix pick correctness error: {e}")
-        return jsonify({'error': str(e)}), 500
-
 @app.errorhandler(404)
 def not_found_error(error):
     return render_template('error.html', error="Page not found"), 404
 
+
 @app.errorhandler(500)
 def internal_error(error):
     return render_template('error.html', error="Internal server error"), 500
+
 
 @app.route('/force_create_games/<int:week>/<int:year>')
 def force_create_games(week, year):
