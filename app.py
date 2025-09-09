@@ -124,9 +124,16 @@ def index():
     
     initialize_app()
     
-    current_week = 1
-    current_year = 2025  # Use 2025 for NFL schedule
+    # Use smart NFL week calculation based on game completion
+    try:
+        from nfl_week_calculator import get_current_nfl_week
+        current_week = get_current_nfl_week(2025)
+    except Exception as e:
+        logger.error(f"Error calculating current week: {e}")
+        current_week = 1  # Fallback
     
+    current_year = 2025  # Use 2025 for NFL schedule
+
     # Get actual game count from database
     with get_db() as conn:
         cursor = conn.cursor()
@@ -1836,13 +1843,18 @@ def weekly_leaderboard(week=None, year=None):
     
     # Default to current week if not specified
     if week is None:
-        # Calculate current NFL week based on date
-        from datetime import datetime
-        current_date = datetime.now()
-        # NFL season typically starts first week of September
-        season_start = datetime(2025, 9, 4)  # 2025 season start
-        days_since_start = (current_date - season_start).days
-        week = max(1, min(18, (days_since_start // 7) + 1))
+        # Use smart NFL week calculation based on game completion
+        try:
+            from nfl_week_calculator import get_current_nfl_week
+            week = get_current_nfl_week(2025)
+        except Exception as e:
+            logger.error(f"Error calculating current week: {e}")
+            # Fallback to calendar calculation
+            from datetime import datetime
+            current_date = datetime.now()
+            season_start = datetime(2025, 9, 5)  # 2025 season start
+            days_since_start = (current_date - season_start).days
+            week = max(1, min(18, (days_since_start // 7) + 1))
     if year is None:
         year = 2025
     
@@ -2166,12 +2178,13 @@ def export_my_picks_csv():
         
         # If no week/year specified, use current week
         if not week or not year:
-            # Get current week from deadline manager or default
+            # Use smart NFL week calculation
             try:
-                deadline_manager = DeadlineManager()
-                week = deadline_manager.get_current_week()
-                year = deadline_manager.get_current_year()
-            except:
+                from nfl_week_calculator import get_current_nfl_week
+                week = get_current_nfl_week(2025)
+                year = 2025
+            except Exception as e:
+                logger.error(f"Error calculating current week: {e}")
                 from datetime import datetime
                 now = datetime.now()
                 week = 1  # Default fallback
