@@ -1924,7 +1924,7 @@ def weekly_leaderboard(week=None, year=None):
             all_picks = cursor.fetchall()
             
             # Calculate Monday Night tiebreaker data
-            monday_tiebreaker = {'has_pick': False}
+            monday_tiebreaker = {'has_pick': False, 'correct_winner': False}
             if monday_pick:
                 pred_home = monday_pick[0] or 0
                 pred_away = monday_pick[1] or 0
@@ -1935,8 +1935,16 @@ def weekly_leaderboard(week=None, year=None):
                 is_final = monday_pick[6] or False
                 selected_team = monday_pick[7] if len(monday_pick) > 7 else None
                 
+                # Check if user predicted correct winner based on selected_team
+                if selected_team and is_final and actual_home is not None and actual_away is not None:
+                    actual_winner = away_team if actual_away > actual_home else home_team
+                    correct_winner = selected_team == actual_winner
+                else:
+                    correct_winner = False
+                
                 monday_tiebreaker = {
                     'has_pick': True,
+                    'correct_winner': correct_winner,
                     'home_diff': abs(pred_home - actual_home) if is_final and actual_home is not None else None,
                     'away_diff': abs(pred_away - actual_away) if is_final and actual_away is not None else None,
                     'total_diff': abs((pred_home + pred_away) - (actual_home + actual_away)) if is_final and actual_home is not None and actual_away is not None else None,
@@ -1991,6 +1999,7 @@ def weekly_leaderboard(week=None, year=None):
         # Simplified: 1 point per win, then Monday Night tiebreakers
         leaderboard_data.sort(key=lambda x: (
             -x['correct_picks'],                               # Most games won (1 point each)
+            not x['monday_tiebreaker'].get('correct_winner', False),  # Correct winner first
             x['monday_tiebreaker'].get('home_diff', 999),      # Closest to home team
             x['monday_tiebreaker'].get('away_diff', 999),      # Closest to away team
             x['monday_tiebreaker'].get('total_diff', 999),     # Closest to total

@@ -56,7 +56,7 @@ class ScoringUpdater:
                 
                 # Get Monday Night pick data for this user
                 cursor.execute('''
-                    SELECT p.predicted_home_score, p.predicted_away_score,
+                    SELECT p.predicted_home_score, p.predicted_away_score, p.selected_team,
                            g.home_score, g.away_score, p.created_at
                     FROM user_picks p
                     JOIN nfl_games g ON p.game_id = g.id
@@ -69,6 +69,7 @@ class ScoringUpdater:
                 
                 # Calculate Monday Night tiebreaker data
                 monday_tiebreaker = {
+                    'correct_winner': False,
                     'home_diff': 999,
                     'away_diff': 999,
                     'total_diff': 999,
@@ -81,7 +82,13 @@ class ScoringUpdater:
                     actual_home = monday_pick['home_score'] or 0
                     actual_away = monday_pick['away_score'] or 0
                     
+                    # Check if user predicted correct winner based on selected_team field
+                    selected_team = monday_pick['selected_team']
+                    actual_winner = 'MIN' if actual_away > actual_home else 'CHI'  # MIN is away, CHI is home
+                    correct_winner = selected_team == actual_winner
+                    
                     monday_tiebreaker = {
+                        'correct_winner': correct_winner,
                         'home_diff': abs(pred_home - actual_home),
                         'away_diff': abs(pred_away - actual_away),
                         'total_diff': abs((pred_home + pred_away) - (actual_home + actual_away)),
@@ -101,6 +108,7 @@ class ScoringUpdater:
             # Sort with Monday Night tiebreaker logic
             results.sort(key=lambda x: (
                 -x['correct_picks'],                                    # Most games won (1 point each)
+                not x['monday_tiebreaker'].get('correct_winner', False), # Correct winner first (False sorts before True)
                 x['monday_tiebreaker']['home_diff'],                    # Closest to home team score
                 x['monday_tiebreaker']['away_diff'],                    # Closest to away team score
                 x['monday_tiebreaker']['total_diff'],                   # Closest to total score
