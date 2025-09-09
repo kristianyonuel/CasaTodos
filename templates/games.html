@@ -117,7 +117,7 @@
             </div>
         {% else %}
             <h3>🎯 Select Your Picks</h3>
-            <form method="POST" class="picks-form">
+            <form method="POST" action="{{ url_for('submit_picks') }}" class="picks-form">
                 {% for game in games %}
                     <div class="game-card">
                         <div class="game-header">

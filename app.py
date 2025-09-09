@@ -570,10 +570,34 @@ def games():
 @app.route('/submit_picks', methods=['POST'])
 def submit_picks():
     if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
+        flash('Please log in to submit picks', 'error')
+        return redirect(url_for('login'))
     
-    data = request.get_json()
-    picks = data.get('picks', [])
+    # Handle both JSON and form data
+    if request.is_json:
+        data = request.get_json()
+        picks = data.get('picks', [])
+    else:
+        # Handle form data
+        picks = []
+        form_data = request.form
+        
+        # Process form data - each pick is like: game_<game_id> = team_name
+        for key, value in form_data.items():
+            if key.startswith('game_') and value:
+                game_id = key.replace('game_', '')
+                pick = {'game_id': game_id, 'selected_team': value}
+                
+                # Also get score predictions for Monday Night games
+                home_score_key = f'home_score_{game_id}'
+                away_score_key = f'away_score_{game_id}'
+                
+                if home_score_key in form_data:
+                    pick['home_score'] = form_data[home_score_key]
+                if away_score_key in form_data:
+                    pick['away_score'] = form_data[away_score_key]
+                
+                picks.append(pick)
     
     # Check deadlines before allowing submissions
     deadline_manager = DeadlineManager()
@@ -611,15 +635,24 @@ def submit_picks():
         
         conn.commit()
     
-    if failed_picks > 0:
-        return jsonify({
-            'success': False, 
-            'message': f'Some picks were rejected due to deadline. {successful_picks} picks saved, {failed_picks} rejected.',
-            'partial': True
-        })
-    
-    return jsonify({'success': True, 'message': f'Successfully submitted {successful_picks} picks!'})
-
+    # Handle responses based on request type
+    if request.is_json:
+        # JSON response for AJAX requests
+        if failed_picks > 0:
+            return jsonify({
+                'success': False, 
+                'message': f'Some picks were rejected due to deadline. {successful_picks} picks saved, {failed_picks} rejected.',
+                'partial': True
+            })
+        return jsonify({'success': True, 'message': f'Successfully submitted {successful_picks} picks!'})
+    else:
+        # Form submission response with flash messages and redirect
+        if failed_picks > 0:
+            flash(f'Some picks were rejected due to deadline. {successful_picks} picks saved, {failed_picks} rejected.', 'warning')
+        else:
+            flash(f'Successfully submitted {successful_picks} picks!', 'success')
+        
+        return redirect(url_for('games'))
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
