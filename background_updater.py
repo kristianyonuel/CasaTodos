@@ -70,9 +70,9 @@ class BackgroundGameUpdater:
                 logger.info("No current NFL week determined, skipping update")
                 return
                 
-            # Only update during game days (Thursday, Sunday, Monday)
-            current_day = datetime.now().weekday()  # 0=Monday, 6=Sunday
-            game_days = [3, 6, 0]  # Thursday, Sunday, Monday
+            # Update during game days (Thursday, Sunday, Monday) and Tuesday (for MNF results)
+            current_day = datetime.now().weekday()  # 0=Monday, 1=Tuesday, ..., 6=Sunday
+            game_days = [3, 6, 0, 1]  # Thursday, Sunday, Monday, Tuesday
             
             if current_day not in game_days:
                 logger.info(f"Not a game day (weekday {current_day}), skipping update")

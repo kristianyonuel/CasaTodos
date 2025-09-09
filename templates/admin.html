@@ -7,6 +7,7 @@
                 <h2>League Administration</h2>
                 
                 <div class="admin-controls">
+                    {% if is_admin %}
                     <div class="week-selector">
                         <label for="admin-week">Select Week:</label>
                         <select id="admin-week" onchange="updateWeek()">
@@ -20,9 +21,11 @@
                             <option value="2026">2026</option>
                         </select>
                     </div>
+                    {% endif %}
                 </div>
                 
                 <div class="admin-actions">
+                    {% if is_admin %}
                     <button onclick="loadAllPicks()" class="btn btn-primary">View All Picks</button>
                     <button onclick="loadSimplePicks()" class="btn btn-secondary">View Simple Picks</button>
                     <button onclick="loadUsers()" class="btn btn-info">Manage Users</button>
@@ -36,9 +39,13 @@
                     <button onclick="exportAllUsersPicksSafe()" class="btn btn-success">📊 Export (SSL-Safe)</button>
                     <button onclick="importPicksFile()" class="btn btn-secondary">📥 Import Picks from CSV</button>
                     <button onclick="exportWeeklyDashboardPDF()" class="btn btn-info">📄 Export Weekly Dashboard PDF</button>
+                    {% else %}
+                    <p class="alert alert-warning">Admin access required to view administrative functions.</p>
+                    {% endif %}
                 </div>
                 
                 <!-- Background Updater Status -->
+                {% if is_admin %}
                 <div class="admin-section">
                     <h3>🔄 Background Game Updater</h3>
                     <div id="updater-status" class="status-display">
@@ -50,6 +57,7 @@
                         <button onclick="stopUpdater()" class="btn btn-danger">⏹️ Stop Updater</button>
                     </div>
                 </div>
+                {% endif %}
                 
                 <div id="admin-content">
                     <p>Select an action above to manage the league.</p>

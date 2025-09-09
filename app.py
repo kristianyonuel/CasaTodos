@@ -165,7 +165,8 @@ def index():
         'user_wins': dashboard_data['user_wins'],
         'total_players': dashboard_data['total_players'],
         'available_weeks': list(range(1, 19)),
-        'deadline_summary': deadline_summary
+        'deadline_summary': deadline_summary,
+        'is_admin': session.get('is_admin', False)
     }
     
     return render_template('index.html', **data)
@@ -692,7 +693,7 @@ def admin():
         flash('Admin access required', 'error')
         return redirect(url_for('index'))
     
-    return render_template('admin.html')
+    return render_template('admin.html', is_admin=session.get('is_admin', False))
 
 @app.route('/admin/all_picks')
 def admin_all_picks():
