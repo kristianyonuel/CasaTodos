@@ -123,6 +123,9 @@
                         <div class="game-header">
                             <strong>{{ get_team_name(game.away_team) }} @ {{ get_team_name(game.home_team) }}</strong>
                             <span class="game-date">{{ game.game_date.strftime('%a %m/%d %I:%M %p') if game.game_date else 'TBD' }}</span>
+                            {% if game.is_monday_night %}
+                                <span class="monday-night-badge">🏈 Monday Night</span>
+                            {% endif %}
                         </div>
                         
                         <div class="team-options">
@@ -144,6 +147,32 @@
                                 {{ get_team_name(game.home_team) }}
                             </label>
                         </div>
+                        
+                        {% if game.is_monday_night %}
+                        <div class="monday-night-scores">
+                            <h4>Score Prediction (Required for Tiebreaker)</h4>
+                            <div class="score-inputs">
+                                <div class="score-input">
+                                    <label for="away_score_{{ game.id }}">{{ get_team_name(game.away_team) }} Score:</label>
+                                    <input type="number" 
+                                           id="away_score_{{ game.id }}" 
+                                           name="away_score_{{ game.id }}" 
+                                           min="0" 
+                                           max="99" 
+                                           value="{{ user_picks.get(game.id, {}).get('predicted_away_score', '') }}">
+                                </div>
+                                <div class="score-input">
+                                    <label for="home_score_{{ game.id }}">{{ get_team_name(game.home_team) }} Score:</label>
+                                    <input type="number" 
+                                           id="home_score_{{ game.id }}" 
+                                           name="home_score_{{ game.id }}" 
+                                           min="0" 
+                                           max="99" 
+                                           value="{{ user_picks.get(game.id, {}).get('predicted_home_score', '') }}">
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 {% endfor %}
                 
@@ -426,6 +455,63 @@
     background: #dbeafe;
     border-color: #3b82f6;
     color: #1e40af;
+}
+
+/* Monday Night Football Styling */
+.monday-night-badge {
+    background: #dc2626;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    margin-left: 10px;
+}
+
+.monday-night-scores {
+    margin-top: 15px;
+    padding: 15px;
+    background: #fef3c7;
+    border: 2px solid #f59e0b;
+    border-radius: 8px;
+}
+
+.monday-night-scores h4 {
+    margin: 0 0 10px 0;
+    color: #92400e;
+    font-size: 0.9rem;
+}
+
+.score-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.score-input {
+    display: flex;
+    flex-direction: column;
+}
+
+.score-input label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #92400e;
+    margin-bottom: 5px;
+}
+
+.score-input input {
+    padding: 8px;
+    border: 1px solid #d97706;
+    border-radius: 4px;
+    font-size: 1rem;
+    text-align: center;
+}
+
+.score-input input:focus {
+    outline: none;
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
 }
 
 .team-option input:checked + .team-option {

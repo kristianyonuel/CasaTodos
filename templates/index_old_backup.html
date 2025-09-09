@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>La Casa de Todos - NFL Fantasy League</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🏠 La Casa de Todos</h1>
+            <p class="subtitle">NFL Fantasy League - Family Edition</p>
+            <nav class="nav">
+                <a href="{{ url_for('games') }}" class="nav-link">Make Picks</a>
+                <a href="{{ url_for('leaderboard') }}" class="nav-link">Season Leaderboard</a>
+                <a href="{{ url_for('weekly_leaderboard') }}" class="nav-link">Weekly Leaderboard</a>
+                <a href="{{ url_for('rules') }}" class="nav-link">Rules</a>
+                {% if session.get('is_admin') %}
+                <a href="{{ url_for('admin') }}" class="nav-link admin">Admin</a>
+                {% endif %}
+                <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="dashboard">
+                <div class="welcome-card">
+                    <h2>Welcome back, {{ username }}! 🏈</h2>
+                    <p>Ready to make your picks for Week {{ current_week }}?</p>
+                    {% if user_picks_count is defined and total_games is defined and total_games > 0 %}
+                        <div class="progress-info">
+                            <p>Your progress: {{ user_picks_count }}/{{ total_games }} games picked</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ (user_picks_count / total_games * 100) if total_games > 0 else 0 }}%"></div>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Current Week</h3>
+                        <div class="stat-value">{{ current_week or 1 }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Your Picks</h3>
+                        <div class="stat-value">{{ user_picks_count or 0 }}/{{ total_games or 0 }}</div>
+                        <div class="stat-subtitle">
+                            {% if total_games and user_picks_count %}
+                                {{ "%.1f"|format((user_picks_count / total_games * 100)) }}% Complete
+                            {% else %}
+                                Ready to pick
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Your Wins</h3>
+                        <div class="stat-value">{{ user_wins or 0 }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Total Players</h3>
+                        <div class="stat-value">{{ total_players or 0 }}</div>
+                    </div>
+                </div>
+
+                <div class="quick-actions">
+                    <h3>Quick Actions</h3>
+                    <div class="action-buttons">
+                        <a href="{{ url_for('games') }}" class="action-btn primary">
+                            🎯 Make Your Picks
+                        </a>
+                        <a href="{{ url_for('leaderboard') }}" class="action-btn secondary">
+                            🏆 View Leaderboard
+                        </a>
+                        <a href="{{ url_for('rules') }}" class="action-btn secondary">
+                            📋 Read Rules
+                        </a>
+                        <a href="{{ url_for('my_picks_export') }}" class="action-btn secondary">
+                            📤 Export My Picks
+                        </a>
+                        <a href="javascript:void(0)" onclick="exportAllPicks()" class="action-btn secondary">
+                            📊 Export All Users
+                        </a>
+                        {% if session.get('is_admin') %}
+                        <a href="{{ url_for('admin') }}" class="action-btn admin">
+                            ⚙️ Admin Panel
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="game-status">
+                    <h3>This Week's Deadlines (AST)</h3>
+                    <div class="status-cards">
+                        {% if deadline_summary.thursday %}
+                        <div class="status-card {% if deadline_summary.thursday.passed %}deadline-passed{% elif deadline_summary.thursday.urgency == 'critical' %}deadline-critical{% elif deadline_summary.thursday.urgency == 'warning' %}deadline-warning{% endif %}">
+                            <h4>Thursday Night</h4>
+                            <p>{{ deadline_summary.thursday.formatted_time }}</p>
+                            {% if deadline_summary.thursday.passed %}
+                                <span class="status-indicator">Deadline Passed</span>
+                            {% elif deadline_summary.thursday.hours_remaining <= 24 %}
+                                <span class="status-indicator {% if deadline_summary.thursday.urgency == 'critical' %}critical{% else %}warning{% endif %}">
+                                    {{ deadline_summary.thursday.hours_remaining|round(1) }} hours left
+                                </span>
+                            {% endif %}
+                            {% if deadline_summary.thursday.matchup %}
+                                <p class="matchup">{{ deadline_summary.thursday.matchup }}</p>
+                            {% endif %}
+                            {% if deadline_summary.thursday.is_override %}
+                                <span class="override-indicator">⚠️ Modified by Admin</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if deadline_summary.sunday %}
+                        <div class="status-card {% if deadline_summary.sunday.passed %}deadline-passed{% elif deadline_summary.sunday.urgency == 'critical' %}deadline-critical{% elif deadline_summary.sunday.urgency == 'warning' %}deadline-warning{% endif %}">
+                            <h4>Sunday Games</h4>
+                            <p>{{ deadline_summary.sunday.formatted_time }}</p>
+                            {% if deadline_summary.sunday.passed %}
+                                <span class="status-indicator">Deadline Passed</span>
+                            {% elif deadline_summary.sunday.hours_remaining <= 24 %}
+                                <span class="status-indicator {% if deadline_summary.sunday.urgency == 'critical' %}critical{% else %}warning{% endif %}">
+                                    {{ deadline_summary.sunday.hours_remaining|round(1) }} hours left
+                                </span>
+                            {% endif %}
+                            {% if deadline_summary.sunday.matchup %}
+                                <p class="matchup">{{ deadline_summary.sunday.matchup }}</p>
+                            {% endif %}
+                            {% if deadline_summary.sunday.is_override %}
+                                <span class="override-indicator">⚠️ Modified by Admin</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if deadline_summary.monday %}
+                        <div class="status-card {% if deadline_summary.monday.passed %}deadline-passed{% elif deadline_summary.monday.urgency == 'critical' %}deadline-critical{% elif deadline_summary.monday.urgency == 'warning' %}deadline-warning{% endif %}">
+                            <h4>Monday Night</h4>
+                            <p>{{ deadline_summary.monday.formatted_time }}</p>
+                            <p>Score prediction required</p>
+                            {% if deadline_summary.monday.passed %}
+                                <span class="status-indicator">Deadline Passed</span>
+                            {% elif deadline_summary.monday.hours_remaining <= 24 %}
+                                <span class="status-indicator {% if deadline_summary.monday.urgency == 'critical' %}critical{% else %}warning{% endif %}">
+                                    {{ deadline_summary.monday.hours_remaining|round(1) }} hours left
+                                </span>
+                            {% endif %}
+                            {% if deadline_summary.monday.matchup %}
+                                <p class="matchup">{{ deadline_summary.monday.matchup }}</p>
+                            {% endif %}
+                            {% if deadline_summary.monday.is_override %}
+                                <span class="override-indicator">⚠️ Modified by Admin</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if not deadline_summary.thursday and not deadline_summary.sunday and not deadline_summary.monday %}
+                        <div class="status-card">
+                            <h4>No Games</h4>
+                            <p>No games scheduled this week</p>
+                        </div>
+                        {% endif %}
+                        
+                        {% if deadline_summary.next_deadline %}
+                        <div class="next-deadline-card">
+                            <h4>⏰ Next Deadline</h4>
+                            <p><strong>{{ deadline_summary.next_deadline.hours_remaining|round(1) }} hours</strong> until {{ deadline_summary.next_deadline.type.replace('_', ' ').title() }}</p>
+                            <p>{{ deadline_summary.next_deadline.formatted_time }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="recent-activity">
+                    <h3>Week {{ current_week }} Information</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <strong>Total Games:</strong> {{ total_games }} games this week
+                        </div>
+                        <div class="info-item">
+                            <strong>Your Progress:</strong> {{ user_picks_count }}/{{ total_games }} picks made
+                        </div>
+                        <div class="info-item">
+                            <strong>Entry Fees:</strong> $20 Weekly / $20 Initial to Join
+                        </div>
+                        <div class="info-item">
+                            <strong>Tiebreaker:</strong> Monday Night Score Prediction
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script>
+        // Export user picks function
+        function exportMyPicks() {
+            const week = '{{ current_week or 1 }}';
+            const year = '{{ current_year or 2025 }}';
+            
+            // Create a temporary link to download the CSV
+            const link = document.createElement('a');
+            link.href = `{{ url_for('export_my_picks_csv') }}?week=${week}&year=${year}`;
+            link.download = `{{ username }}_picks_week_${week}_${year}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Export all users picks function (spreadsheet format)
+        function exportAllPicks() {
+            const week = '{{ current_week or 1 }}';
+            const year = '{{ current_year or 2025 }}';
+            
+            // Create a temporary link to download the CSV
+            const link = document.createElement('a');
+            link.href = `{{ url_for('export_all_users_picks_csv') }}?week=${week}&year=${year}`;
+            link.download = `all_picks_week_${week}_${year}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
