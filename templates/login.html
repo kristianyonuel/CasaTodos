@@ -21,7 +21,7 @@
                 
                 <!-- Fallback placeholder if no logo image is found -->
                 <div class="logo-placeholder" style="display: none;">
-                    🏠
+                    &#127968;
                 </div>
                 
                 <h1>La Casa de Todos</h1>
@@ -58,8 +58,147 @@
                 <small>(Admin access available with separate credentials)</small>
             </div>
             
+            <div class="forgot-password-section">
+                <p><a href="#" id="forgot-password-link">Forgot your password? Reset it here</a></p>
+                
+                <div id="password-reset-form" class="password-reset-form" style="display: none;">
+                    <h3>Reset Password</h3>
+                    <p class="reset-description">Enter your username and new password to reset your account password.</p>
+                    
+                    <form method="POST" action="{{ url_for('reset_password') }}" class="reset-form">
+                        <div class="form-group">
+                            <label for="reset_username">Username</label>
+                            <input type="text" id="reset_username" name="username" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="reset_new_password">New Password</label>
+                            <input type="password" id="reset_new_password" name="new_password" required minlength="6">
+                            <small class="form-help">Password must be at least 6 characters long</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="reset_confirm_password">Confirm New Password</label>
+                            <input type="password" id="reset_confirm_password" name="confirm_password" required minlength="6">
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-secondary">Reset Password</button>
+                            <button type="button" id="cancel-reset" class="btn btn-cancel">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
             <p>Don't have an account? <a href="{{ url_for('register') }}">Register here</a></p>
         </div>
     </div>
+
+    <style>
+    .forgot-password-section {
+        margin-top: 20px;
+        text-align: center;
+    }
+
+    .password-reset-form {
+        margin-top: 15px;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background-color: #f9f9f9;
+        text-align: left;
+    }
+
+    .password-reset-form h3 {
+        margin-top: 0;
+        color: #333;
+    }
+
+    .reset-description {
+        margin-bottom: 15px;
+        color: #666;
+        font-size: 14px;
+    }
+
+    .form-help {
+        display: block;
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+    }
+
+    .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .btn-secondary:hover {
+        background-color: #5a6268;
+    }
+
+    .btn-cancel {
+        background-color: #dc3545;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .btn-cancel:hover {
+        background-color: #c82333;
+    }
+    </style>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const forgotPasswordLink = document.getElementById('forgot-password-link');
+        const passwordResetForm = document.getElementById('password-reset-form');
+        const cancelResetBtn = document.getElementById('cancel-reset');
+        const resetForm = document.querySelector('.reset-form');
+
+        forgotPasswordLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            passwordResetForm.style.display = 'block';
+            forgotPasswordLink.style.display = 'none';
+        });
+
+        cancelResetBtn.addEventListener('click', function() {
+            passwordResetForm.style.display = 'none';
+            forgotPasswordLink.style.display = 'inline';
+            resetForm.reset();
+        });
+
+        // Validate password confirmation
+        resetForm.addEventListener('submit', function(e) {
+            const newPassword = document.getElementById('reset_new_password').value;
+            const confirmPassword = document.getElementById('reset_confirm_password').value;
+
+            if (newPassword !== confirmPassword) {
+                e.preventDefault();
+                alert('Passwords do not match. Please try again.');
+                return false;
+            }
+
+            if (newPassword.length < 6) {
+                e.preventDefault();
+                alert('Password must be at least 6 characters long.');
+                return false;
+            }
+        });
+    });
+    </script>
 </body>
 </html>

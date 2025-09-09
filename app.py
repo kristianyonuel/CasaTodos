@@ -216,6 +216,54 @@ def login():
     
     return render_template('login.html')
 
+@app.route('/reset_password', methods=['POST'])
+def reset_password():
+    """Handle password reset requests"""
+    username = request.form.get('username', '').strip()
+    new_password = request.form.get('new_password', '').strip()
+    confirm_password = request.form.get('confirm_password', '').strip()
+    
+    if not username or not new_password or not confirm_password:
+        flash('All fields are required for password reset', 'error')
+        return redirect(url_for('login'))
+    
+    if new_password != confirm_password:
+        flash('Passwords do not match', 'error')
+        return redirect(url_for('login'))
+    
+    if len(new_password) < 6:
+        flash('Password must be at least 6 characters long', 'error')
+        return redirect(url_for('login'))
+    
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Check if user exists
+            cursor.execute('SELECT id FROM users WHERE LOWER(username) = LOWER(?)', (username,))
+            user = cursor.fetchone()
+            
+            if not user:
+                flash('Username not found', 'error')
+                return redirect(url_for('login'))
+            
+            # Update password
+            password_hash = generate_password_hash(new_password)
+            cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?', (password_hash, user[0]))
+            conn.commit()
+            
+            logger.info(f"Password reset successful for user: {username}")
+            flash('Password reset successful! You can now login with your new password.', 'success')
+            
+    except sqlite3.Error as e:
+        logger.error(f"Database error during password reset: {e}")
+        flash('A system error occurred. Please try again later.', 'error')
+    except Exception as e:
+        logger.error(f"Unexpected error during password reset: {e}")
+        flash('An unexpected error occurred. Please try again.', 'error')
+    
+    return redirect(url_for('login'))
+
 @app.route('/logout')
 def logout():
     session.clear()
