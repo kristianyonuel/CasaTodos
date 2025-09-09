@@ -1,311 +1,511 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Make Picks - La Casa de Todos</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <style>
-        .team-logo {
-            width: 24px !important;
-            height: 24px !important;
-            margin-right: 8px !important;
-            vertical-align: middle !important;
-            border-radius: 3px !important;
-            object-fit: contain !important;
-        }
-        .header-logo {
-            width: 20px !important;
-            height: 20px !important;
-            margin: 0 4px !important;
-            vertical-align: middle !important;
-        }
-        .team label {
-            display: flex !important;
-            align-items: center !important;
-            gap: 8px !important;
-            padding: 8px !important;
-        }
-        .team-info-container {
-            display: flex !important;
-            flex-direction: column !important;
-        }
-        .team-name {
-            display: block !important;
-            font-size: 0.9em !important;
-            color: #666 !important;
-            font-weight: normal !important;
-        }
-        .matchup-header h3 {
-            color: #333 !important;
-            font-size: 1.2em !important;
-            margin: 10px 0 !important;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header class="header">
-            <h1>🏈 Make Your Picks</h1>
-            <nav class="nav">
-                <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
-                <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
-                <a href="{{ url_for('rules') }}" class="nav-link">Rules</a>
-                {% if session.get('is_admin') %}
-                <a href="{{ url_for('admin') }}" class="nav-link admin">Admin</a>
-                {% endif %}
-                <a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a>
-            </nav>
-        </header>
+{% extends "base.html" %}
 
-        <main class="main-content">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }}">{{ message }}</div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
+{% block title %}Make Picks - La Casa de Todos{% endblock %}
 
-            <div class="picks-header">
-                <h2>Week {{ current_week }}, {{ current_year }}</h2>
-                <div class="week-selector">
-                    <label for="week-select">Select Week:</label>
-                    <select id="week-select" onchange="changeWeek()">
-                        {% for week_num in available_weeks %}
-                        <option value="{{ week_num }}" {% if week_num == current_week %}selected{% endif %}>
-                            Week {{ week_num }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <div class="picks-summary">
-                    <p><strong>Games this week:</strong> {{ total_games }}</p>
-                    <p><strong>Your picks:</strong> <span id="picks-count">{{ user_picks.keys()|length }}</span>/{{ total_games }}</p>
-                </div>
+{% block content %}
+<div class="games-container">
+    <!-- Dashboard Section -->
+    <div class="dashboard-section">
+        <div class="welcome-header">
+            <h2>Make Your Picks - Week {{ current_week }} 🏈</h2>
+            <p>Hi {{ username }}! Ready to make your selections?</p>
+        </div>
+        
+        <div class="stats-row">
+            <div class="stat-item">
+                <div class="stat-label">Current Week</div>
+                <div class="stat-value">{{ current_week }}</div>
             </div>
-
-            {% if total_games == 0 %}
-                <div class="no-games-alert">
-                    <h3>No games available for Week {{ current_week }}</h3>
-                    <p>Games haven't been created yet for this week.</p>
-                    {% if session.get('is_admin') %}
-                        <div class="admin-actions">
-                            <a href="{{ url_for('force_create_games', week=current_week, year=current_year) }}" 
-                               class="btn btn-primary">Create Games for Week {{ current_week }}</a>
-                            <a href="{{ url_for('admin') }}" class="btn btn-secondary">Go to Admin Panel</a>
-                        </div>
+            <div class="stat-item">
+                <div class="stat-label">Your Progress</div>
+                <div class="stat-value">{{ user_picks_count }}/{{ total_games }}</div>
+                <div class="stat-subtitle">
+                    {% if total_games and user_picks_count %}
+                        {{ "%.0f"|format((user_picks_count / total_games * 100)) }}% Complete
                     {% else %}
-                        <p>Please contact the administrator to set up games for this week.</p>
+                        Ready to pick
                     {% endif %}
                 </div>
-            {% else %}
-                <div class="games-container">
-                    <form id="picks-form">
-                        {% for game in games %}
-                        <div class="game-card" data-game-id="{{ game.id }}">
-                            <!-- Team Matchup Header with Logos -->
-                            <div class="matchup-header">
-                                <h3>
-                                    <img src="{{ game.away_team_logo }}" alt="{{ game.away_team }}" class="header-logo" onerror="this.style.display='none'">
-                                    {{ game.away_team_name }} ({{ game.away_team }}) 
-                                    @ 
-                                    <img src="{{ game.home_team_logo }}" alt="{{ game.home_team }}" class="header-logo" onerror="this.style.display='none'">
-                                    {{ game.home_team_name }} ({{ game.home_team }})
-                                </h3>
-                            </div>
-                            
-                            <div class="game-info">
-                                <div class="game-date">
-                                    {% if game.game_date %}
-                                        {% set game_datetime = game.game_date %}
-                                        {{ game_datetime.strftime('%A, %B %d') }}
-                                        <br>
-                                        {{ game_datetime.strftime('%I:%M %p AST') }}
-                                    {% else %}
-                                        TBD
-                                        <br>
-                                        Time TBD
-                                    {% endif %}
-                                    
-                                    {% if game.is_thursday_night %}
-                                        <span class="game-type tnf">TNF</span>
-                                    {% elif game.is_monday_night %}
-                                        <span class="game-type mnf">MNF</span>
-                                    {% elif game.is_sunday_night %}
-                                        <span class="game-type snf">SNF</span>
-                                    {% endif %}
-                                </div>
-                                
-                                <!-- Show current game score if available -->
-                                {% if (game.away_score is not none) and (game.home_score is not none) %}
-                                    <div class="current-score">
-                                        <h4>📊 Final Score</h4>
-                                        <div class="score-display">
-                                            <span class="away-score">{{ game.away_team }}: {{ game.away_score }}</span>
-                                            <span class="score-separator">-</span>
-                                            <span class="home-score">{{ game.home_team }}: {{ game.home_score }}</span>
-                                        </div>
-                                        {% if game.is_final %}
-                                            <div class="game-status final">🏁 FINAL</div>
-                                        {% else %}
-                                            <div class="game-status live">🔴 {{ game.game_status or 'LIVE' }}</div>
-                                        {% endif %}
-                                    </div>
-                                {% elif game.game_status and game.game_status not in ['Scheduled', 'scheduled'] %}
-                                    <div class="current-score">
-                                        <div class="game-status">🟡 {{ game.game_status }}</div>
-                                    </div>
-                                {% endif %}
-                                
-                                <!-- Show regular pick interface -->
-                                <div class="teams">
-                                    <div class="team away-team">
-                                        <input type="radio" 
-                                               name="game_{{ game.id }}" 
-                                               value="{{ game.away_team }}"
-                                               id="away_{{ game.id }}"
-                                               {% if user_picks.get(game.id, {}).get('selected_team') == game.away_team %}checked{% endif %}>
-                                        <label for="away_{{ game.id }}">
-                                            <img src="{{ game.away_team_logo }}" alt="{{ game.away_team }}" class="team-logo" onerror="this.style.display='none'">
-                                            <div class="team-info-container">
-                                                <span class="team-abbrev">{{ game.away_team }}</span>
-                                                <span class="team-name">{{ game.away_team_name }}</span>
-                                            </div>
-                                        </label>
-                                    </div>
-                                    
-                                    <div class="vs">@</div>
-                                    
-                                    <div class="team home-team">
-                                        <input type="radio" 
-                                               name="game_{{ game.id }}" 
-                                               value="{{ game.home_team }}"
-                                               id="home_{{ game.id }}"
-                                               {% if user_picks.get(game.id, {}).get('selected_team') == game.home_team %}checked{% endif %}>
-                                        <label for="home_{{ game.id }}">
-                                            <img src="{{ game.home_team_logo }}" alt="{{ game.home_team }}" class="team-logo" onerror="this.style.display='none'">
-                                            <div class="team-info-container">
-                                                <span class="team-abbrev">{{ game.home_team }}</span>
-                                                <span class="team-name">{{ game.home_team_name }}</span>
-                                            </div>
-                                        </label>
-                                    </div>
-                                </div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Your Wins</div>
+                <div class="stat-value">{{ user_wins or 0 }}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Total Players</div>
+                <div class="stat-value">{{ total_players or 0 }}</div>
+            </div>
+        </div>
 
-                                {% if game.is_monday_night %}
-                                <div class="score-prediction">
-                                    <h4>Score Prediction (Tiebreaker)</h4>
-                                    <div class="score-inputs">
-                                        <input type="number" 
-                                               name="away_score_{{ game.id }}" 
-                                               placeholder="Away"
-                                               min="0" max="99"
-                                               value="{{ user_picks.get(game.id, {}).get('predicted_away_score') or '' }}">
-                                        <span>-</span>
-                                        <input type="number" 
-                                               name="home_score_{{ game.id }}" 
-                                               placeholder="Home"
-                                               min="0" max="99"
-                                               value="{{ user_picks.get(game.id, {}).get('predicted_home_score') or '' }}">
-                                    </div>
-                                </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% endfor %}
-                        
-                        <div class="submit-section">
-                            <button type="submit" class="btn btn-primary btn-large">
-                                Submit All Picks
-                            </button>
-                            <button type="button" onclick="exportMyPicks()" class="btn btn-secondary btn-large">
-                                📤 Export My Picks
-                            </button>
-                            <p class="picks-info">
-                                You have selected <span id="selected-count">0</span> out of {{ total_games }} games
-                            </p>
-                        </div>
-                    </form>
+        <!-- Progress Bar -->
+        {% if total_games > 0 %}
+        <div class="progress-section">
+            <div class="progress-info">
+                <span>Your picks: {{ user_picks_count }}/{{ total_games }} games</span>
+                <span>{{ "%.0f"|format((user_picks_count / total_games * 100)) if total_games > 0 else 0 }}%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {{ (user_picks_count / total_games * 100) if total_games > 0 else 0 }}%"></div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Deadline Information -->
+        {% if deadline_summary %}
+        <div class="deadline-summary">
+            <h3>⏰ Deadlines (AST)</h3>
+            <div class="deadline-cards">
+                {% if deadline_summary.thursday %}
+                <div class="deadline-card {% if deadline_summary.thursday.passed %}passed{% elif deadline_summary.thursday.urgency == 'critical' %}critical{% elif deadline_summary.thursday.urgency == 'warning' %}warning{% endif %}">
+                    <div class="deadline-type">Thursday Night</div>
+                    <div class="deadline-time">{{ deadline_summary.thursday.formatted_time }}</div>
+                    {% if deadline_summary.thursday.passed %}
+                        <div class="deadline-status">Deadline Passed</div>
+                    {% elif deadline_summary.thursday.hours_remaining <= 24 %}
+                        <div class="deadline-status">{{ deadline_summary.thursday.hours_remaining|round(1) }}h left</div>
+                    {% endif %}
+                    {% if deadline_summary.thursday.matchup %}
+                        <div class="deadline-matchup">{{ deadline_summary.thursday.matchup }}</div>
+                    {% endif %}
                 </div>
-            {% endif %}
-        </main>
+                {% endif %}
+                
+                {% if deadline_summary.sunday %}
+                <div class="deadline-card {% if deadline_summary.sunday.passed %}passed{% elif deadline_summary.sunday.urgency == 'critical' %}critical{% elif deadline_summary.sunday.urgency == 'warning' %}warning{% endif %}">
+                    <div class="deadline-type">Sunday Games</div>
+                    <div class="deadline-time">{{ deadline_summary.sunday.formatted_time }}</div>
+                    {% if deadline_summary.sunday.passed %}
+                        <div class="deadline-status">Deadline Passed</div>
+                    {% elif deadline_summary.sunday.hours_remaining <= 24 %}
+                        <div class="deadline-status">{{ deadline_summary.sunday.hours_remaining|round(1) }}h left</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                {% if deadline_summary.monday %}
+                <div class="deadline-card {% if deadline_summary.monday.passed %}passed{% elif deadline_summary.monday.urgency == 'critical' %}critical{% elif deadline_summary.monday.urgency == 'warning' %}warning{% endif %}">
+                    <div class="deadline-type">Monday Night</div>
+                    <div class="deadline-time">{{ deadline_summary.monday.formatted_time }}</div>
+                    <div class="deadline-note">Score prediction required</div>
+                    {% if deadline_summary.monday.passed %}
+                        <div class="deadline-status">Deadline Passed</div>
+                    {% elif deadline_summary.monday.hours_remaining <= 24 %}
+                        <div class="deadline-status">{{ deadline_summary.monday.hours_remaining|round(1) }}h left</div>
+                    {% endif %}
+                    {% if deadline_summary.monday.matchup %}
+                        <div class="deadline-matchup">{{ deadline_summary.monday.matchup }}</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                {% if deadline_summary.next_deadline %}
+                <div class="next-deadline">
+                    <strong>⚡ Next Deadline:</strong> {{ deadline_summary.next_deadline.hours_remaining|round(1) }} hours until {{ deadline_summary.next_deadline.type.replace('_', ' ').title() }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 
-    <script>
-        function changeWeek() {
-            const weekSelect = document.getElementById('week-select');
-            const selectedWeek = weekSelect.value;
-            window.location.href = `/games?week=${selectedWeek}`;
-        }
+    <!-- Games Section -->
+    <div class="games-section">
+        {% if total_games == 0 %}
+            <div class="no-games">
+                <h3>No games available for Week {{ current_week }}</h3>
+                <p>Games haven't been created yet for this week.</p>
+            </div>
+        {% else %}
+            <h3>🎯 Select Your Picks</h3>
+            <form method="POST" class="picks-form">
+                {% for game in games %}
+                    <div class="game-card">
+                        <div class="game-header">
+                            <strong>{{ get_team_name(game.away_team) }} @ {{ get_team_name(game.home_team) }}</strong>
+                            <span class="game-date">{{ game.game_date.strftime('%a %m/%d %I:%M %p') if game.game_date else 'TBD' }}</span>
+                        </div>
+                        
+                        <div class="team-options">
+                            <label class="team-option">
+                                <input type="radio" 
+                                       name="game_{{ game.id }}" 
+                                       value="{{ game.away_team }}"
+                                       {% if user_picks.get(game.id) and user_picks[game.id].selected_team == game.away_team %}checked{% endif %}>
+                                <img src="{{ get_team_logo_url(game.away_team) }}" alt="{{ game.away_team }}" class="team-logo">
+                                {{ get_team_name(game.away_team) }}
+                            </label>
+                            
+                            <label class="team-option">
+                                <input type="radio" 
+                                       name="game_{{ game.id }}" 
+                                       value="{{ game.home_team }}"
+                                       {% if user_picks.get(game.id) and user_picks[game.id].selected_team == game.home_team %}checked{% endif %}>
+                                <img src="{{ get_team_logo_url(game.home_team) }}" alt="{{ game.home_team }}" class="team-logo">
+                                {{ get_team_name(game.home_team) }}
+                            </label>
+                        </div>
+                    </div>
+                {% endfor %}
+                
+                <div class="form-actions">
+                    <button type="submit" class="submit-button">💾 Save All Picks</button>
+                    <a href="{{ url_for('index') }}" class="back-button">← Back to Dashboard</a>
+                </div>
+            </form>
+        {% endif %}
+    </div>
+</div>
 
-        function exportMyPicks() {
-            window.open('/my_picks_export', '_blank');
-        }
+<style>
+.games-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
 
-        document.getElementById('picks-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            const picks = [];
-            
-            for (let [name, value] of formData.entries()) {
-                if (name.startsWith('game_')) {
-                    const gameId = name.replace('game_', '');
-                    picks.push({
-                        game_id: gameId,
-                        selected_team: value
-                    });
-                } else if (name.includes('_score_')) {
-                    // Handle score predictions
-                    const parts = name.split('_');
-                    const gameId = parts[parts.length - 1];
-                    const scoreType = parts[0]; // 'away' or 'home'
-                    
-                    let pick = picks.find(p => p.game_id === gameId);
-                    if (!pick) {
-                        pick = { game_id: gameId };
-                        picks.push(pick);
-                    }
-                    
-                    if (scoreType === 'away') {
-                        pick.predicted_away_score = value;
-                    } else if (scoreType === 'home') {
-                        pick.predicted_home_score = value;
-                    }
-                }
-            }
-            
-            fetch('/submit_picks', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({picks: picks})
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Picks submitted successfully!');
-                    location.reload();
-                } else {
-                    alert('Error: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error submitting picks');
-            });
-        });
+/* Dashboard Section */
+.dashboard-section {
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
 
-        // Update pick count
-        function updatePickCount() {
-            const checkedRadios = document.querySelectorAll('input[type="radio"]:checked');
-            document.getElementById('selected-count').textContent = checkedRadios.length;
-        }
+.welcome-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
 
-        document.addEventListener('change', updatePickCount);
-        updatePickCount(); // Initial count
-    </script>
-</body>
-</html>
+.welcome-header h2 {
+    color: #1e3a8a;
+    margin-bottom: 10px;
+}
+
+.welcome-header p {
+    color: #666;
+    font-size: 1.1rem;
+}
+
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border-left: 4px solid #3b82f6;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #1e3a8a;
+    margin-bottom: 5px;
+}
+
+.stat-subtitle {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.progress-section {
+    margin-bottom: 30px;
+}
+
+.progress-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.progress-bar {
+    background: #e5e7eb;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    background: #059669;
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+/* Deadline Section */
+.deadline-summary h3 {
+    color: #1e3a8a;
+    margin-bottom: 15px;
+}
+
+.deadline-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.deadline-card {
+    background: #f8fafc;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #e5e7eb;
+}
+
+.deadline-card.warning {
+    border-left-color: #f59e0b;
+    background: #fffbeb;
+}
+
+.deadline-card.critical {
+    border-left-color: #ef4444;
+    background: #fef2f2;
+}
+
+.deadline-card.passed {
+    border-left-color: #6b7280;
+    background: #f9fafb;
+    opacity: 0.7;
+}
+
+.deadline-type {
+    font-weight: bold;
+    color: #1e3a8a;
+}
+
+.deadline-time {
+    font-size: 0.9rem;
+    color: #666;
+    margin: 5px 0;
+}
+
+.deadline-status {
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+
+.deadline-card.warning .deadline-status {
+    color: #f59e0b;
+}
+
+.deadline-card.critical .deadline-status {
+    color: #ef4444;
+}
+
+.deadline-note {
+    font-size: 0.8rem;
+    font-style: italic;
+    color: #666;
+}
+
+.deadline-matchup {
+    font-size: 0.8rem;
+    color: #666;
+    margin-top: 5px;
+}
+
+.next-deadline {
+    text-align: center;
+    background: #dbeafe;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #3b82f6;
+    grid-column: 1 / -1;
+    color: #1e40af;
+}
+
+/* Games Section */
+.games-section {
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.games-section h3 {
+    color: #1e3a8a;
+    margin-bottom: 20px;
+}
+
+.no-games {
+    text-align: center;
+    padding: 40px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.game-card {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 15px;
+    transition: all 0.3s ease;
+}
+
+.game-card:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+}
+
+.game-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #1e3a8a;
+}
+
+.game-date {
+    color: #666;
+    font-size: 0.9rem;
+    font-weight: normal;
+}
+
+.team-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.team-option {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.team-option:hover {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+.team-logo {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+    object-fit: contain;
+}
+
+.team-option input[type="radio"]:checked + .team-logo + span,
+.team-option input[type="radio"]:checked ~ .team-logo,
+.team-option:has(input[type="radio"]:checked) {
+    background: #dbeafe;
+    border-color: #3b82f6;
+    color: #1e40af;
+}
+
+.team-option input {
+    margin-right: 10px;
+}
+
+.team-option input[type="radio"]:checked {
+    accent-color: #3b82f6;
+}
+
+.team-option:has(input[type="radio"]:checked) {
+    background: #dbeafe;
+    border-color: #3b82f6;
+    color: #1e40af;
+}
+
+.team-option input:checked + .team-option {
+    border-color: #059669;
+    background: #ecfdf5;
+}
+
+.form-actions {
+    margin-top: 30px;
+    text-align: center;
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.submit-button {
+    background: #059669;
+    color: white;
+    padding: 15px 30px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.submit-button:hover {
+    background: #047857;
+    transform: translateY(-2px);
+}
+
+.back-button {
+    background: #6b7280;
+    color: white;
+    padding: 15px 30px;
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.back-button:hover {
+    background: #4b5563;
+    transform: translateY(-2px);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .games-container {
+        padding: 15px;
+    }
+    
+    .stats-row {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+    }
+    
+    .deadline-cards {
+        grid-template-columns: 1fr;
+    }
+    
+    .team-options {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .submit-button,
+    .back-button {
+        width: 100%;
+        max-width: 300px;
+    }
+}
+</style>
+
+{% endblock %}
