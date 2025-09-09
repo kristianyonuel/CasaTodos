@@ -12,7 +12,7 @@
                         <label for="admin-week">Select Week:</label>
                         <select id="admin-week" onchange="updateWeek()">
                             {% for week_num in range(1, 19) %}
-                            <option value="{{ week_num }}" {% if week_num == 1 %}selected{% endif %}>Week {{ week_num }}</option>
+                            <option value="{{ week_num }}" {% if week_num == current_week %}selected{% endif %}>Week {{ week_num }}</option>
                             {% endfor %}
                         </select>
                         <select id="admin-year" onchange="updateYear()">
@@ -67,8 +67,8 @@
 
 {% block scripts %}
     <script>
-        let currentWeek = 1;
-        let currentYear = 2025;
+        let currentWeek = {{ current_week if current_week else 1 }};
+        let currentYear = {{ current_year if current_year else 2025 }};
         
         function updateWeek() {
             currentWeek = document.getElementById('admin-week').value;

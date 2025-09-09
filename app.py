@@ -783,237 +783,18 @@ def admin():
         flash('Admin access required', 'error')
         return redirect(url_for('index'))
     
-    return render_template('admin.html', is_admin=session.get('is_admin', False))
-
-# DEBUG ROUTES COMMENTED OUT - Cache busting system implemented instead
-# @app.route('/debug_kristian_dashboard')
-# @app.route('/debug_kristian_context') 
-# @app.route('/debug_kristian')
-# These routes were used for troubleshooting and are no longer needed
-
-@app.route('/admin/all_picks')
-def debug_kristian_dashboard():
-    """DEBUG ROUTE: Show kristian's dashboard directly with template context details"""
-    # Force login as kristian
+    # Calculate current NFL week to set as default
     try:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, is_admin FROM users WHERE username = ?', ('kristian',))
-            user = cursor.fetchone()
-            
-            if not user:
-                return "DEBUG: kristian user not found!"
-                
-            # Set session
-            session['user_id'] = user[0]
-            session['username'] = user[1]
-            session['is_admin'] = bool(user[2])
-            
-            logger.info(f"DEBUG: Session set - user_id: {session.get('user_id')}, is_admin: {session.get('is_admin')}")
-            
-            # Get the exact same data as the index() route
-            from nfl_week_calculator import get_current_nfl_week
-            
-            current_week = get_current_nfl_week(2025)
-            current_year = 2025
-            
-            # Get deadline summary with user-specific overrides
-            deadline_manager = DeadlineManager()
-            deadline_summary = deadline_manager.get_deadline_summary(current_week, current_year)
-            
-            # Get stats exactly like index() route
-            cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', 
-                          (current_week, current_year))
-            total_games = cursor.fetchone()[0]
-            
-            cursor.execute('''SELECT COUNT(*) FROM user_picks 
-                             WHERE user_id = ? AND game_id IN 
-                             (SELECT id FROM nfl_games WHERE week = ? AND year = ?)''', 
-                          (user[0], current_week, current_year))
-            user_picks_count = cursor.fetchone()[0]
-            
-            cursor.execute('SELECT COUNT(*) FROM users WHERE is_active = 1')
-            total_players = cursor.fetchone()[0]
-            
-            cursor.execute('''SELECT COUNT(*) FROM user_picks up
-                             JOIN nfl_games g ON up.game_id = g.id
-                             WHERE up.user_id = ? AND g.week < ? AND g.year = ?
-                             AND ((up.predicted_winner = g.home_team AND g.home_score > g.away_score)
-                                  OR (up.predicted_winner = g.away_team AND g.away_score > g.home_score))''',
-                          (user[0], current_week, current_year))
-            user_wins = cursor.fetchone()[0]
-            
-            # Create the exact template context
-            template_context = {
-                'username': user[1],
-                'is_admin': bool(user[2]),
-                'current_week': current_week,
-                'current_year': current_year,
-                'total_games': total_games,
-                'user_picks_count': user_picks_count,
-                'user_wins': user_wins,
-                'total_players': total_players,
-                'deadline_summary': deadline_summary
-            }
-            
-            # Check the critical template conditions
-            all_deadlines_passed = deadline_summary.get('all_deadlines_passed', False)
-            is_admin = bool(user[2])
-            export_button_condition = is_admin and all_deadlines_passed
-            
-            # Render the actual template with debug info
-            debug_html = f"""
-            <div style="background: #ffeb3b; padding: 20px; border: 2px solid #f57f17; margin-bottom: 20px;">
-                <h2>🔍 DEBUG INFO FOR KRISTIAN</h2>
-                <p><strong>User ID:</strong> {user[0]}</p>
-                <p><strong>Username:</strong> {user[1]}</p>
-                <p><strong>is_admin (DB):</strong> {user[2]}</p>
-                <p><strong>is_admin (bool):</strong> {bool(user[2])}</p>
-                <p><strong>Current Week:</strong> {current_week}</p>
-                <p><strong>all_deadlines_passed:</strong> {all_deadlines_passed}</p>
-                <p><strong>Export Button Condition (is_admin AND all_deadlines_passed):</strong> {export_button_condition}</p>
-                <p><strong>Export Button Should Be:</strong> <span style="color: {'red' if export_button_condition else 'green'}; font-weight: bold;">{'VISIBLE' if export_button_condition else 'HIDDEN'}</span></p>
-                <p><strong>Session user_id:</strong> {session.get('user_id')}</p>
-                <p><strong>Session is_admin:</strong> {session.get('is_admin')}</p>
-            </div>
-            """
-            
-            # Now render the actual index template
-            try:
-                from flask import render_template_string
-                full_template = render_template('index.html', **template_context)
-                return debug_html + full_template
-            except Exception as e:
-                return f"{debug_html}<p><strong>Template Error:</strong> {e}</p>"
-                
+        from nfl_week_calculator import get_current_nfl_week
+        current_week = get_current_nfl_week(2025)
     except Exception as e:
-        return f"DEBUG: Error - {e}"
-
-@app.route('/debug_kristian_context')
-def debug_kristian_context():
-    """DEBUG ROUTE: Show exact template context for kristian"""
-    # Force login as kristian
-    try:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, is_admin FROM users WHERE username = ?', ('kristian',))
-            user = cursor.fetchone()
-            
-            if not user:
-                return "DEBUG: kristian user not found!"
-                
-            session['user_id'] = user[0]
-            session['username'] = user[1]
-            session['is_admin'] = bool(user[2])
-            
-            # Get the same data that index() route would get
-            from nfl_week_calculator import get_current_nfl_week
-            
-            current_week = get_current_nfl_week()
-            current_year = 2025
-            
-            # Get deadline summary
-            deadline_manager = DeadlineManager()
-            deadline_summary = deadline_manager.get_deadline_summary(current_week, current_year)
-            
-            # Get other stats
-            cursor.execute('SELECT COUNT(*) FROM nfl_games WHERE week = ? AND year = ?', (current_week, current_year))
-            total_games = cursor.fetchone()[0]
-            
-            cursor.execute('SELECT COUNT(*) FROM user_picks WHERE user_id = ? AND game_id IN (SELECT id FROM nfl_games WHERE week = ? AND year = ?)', 
-                          (user[0], current_week, current_year))
-            user_picks_count = cursor.fetchone()[0]
-            
-            cursor.execute('SELECT COUNT(*) FROM users WHERE is_active = 1')
-            total_players = cursor.fetchone()[0]
-            
-            # Create debug info
-            debug_info = {
-                'user_id': user[0],
-                'username': user[1],
-                'is_admin': bool(user[2]),
-                'current_week': current_week,
-                'current_year': current_year,
-                'total_games': total_games,
-                'user_picks_count': user_picks_count,
-                'total_players': total_players,
-                'deadline_summary': deadline_summary,
-                'session_is_admin': session.get('is_admin'),
-                'all_deadlines_passed': deadline_summary.get('all_deadlines_passed', False)
-            }
-            
-            # Template condition evaluation
-            template_condition = bool(user[2]) and deadline_summary.get('all_deadlines_passed', False)
-            
-            html_response = f"""
-            <h1>🔍 DEBUG: kristian's Template Context</h1>
-            <h2>User Info:</h2>
-            <ul>
-                <li>User ID: {debug_info['user_id']}</li>
-                <li>Username: {debug_info['username']}</li>
-                <li>is_admin (database): {debug_info['is_admin']}</li>
-                <li>session['is_admin']: {debug_info['session_is_admin']}</li>
-            </ul>
-            
-            <h2>Week Info:</h2>
-            <ul>
-                <li>Current Week: {debug_info['current_week']}</li>
-                <li>Current Year: {debug_info['current_year']}</li>
-                <li>Total Games: {debug_info['total_games']}</li>
-                <li>User Picks: {debug_info['user_picks_count']}</li>
-            </ul>
-            
-            <h2>Deadline Info:</h2>
-            <ul>
-                <li>all_deadlines_passed: {debug_info['all_deadlines_passed']}</li>
-                <li>next_deadline: {deadline_summary.get('next_deadline', 'None')}</li>
-            </ul>
-            
-            <h2>🎯 CRITICAL: Template Condition Analysis</h2>
-            <ul>
-                <li>is_admin: {debug_info['is_admin']}</li>
-                <li>all_deadlines_passed: {debug_info['all_deadlines_passed']}</li>
-                <li><strong>Template condition (is_admin AND all_deadlines_passed): {template_condition}</strong></li>
-            </ul>
-            
-            <h2>🔍 Export Button Should Be:</h2>
-            <h3 style="color: {'green' if not template_condition else 'red'}">
-                {'✅ HIDDEN (Correct)' if not template_condition else '❌ VISIBLE (Problem!)'}
-            </h3>
-            
-            <hr>
-            <p><a href="/">Go to Main Dashboard</a> | <a href="/logout">Logout</a></p>
-            """
-            
-            return html_response
-            
-    except Exception as e:
-        return f"DEBUG: Error - {e}"
-
-@app.route('/debug_kristian')
-def debug_kristian():
-    """DEBUG ROUTE: Auto-login as kristian to troubleshoot export button issue"""
-    # Force login as kristian for debugging
-    try:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, is_admin FROM users WHERE username = ?', ('kristian',))
-            user = cursor.fetchone()
-            
-            if user:
-                session['user_id'] = user[0]
-                session['username'] = user[1]
-                session['is_admin'] = bool(user[2])
-                
-                logger.info(f"DEBUG: Auto-logged in as kristian - user_id: {user[0]}, is_admin: {user[2]}")
-                
-                # Now redirect to index to see what kristian sees
-                return redirect(url_for('index'))
-            else:
-                return "DEBUG: kristian user not found!"
-                
-    except Exception as e:
-        return f"DEBUG: Error - {e}"
+        logger.error(f"Error calculating current week: {e}")
+        current_week = 1  # Fallback
+    
+    return render_template('admin.html', 
+                         is_admin=session.get('is_admin', False),
+                         current_week=current_week,
+                         current_year=2025)
 
 @app.route('/admin/all_picks')
 def admin_all_picks():
@@ -2118,6 +1899,7 @@ def admin_simple_picks():
         return jsonify({'error': 'Admin access required'}), 403
     
     try:
+        picks = []  # Initialize the picks list
         with get_db() as conn:
             cursor = conn.cursor()
             
