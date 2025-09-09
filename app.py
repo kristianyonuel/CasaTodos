@@ -2121,7 +2121,13 @@ def weekly_leaderboard(week=None, year=None):
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    # Default to current week if not specified
+    # Handle query parameters if no path parameters provided
+    if week is None:
+        week = request.args.get('week', type=int)
+    if year is None:
+        year = request.args.get('year', type=int)
+    
+    # Default to current week if still not specified
     if week is None:
         # Use smart NFL week calculation based on game completion
         try:
