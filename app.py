@@ -2517,7 +2517,7 @@ def debug_leaderboard():
 
 @app.route('/export_my_picks_csv')
 def export_my_picks_csv():
-    """Export current user's picks for a specific week as CSV"""
+    """Export current user's picks for a specific week as CSV - Beautiful Format"""
     if 'user_id' not in session:
         return jsonify({'error': 'Login required'}), 401
     
@@ -2575,28 +2575,72 @@ def export_my_picks_csv():
                     'predicted_away_score': row['predicted_away_score']
                 }
         
-        # Create CSV content
+        # Create CSV content with beautiful format (similar to admin export)
         output = io.StringIO()
-        fieldnames = ['Week', 'Game', 'Away Team', 'Home Team', 'Selected Team', 
-                     'Home Score Prediction', 'Away Score Prediction']
-        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer = csv.writer(output)
         
-        writer.writeheader()
+        # Header row with user info
+        writer.writerow([f'{username} - Week {week}, {year}', 'My Pick', 'Monday Night Score'])
         
-        # Write a row for each game
+        # Subheader row
+        writer.writerow(['Game', 'Selected Team', 'Score Prediction'])
+        
+        # Separate regular games and Monday Night
+        regular_games = []
+        monday_night_games = []
+        
+        # Write game picks
         for game in games:
-            pick_data = user_picks.get(game['id'], {})
+            game_id = game['id']
+            is_monday_night = game['is_monday_night']
+            game_label = f"{game['away_team']} @ {game['home_team']}"
             
-            row = {
-                'Week': f'Week {week}',
-                'Game': f"{game['away_team']} @ {game['home_team']}",
-                'Away Team': game['away_team'],
-                'Home Team': game['home_team'],
-                'Selected Team': pick_data.get('selected_team', 'No Pick Made'),
-                'Home Score Prediction': pick_data.get('predicted_home_score', ''),
-                'Away Score Prediction': pick_data.get('predicted_away_score', '')
-            }
-            writer.writerow(row)
+            pick_data = user_picks.get(game_id, {})
+            selected_team = pick_data.get('selected_team', 'No Pick Made')
+            
+            if is_monday_night:
+                # For Monday Night, include score prediction
+                home_score = pick_data.get('predicted_home_score', '')
+                away_score = pick_data.get('predicted_away_score', '')
+                score_prediction = f"{home_score}–{away_score}" if home_score and away_score else ''
+                
+                monday_night_games.append([game_label, selected_team, score_prediction])
+            else:
+                regular_games.append([game_label, selected_team, ''])
+        
+        # Write regular games first
+        for game_row in regular_games:
+            writer.writerow(game_row)
+        
+        # Write Monday Night games
+        for game_row in monday_night_games:
+            writer.writerow(game_row)
+        
+        # Add summary section
+        writer.writerow([])  # Empty row
+        writer.writerow(['Summary', '', ''])
+        
+        # Count picks made
+        total_games = len(games)
+        picks_made = len([p for p in user_picks.values() if p.get('selected_team')])
+        
+        writer.writerow([f'Total Games: {total_games}', '', ''])
+        writer.writerow([f'Picks Made: {picks_made}', '', ''])
+        writer.writerow([f'Completion: {picks_made}/{total_games}', '', ''])
+        
+        # Monday Night prediction summary
+        monday_prediction = None
+        for game in games:
+            if game['is_monday_night']:
+                pick_data = user_picks.get(game['id'], {})
+                home_score = pick_data.get('predicted_home_score', '')
+                away_score = pick_data.get('predicted_away_score', '')
+                if home_score and away_score:
+                    monday_prediction = f"{home_score}–{away_score}"
+                    break
+        
+        if monday_prediction:
+            writer.writerow([f'Monday Night Prediction: {monday_prediction}', '', ''])
         
         # Prepare response
         csv_content = output.getvalue()
