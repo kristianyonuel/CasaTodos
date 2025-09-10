@@ -1,0 +1,400 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile - La Casa de Todos{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+    <div class="profile-card">
+        <div class="profile-header">
+            <h2>👤 My Profile</h2>
+        </div>
+        
+        <!-- Profile Information Section -->
+        <div class="profile-section">
+            <h3>Profile Information</h3>
+            <div class="profile-info">
+                <div class="info-row">
+                    <label>Username:</label>
+                    <span>{{ user.username }}</span>
+                </div>
+                {% if user.email %}
+                <div class="info-row">
+                    <label>Email:</label>
+                    <span>{{ user.email }}</span>
+                </div>
+                {% endif %}
+                {% if user.full_name %}
+                <div class="info-row">
+                    <label>Full Name:</label>
+                    <span>{{ user.full_name }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Favorite Team Section -->
+        <div class="profile-section">
+            <h3>Fantasy Preferences</h3>
+            <div class="form-group">
+                <label for="favoriteTeam">Favorite NFL Team:</label>
+                <select id="favoriteTeam" class="form-select">
+                    <option value="">Select your favorite team...</option>
+                    {% for abbr, name in nfl_teams.items() %}
+                    <option value="{{ abbr }}" {% if favorite_team == abbr %}selected{% endif %}>
+                        {{ abbr }} - {{ name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if favorite_team %}
+            <div class="current-team">
+                <span class="team-info">
+                    ❤️ Currently supporting: <strong>{{ favorite_team }} - {{ nfl_teams[favorite_team] }}</strong>
+                </span>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Password Change Section -->
+        <div class="profile-section">
+            <h3>Change Password</h3>
+            <div class="password-form">
+                <div class="form-group">
+                    <label for="currentPassword">Current Password:</label>
+                    <input type="password" id="currentPassword" placeholder="Enter current password">
+                </div>
+                <div class="form-group">
+                    <label for="newPassword">New Password:</label>
+                    <input type="password" id="newPassword" placeholder="Enter new password" minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm New Password:</label>
+                    <input type="password" id="confirmPassword" placeholder="Confirm new password">
+                </div>
+                <div class="form-help">
+                    ℹ️ Password must be at least 6 characters long. Leave blank if you don't want to change your password.
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="profile-actions">
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                ← Back to Home
+            </a>
+            <button type="button" class="btn btn-primary" onclick="updateProfile()">
+                💾 Save Changes
+            </button>
+        </div>
+
+        <!-- Alert area for messages -->
+        <div id="profileAlert" class="alert" style="display: none;"></div>
+    </div>
+</div>
+
+<style>
+.profile-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.profile-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    padding: 30px;
+}
+
+.profile-header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #eee;
+}
+
+.profile-header h2 {
+    font-size: 2rem;
+    color: #2c3e50;
+    margin: 0;
+}
+
+.profile-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.profile-section:last-of-type {
+    border-bottom: none;
+}
+
+.profile-section h3 {
+    color: #34495e;
+    margin-bottom: 15px;
+    font-size: 1.3rem;
+}
+
+.profile-info {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-row label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.info-row span {
+    color: #212529;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 16px;
+    transition: border-color 0.3s ease;
+    background: white;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.current-team {
+    margin-top: 15px;
+    padding: 12px;
+    background: #e8f5e8;
+    border-radius: 8px;
+    border-left: 4px solid #28a745;
+}
+
+.team-info {
+    color: #155724;
+    font-size: 14px;
+}
+
+.password-form {
+    display: grid;
+    gap: 15px;
+}
+
+.form-help {
+    font-size: 14px;
+    color: #6c757d;
+    margin-top: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #17a2b8;
+}
+
+.profile-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 30px;
+    padding-top: 20px;
+}
+
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+    transform: translateY(-2px);
+}
+
+.alert {
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 20px;
+    border-left: 4px solid;
+}
+
+.alert-success {
+    background: #d4edda;
+    color: #155724;
+    border-left-color: #28a745;
+}
+
+.alert-danger {
+    background: #f8d7da;
+    color: #721c24;
+    border-left-color: #dc3545;
+}
+
+@media (max-width: 768px) {
+    .profile-card {
+        padding: 20px;
+        margin: 10px;
+    }
+    
+    .profile-actions {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .btn {
+        width: 100%;
+        text-align: center;
+    }
+}
+</style>
+
+<script>
+function updateProfile() {
+    const favoriteTeam = document.getElementById('favoriteTeam').value;
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+
+    // Clear previous alerts
+    const alertDiv = document.getElementById('profileAlert');
+    alertDiv.style.display = 'none';
+
+    // Validation
+    if (newPassword && !currentPassword) {
+        showAlert('Please enter your current password to change your password.', 'danger');
+        return;
+    }
+
+    if (newPassword && newPassword !== confirmPassword) {
+        showAlert('New passwords do not match.', 'danger');
+        return;
+    }
+
+    if (newPassword && newPassword.length < 6) {
+        showAlert('New password must be at least 6 characters long.', 'danger');
+        return;
+    }
+
+    // Prepare data
+    const data = {
+        favorite_team: favoriteTeam || null
+    };
+
+    if (newPassword) {
+        data.current_password = currentPassword;
+        data.new_password = newPassword;
+    }
+
+    // Show loading state
+    const saveBtn = document.querySelector('button[onclick="updateProfile()"]');
+    const originalText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '⏳ Saving...';
+    saveBtn.disabled = true;
+
+    // Submit the update
+    fetch('/profile/update', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+            // Clear password fields on success
+            if (newPassword) {
+                document.getElementById('currentPassword').value = '';
+                document.getElementById('newPassword').value = '';
+                document.getElementById('confirmPassword').value = '';
+            }
+        } else {
+            showAlert(data.error || 'An error occurred', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('An error occurred while updating your profile.', 'danger');
+    })
+    .finally(() => {
+        // Restore button state
+        saveBtn.innerHTML = originalText;
+        saveBtn.disabled = false;
+    });
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.getElementById('profileAlert');
+    alertDiv.className = `alert alert-${type}`;
+    alertDiv.textContent = message;
+    alertDiv.style.display = 'block';
+    
+    // Auto-hide success messages after 5 seconds
+    if (type === 'success') {
+        setTimeout(() => {
+            alertDiv.style.display = 'none';
+        }, 5000);
+    }
+}
+
+// Add enter key support for password fields
+document.addEventListener('DOMContentLoaded', function() {
+    const passwordFields = ['currentPassword', 'newPassword', 'confirmPassword'];
+    passwordFields.forEach(fieldId => {
+        document.getElementById(fieldId).addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                updateProfile();
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

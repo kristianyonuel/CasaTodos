@@ -777,6 +777,122 @@ def leaderboard():
 def rules():
     return render_template('rules.html')
 
+@app.route('/profile')
+def profile():
+    """User profile page"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # First, try to add the favorite_team column if it doesn't exist
+            try:
+                cursor.execute('ALTER TABLE users ADD COLUMN favorite_team TEXT')
+                conn.commit()
+                logger.info("Added favorite_team column to users table")
+            except Exception:
+                # Column probably already exists
+                pass
+            
+            # Get user information including favorite_team
+            try:
+                cursor.execute('SELECT username, email, full_name, favorite_team FROM users WHERE id = ?', (session['user_id'],))
+                user = cursor.fetchone()
+            except Exception:
+                # If favorite_team column still doesn't exist, get without it
+                cursor.execute('SELECT username, email, full_name FROM users WHERE id = ?', (session['user_id'],))
+                user_basic = cursor.fetchone()
+                user = user_basic + (None,) if user_basic else None
+            
+            if not user:
+                flash('User not found', 'error')
+                return redirect(url_for('logout'))
+            
+            # Convert to dict for easier access
+            user_data = {
+                'username': user[0],
+                'email': user[1],
+                'full_name': user[2]
+            }
+            favorite_team = user[3] if len(user) > 3 else None
+            
+            return render_template('profile.html', 
+                                 user=user_data, 
+                                 favorite_team=favorite_team,
+                                 nfl_teams=NFL_TEAM_NAMES)
+    
+    except Exception as e:
+        logger.error(f"Error loading profile: {e}")
+        flash('Error loading profile', 'error')
+        return redirect(url_for('index'))
+
+@app.route('/profile/update', methods=['POST'])
+def update_profile():
+    """Update user profile"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Login required'}), 401
+    
+    try:
+        data = request.get_json()
+        favorite_team = data.get('favorite_team')
+        current_password = data.get('current_password')
+        new_password = data.get('new_password')
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Validate current password if trying to change password
+            if new_password:
+                if not current_password:
+                    return jsonify({'error': 'Current password required to change password'}), 400
+                
+                cursor.execute('SELECT password_hash FROM users WHERE id = ?', (session['user_id'],))
+                user = cursor.fetchone()
+                
+                if not check_password_hash(user[0], current_password):
+                    return jsonify({'error': 'Current password is incorrect'}), 400
+                
+                if len(new_password) < 6:
+                    return jsonify({'error': 'New password must be at least 6 characters long'}), 400
+                
+                # Update password
+                new_password_hash = generate_password_hash(new_password)
+                cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?', 
+                             (new_password_hash, session['user_id']))
+            
+            # Update favorite team
+            if favorite_team and favorite_team in NFL_TEAM_NAMES:
+                try:
+                    # First try to add the column if it doesn't exist
+                    cursor.execute('ALTER TABLE users ADD COLUMN favorite_team TEXT')
+                except Exception:
+                    # Column probably already exists
+                    pass
+                
+                # Update favorite team
+                cursor.execute('UPDATE users SET favorite_team = ? WHERE id = ?', 
+                             (favorite_team, session['user_id']))
+            
+            conn.commit()
+            
+            updates = []
+            if favorite_team:
+                updates.append('favorite team')
+            if new_password:
+                updates.append('password')
+            
+            message = f"Successfully updated {' and '.join(updates)}" if updates else "Profile updated"
+            
+            logger.info(f"User {session['username']} updated profile: {', '.join(updates)}")
+            
+            return jsonify({'success': True, 'message': message})
+    
+    except Exception as e:
+        logger.error(f"Error updating profile: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/admin')
 def admin():
     if 'user_id' not in session or not session.get('is_admin'):
