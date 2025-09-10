@@ -2602,7 +2602,7 @@ def export_my_picks_csv():
                 # For Monday Night, include score prediction
                 home_score = pick_data.get('predicted_home_score', '')
                 away_score = pick_data.get('predicted_away_score', '')
-                score_prediction = f"{home_score}–{away_score}" if home_score and away_score else ''
+                score_prediction = f"{home_score}-{away_score}" if home_score and away_score else ''
                 
                 monday_night_games.append([game_label, selected_team, score_prediction])
             else:
@@ -2636,7 +2636,7 @@ def export_my_picks_csv():
                 home_score = pick_data.get('predicted_home_score', '')
                 away_score = pick_data.get('predicted_away_score', '')
                 if home_score and away_score:
-                    monday_prediction = f"{home_score}–{away_score}"
+                    monday_prediction = f"{home_score}-{away_score}"
                     break
         
         if monday_prediction:
@@ -3014,7 +3014,7 @@ def export_all_users_picks_csv():
                 if scores and scores[0] is not None and scores[1] is not None:
                     home_score = scores[0]
                     away_score = scores[1]
-                    monday_scores_header.append(f"{home_score}–{away_score}")
+                    monday_scores_header.append(f"{home_score}-{away_score}")
                 else:
                     monday_scores_header.append("")
             
