@@ -2905,19 +2905,23 @@ def export_all_users_picks_csv():
             output = StringIO()
             writer = csv.writer(output)
             
-            # Header row: usernames (Fantasy League Format)
-            usernames = [user[1] for user in users]
-            writer.writerow(usernames)
+            # Header row: Game column + usernames (Fantasy League Format)
+            header_row = ['Game']
+            for user in users:
+                header_row.append(user[1])  # username
+            writer.writerow(header_row)
             
             # Data rows: each game's picks (one row per game)
             regular_games = []
             monday_night_games = []
             
             for game in games:
-                game_id = game[0]
-                is_monday_night = game[4]
+                game_id, home_team, away_team, game_date, is_monday_night, home_score, away_score = game
                 
-                picks_row = []
+                # Create game label
+                game_label = f"{away_team} @ {home_team}"
+                
+                picks_row = [game_label]
                 for user in users:
                     user_id = user[0]
                     
@@ -2932,26 +2936,29 @@ def export_all_users_picks_csv():
                     picks_row.append(pick[0] if pick else '')
                 
                 if is_monday_night:
-                    monday_night_games.append((game, picks_row))
+                    monday_night_games.append(picks_row)
                 else:
-                    regular_games.append((game, picks_row))
+                    regular_games.append(picks_row)
             
             # Write regular games first
-            for game, picks_row in regular_games:
+            for picks_row in regular_games:
                 writer.writerow(picks_row)
             
             # Write Monday Night games
-            for game, picks_row in monday_night_games:
+            for picks_row in monday_night_games:
                 writer.writerow(picks_row)
             
+            # Add empty row before Monday Night scores
+            writer.writerow([''] * (len(users) + 1))
+            
             # Add Monday Night total scores row
-            monday_scores_row = []
+            monday_scores_header = ['Monday Night Scores']
             for user in users:
                 user_id = user[0]
                 
-                # Get user's Monday Night total prediction
+                # Get user's Monday Night score prediction
                 cursor.execute('''
-                    SELECT predicted_home_score + predicted_away_score as total_score
+                    SELECT predicted_home_score, predicted_away_score
                     FROM user_picks up
                     JOIN nfl_games g ON up.game_id = g.id
                     WHERE up.user_id = ? AND g.week = ? AND g.year = ? 
@@ -2959,30 +2966,16 @@ def export_all_users_picks_csv():
                     LIMIT 1
                 ''', (user_id, week, year))
                 
-                total_prediction = cursor.fetchone()
-                if total_prediction:
-                    # Format as "home_score–away_score" (using en-dash)
-                    cursor.execute('''
-                        SELECT predicted_home_score, predicted_away_score
-                        FROM user_picks up
-                        JOIN nfl_games g ON up.game_id = g.id
-                        WHERE up.user_id = ? AND g.week = ? AND g.year = ? 
-                        AND g.is_monday_night = 1
-                        LIMIT 1
-                    ''', (user_id, week, year))
-                    
-                    scores = cursor.fetchone()
-                    if scores:
-                        home_score = scores[0] or 0
-                        away_score = scores[1] or 0
-                        monday_scores_row.append(f"{home_score}–{away_score}")
-                    else:
-                        monday_scores_row.append("")
+                scores = cursor.fetchone()
+                if scores and scores[0] is not None and scores[1] is not None:
+                    home_score = scores[0]
+                    away_score = scores[1]
+                    monday_scores_header.append(f"{home_score}–{away_score}")
                 else:
-                    monday_scores_row.append("")
+                    monday_scores_header.append("")
             
             # Write Monday Night scores row
-            writer.writerow(monday_scores_row)
+            writer.writerow(monday_scores_header)
             
             # Prepare response with better headers for download reliability
             output.seek(0)
