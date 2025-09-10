@@ -884,17 +884,52 @@ def admin_update_pick():
         predicted_away_score = data.get('predicted_away_score')
         predicted_home_score = data.get('predicted_home_score')
         
+        week_year = None
+        
         with get_db() as conn:
             cursor = conn.cursor()
+            
+            # Get week/year for this pick to trigger scoring update
+            cursor.execute('''
+                SELECT g.week, g.year FROM user_picks p
+                JOIN nfl_games g ON p.game_id = g.id
+                WHERE p.id = ?
+            ''', (pick_id,))
+            game_info = cursor.fetchone()
+            if game_info:
+                week_year = (game_info[0], game_info[1])
+            
             cursor.execute('''
                 UPDATE user_picks 
                 SET selected_team = ?, predicted_away_score = ?, predicted_home_score = ?
                 WHERE id = ?
             ''', (selected_team, predicted_away_score, predicted_home_score, pick_id))
             conn.commit()
-            
-        logger.info(f"Admin {session['username']} updated pick {pick_id}")
-        return jsonify({'success': True})
+        
+        # Auto-update scoring for this week
+        scoring_message = ""
+        if week_year:
+            try:
+                from database_sync import update_pick_correctness
+                from scoring_updater import ScoringUpdater
+                
+                week, year = week_year
+                picks_updated = update_pick_correctness(week, year)
+                
+                updater = ScoringUpdater()
+                updater.update_weekly_results(week, year)
+                
+                # Update season standings by refreshing all completed weeks
+                total_weeks_updated = updater.update_all_completed_weeks()
+                
+                scoring_message = f" (Auto-updated scoring for Week {week}, {year} and season standings)"
+                logger.info(f"Auto-updated scoring and season standings for Week {week}, {year} after admin pick update")
+                
+            except Exception as e:
+                logger.error(f"Failed to auto-update scoring after pick update: {e}")
+        
+        logger.info(f"Admin {session['username']} updated pick {pick_id}{scoring_message}")
+        return jsonify({'success': True, 'message': f'Pick updated{scoring_message}'})
         
     except Exception as e:
         logger.error(f"Error updating pick: {e}")
@@ -910,13 +945,48 @@ def admin_delete_pick():
         data = request.get_json()
         pick_id = data.get('pick_id')
         
+        week_year = None
+        
         with get_db() as conn:
             cursor = conn.cursor()
+            
+            # Get week/year for this pick before deleting
+            cursor.execute('''
+                SELECT g.week, g.year FROM user_picks p
+                JOIN nfl_games g ON p.game_id = g.id
+                WHERE p.id = ?
+            ''', (pick_id,))
+            game_info = cursor.fetchone()
+            if game_info:
+                week_year = (game_info[0], game_info[1])
+            
             cursor.execute('DELETE FROM user_picks WHERE id = ?', (pick_id,))
             conn.commit()
-            
-        logger.info(f"Admin {session['username']} deleted pick {pick_id}")
-        return jsonify({'success': True})
+        
+        # Auto-update scoring for this week
+        scoring_message = ""
+        if week_year:
+            try:
+                from database_sync import update_pick_correctness
+                from scoring_updater import ScoringUpdater
+                
+                week, year = week_year
+                update_pick_correctness(week, year)
+                
+                updater = ScoringUpdater()
+                updater.update_weekly_results(week, year)
+                
+                # Update season standings by refreshing all completed weeks
+                updater.update_all_completed_weeks()
+                
+                scoring_message = f" (Auto-updated scoring for Week {week}, {year} and season standings)"
+                logger.info(f"Auto-updated scoring and season standings for Week {week}, {year} after admin pick deletion")
+                
+            except Exception as e:
+                logger.error(f"Failed to auto-update scoring after pick deletion: {e}")
+        
+        logger.info(f"Admin {session['username']} deleted pick {pick_id}{scoring_message}")
+        return jsonify({'success': True, 'message': f'Pick deleted{scoring_message}'})
         
     except Exception as e:
         logger.error(f"Error deleting pick: {e}")
@@ -1387,6 +1457,9 @@ def admin_set_user_picks():
         user_id = data.get('user_id')
         picks = data.get('picks', [])
         
+        # Track weeks/years that need scoring updates
+        weeks_to_update = set()
+        
         with get_db() as conn:
             cursor = conn.cursor()
             
@@ -1399,6 +1472,12 @@ def admin_set_user_picks():
                 away_score = pick.get('away_score')
                 
                 if game_id and selected_team:
+                    # Get week/year for this game to trigger scoring update
+                    cursor.execute('SELECT week, year FROM nfl_games WHERE id = ?', (game_id,))
+                    game_info = cursor.fetchone()
+                    if game_info:
+                        weeks_to_update.add((game_info[0], game_info[1]))
+                    
                     cursor.execute('''
                         INSERT OR REPLACE INTO user_picks 
                         (user_id, game_id, selected_team, predicted_home_score, predicted_away_score, created_at)
@@ -1408,10 +1487,36 @@ def admin_set_user_picks():
             
             conn.commit()
         
+        # Auto-update scoring for affected weeks
+        scoring_updates = []
+        for week, year in weeks_to_update:
+            try:
+                from database_sync import update_pick_correctness
+                from scoring_updater import ScoringUpdater
+                
+                # Update pick correctness
+                picks_updated = update_pick_correctness(week, year)
+                
+                # Update weekly results for this specific week
+                updater = ScoringUpdater()
+                updater.update_weekly_results(week, year)
+                
+                # Update season standings by refreshing all completed weeks
+                # This ensures the overall leaderboard reflects the changes
+                total_weeks_updated = updater.update_all_completed_weeks()
+                
+                scoring_updates.append(f"Week {week}/{year}: {picks_updated} picks updated, season standings refreshed ({total_weeks_updated} weeks)")
+                logger.info(f"Auto-updated scoring and season standings for Week {week}, {year} after admin set user picks")
+                
+            except Exception as e:
+                logger.error(f"Failed to auto-update scoring for Week {week}, {year}: {e}")
+                scoring_updates.append(f"Week {week}/{year}: Failed to update")
+        
         return jsonify({
             'success': True, 
             'message': f'Successfully set {successful_picks} picks for user',
-            'picks_set': successful_picks
+            'picks_set': successful_picks,
+            'scoring_updates': scoring_updates
         })
         
     except Exception as e:
@@ -1442,11 +1547,38 @@ def admin_clear_user_picks():
             picks_cleared = cursor.rowcount
             conn.commit()
         
+        # Auto-update scoring for this week after clearing picks
+        scoring_message = ""
+        try:
+            from database_sync import update_pick_correctness
+            from scoring_updater import ScoringUpdater
+            
+            # Update pick correctness for remaining picks
+            picks_updated = update_pick_correctness(week, year)
+            
+            # Update weekly results for this specific week
+            updater = ScoringUpdater()
+            updater.update_weekly_results(week, year)
+            
+            # Update season standings by refreshing all completed weeks
+            total_weeks_updated = updater.update_all_completed_weeks()
+            
+            scoring_message = f" Scoring updated: {picks_updated} picks recalculated, season standings refreshed ({total_weeks_updated} weeks)."
+            logger.info(f"Auto-updated scoring and season standings for Week {week}, {year} after admin clear user picks")
+            
+        except Exception as e:
+            logger.error(f"Failed to auto-update scoring for Week {week}, {year}: {e}")
+            scoring_message = " Warning: Scoring update failed - manual update may be needed."
+        
         return jsonify({
             'success': True,
-            'message': f'Cleared {picks_cleared} picks for user',
+            'message': f'Cleared {picks_cleared} picks for user.{scoring_message}',
             'picks_cleared': picks_cleared
         })
+        
+    except Exception as e:
+        logger.error(f"Admin clear user picks error: {e}")
+        return jsonify({'error': str(e)}), 500
         
     except Exception as e:
         logger.error(f"Admin clear user picks error: {e}")
