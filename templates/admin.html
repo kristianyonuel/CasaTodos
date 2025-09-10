@@ -829,7 +829,17 @@
                 
                 const result = await response.json();
                 if (result.success) {
-                    alert(`Successfully set ${picks.length} picks for user`);
+                    let message = `Successfully set ${picks.length} picks for user`;
+                    
+                    // Add detailed scoring updates if available
+                    if (result.scoring_updates && result.scoring_updates.length > 0) {
+                        message += '\n\nScoring Updates:';
+                        result.scoring_updates.forEach(update => {
+                            message += '\n• ' + update;
+                        });
+                    }
+                    
+                    alert(message);
                 } else {
                     alert('Error setting picks: ' + result.error);
                 }
@@ -865,7 +875,8 @@
                 
                 const result = await response.json();
                 if (result.success) {
-                    alert('User picks cleared successfully');
+                    // Use the message from the backend which includes scoring update info
+                    alert(result.message || 'User picks cleared successfully');
                     loadUserCurrentPicks(); // Refresh the form
                 } else {
                     alert('Error clearing picks: ' + result.error);
