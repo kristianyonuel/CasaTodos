@@ -131,7 +131,7 @@
                                     
                                     {% if game.is_thursday_night %}
                                         <span class="game-type tnf">TNF</span>
-                                    {% elif game.is_monday_night %}
+                                    {% elif game.is_actual_monday_night %}
                                         <span class="game-type mnf">MNF</span>
                                     {% elif game.is_sunday_night %}
                                         <span class="game-type snf">SNF</span>
@@ -194,7 +194,7 @@
                                     </div>
                                 </div>
 
-                                {% if game.is_monday_night %}
+                                {% if game.is_actual_monday_night %}
                                 <div class="score-prediction">
                                     <h4>Score Prediction (Tiebreaker)</h4>
                                     <div class="score-inputs">

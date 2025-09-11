@@ -451,6 +451,18 @@ def games():
         ''', (week, year))
         games_raw = cursor.fetchall()
         
+        # Find the actual Monday Night Football game (latest game on Monday)
+        cursor.execute('''
+            SELECT id FROM nfl_games 
+            WHERE week = ? AND year = ? 
+            AND strftime('%w', game_date) = '1'  -- Monday
+            ORDER BY game_date DESC, id DESC
+            LIMIT 1
+        ''', (week, year))
+        
+        monday_night_game = cursor.fetchone()
+        monday_night_game_id = monday_night_game[0] if monday_night_game else None
+        
         # Convert games to proper format with AST datetime objects
         games_data = []
         for game in games_raw:
@@ -472,6 +484,9 @@ def games():
             # Add team logos
             game_dict['away_team_logo'] = get_team_logo_url(game_dict['away_team'])
             game_dict['home_team_logo'] = get_team_logo_url(game_dict['home_team'])
+            
+            # Add actual Monday Night Football detection
+            game_dict['is_actual_monday_night'] = (game_dict['id'] == monday_night_game_id)
             
             games_data.append(game_dict)
         
@@ -2257,19 +2272,32 @@ def weekly_leaderboard(week=None, year=None):
         leaderboard_data = []
         for i, (user_id, username, total_picks, correct_picks) in enumerate(user_results, 1):
             
-            # Get Monday Night pick data for this user (remove is_final requirement)
+            # Get Monday Night pick data for this user (actual MNF game)
+            # First, find the actual Monday Night Football game
             cursor.execute('''
-                SELECT p.predicted_home_score, p.predicted_away_score,
-                       g.home_score, g.away_score, g.home_team, g.away_team, g.is_final,
-                       p.selected_team
-                FROM user_picks p
-                JOIN nfl_games g ON p.game_id = g.id
-                WHERE p.user_id = ? AND g.week = ? AND g.year = ? 
-                  AND g.is_monday_night = 1
+                SELECT id FROM nfl_games 
+                WHERE week = ? AND year = ? 
+                AND strftime('%w', game_date) = '1'  -- Monday
+                ORDER BY game_date DESC, id DESC
                 LIMIT 1
-            ''', (user_id, week, year))
+            ''', (week, year))
             
-            monday_pick = cursor.fetchone()
+            monday_night_game = cursor.fetchone()
+            monday_night_game_id = monday_night_game[0] if monday_night_game else None
+            
+            monday_pick = None
+            if monday_night_game_id:
+                cursor.execute('''
+                    SELECT p.predicted_home_score, p.predicted_away_score,
+                           g.home_score, g.away_score, g.home_team, g.away_team, g.is_final,
+                           p.selected_team
+                    FROM user_picks p
+                    JOIN nfl_games g ON p.game_id = g.id
+                    WHERE p.user_id = ? AND g.id = ?
+                    LIMIT 1
+                ''', (user_id, monday_night_game_id))
+                
+                monday_pick = cursor.fetchone()
             
             # Get all picks for this user for this week
             cursor.execute('''
@@ -2575,6 +2603,18 @@ def export_my_picks_csv():
                     'predicted_away_score': row['predicted_away_score']
                 }
         
+        # Find the actual Monday Night Football game (latest game on Monday)
+        cursor.execute('''
+            SELECT id FROM nfl_games 
+            WHERE week = ? AND year = ? 
+            AND strftime('%w', game_date) = '1'  -- Monday
+            ORDER BY game_date DESC, id DESC
+            LIMIT 1
+        ''', (week, year))
+        
+        monday_night_game = cursor.fetchone()
+        monday_night_game_id = monday_night_game[0] if monday_night_game else None
+
         # Create CSV content with beautiful format (similar to admin export)
         output = io.StringIO()
         writer = csv.writer(output)
@@ -2592,14 +2632,14 @@ def export_my_picks_csv():
         # Write game picks
         for game in games:
             game_id = game['id']
-            is_monday_night = game['is_monday_night']
+            is_actual_monday_night = (game_id == monday_night_game_id)
             game_label = f"{game['away_team']} @ {game['home_team']}"
             
             pick_data = user_picks.get(game_id, {})
             selected_team = pick_data.get('selected_team', 'No Pick Made')
             
-            if is_monday_night:
-                # For Monday Night, include score prediction
+            if is_actual_monday_night:
+                # For actual Monday Night Football, include score prediction
                 home_score = pick_data.get('predicted_home_score', '')
                 away_score = pick_data.get('predicted_away_score', '')
                 score_prediction = f"{home_score}-{away_score}" if home_score and away_score else ''
@@ -2628,16 +2668,27 @@ def export_my_picks_csv():
         writer.writerow([f'Picks Made: {picks_made}', '', ''])
         writer.writerow([f'Completion: {picks_made}/{total_games}', '', ''])
         
-        # Monday Night prediction summary
+        # Monday Night prediction summary (only for the actual Monday Night Football game)
         monday_prediction = None
-        for game in games:
-            if game['is_monday_night']:
-                pick_data = user_picks.get(game['id'], {})
-                home_score = pick_data.get('predicted_home_score', '')
-                away_score = pick_data.get('predicted_away_score', '')
-                if home_score and away_score:
-                    monday_prediction = f"{home_score}-{away_score}"
-                    break
+        
+        # Find the actual Monday Night Football game (latest game on Monday)
+        cursor.execute('''
+            SELECT id FROM nfl_games 
+            WHERE week = ? AND year = ? 
+            AND strftime('%w', game_date) = '1'  -- Monday
+            ORDER BY game_date DESC, id DESC
+            LIMIT 1
+        ''', (week, year))
+        
+        monday_night_game = cursor.fetchone()
+        
+        if monday_night_game:
+            monday_night_game_id = monday_night_game[0]
+            pick_data = user_picks.get(monday_night_game_id, {})
+            home_score = pick_data.get('predicted_home_score', '')
+            away_score = pick_data.get('predicted_away_score', '')
+            if home_score and away_score:
+                monday_prediction = f"{home_score}-{away_score}"
         
         if monday_prediction:
             writer.writerow([f'Monday Night Prediction: {monday_prediction}', '', ''])
@@ -2955,12 +3006,27 @@ def export_all_users_picks_csv():
                 header_row.append(user[1])  # username
             writer.writerow(header_row)
             
+            # Find the actual Monday Night Football game (latest game on Monday)
+            cursor.execute('''
+                SELECT id FROM nfl_games 
+                WHERE week = ? AND year = ? 
+                AND strftime('%w', game_date) = '1'  -- Monday
+                ORDER BY game_date DESC, id DESC
+                LIMIT 1
+            ''', (week, year))
+            
+            monday_night_game = cursor.fetchone()
+            monday_night_game_id = monday_night_game[0] if monday_night_game else None
+
             # Data rows: each game's picks (one row per game)
             regular_games = []
             monday_night_games = []
             
             for game in games:
                 game_id, home_team, away_team, game_date, is_monday_night, home_score, away_score = game
+                
+                # Check if this is the actual Monday Night Football game
+                is_actual_monday_night = (game_id == monday_night_game_id)
                 
                 # Create game label
                 game_label = f"{away_team} @ {home_team}"
@@ -2979,7 +3045,7 @@ def export_all_users_picks_csv():
                     pick = cursor.fetchone()
                     picks_row.append(pick[0] if pick else '')
                 
-                if is_monday_night:
+                if is_actual_monday_night:
                     monday_night_games.append(picks_row)
                 else:
                     regular_games.append(picks_row)
@@ -2995,26 +3061,39 @@ def export_all_users_picks_csv():
             # Add empty row before Monday Night scores
             writer.writerow([''] * (len(users) + 1))
             
-            # Add Monday Night total scores row
+            # Add Monday Night total scores row (only for the actual Monday Night Football game)
             monday_scores_header = ['Monday Night Scores']
+            
+            # Find the actual Monday Night Football game (latest game on Monday)
+            cursor.execute('''
+                SELECT id FROM nfl_games 
+                WHERE week = ? AND year = ? 
+                AND strftime('%w', game_date) = '1'  -- Monday (0=Sunday, 1=Monday, etc.)
+                ORDER BY game_date DESC, id DESC
+                LIMIT 1
+            ''', (week, year))
+            
+            monday_night_game = cursor.fetchone()
+            monday_night_game_id = monday_night_game[0] if monday_night_game else None
+            
             for user in users:
                 user_id = user[0]
                 
-                # Get user's Monday Night score prediction
-                cursor.execute('''
-                    SELECT predicted_home_score, predicted_away_score
-                    FROM user_picks up
-                    JOIN nfl_games g ON up.game_id = g.id
-                    WHERE up.user_id = ? AND g.week = ? AND g.year = ? 
-                    AND g.is_monday_night = 1
-                    LIMIT 1
-                ''', (user_id, week, year))
-                
-                scores = cursor.fetchone()
-                if scores and scores[0] is not None and scores[1] is not None:
-                    home_score = scores[0]
-                    away_score = scores[1]
-                    monday_scores_header.append(f"{home_score}-{away_score}")
+                if monday_night_game_id:
+                    # Get user's Monday Night score prediction for the actual MNF game
+                    cursor.execute('''
+                        SELECT predicted_home_score, predicted_away_score
+                        FROM user_picks 
+                        WHERE user_id = ? AND game_id = ?
+                    ''', (user_id, monday_night_game_id))
+                    
+                    scores = cursor.fetchone()
+                    if scores and scores[0] is not None and scores[1] is not None:
+                        home_score = scores[0]
+                        away_score = scores[1]
+                        monday_scores_header.append(f"{home_score}-{away_score}")
+                    else:
+                        monday_scores_header.append("")
                 else:
                     monday_scores_header.append("")
             
