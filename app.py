@@ -427,6 +427,15 @@ def games():
     week = request.args.get('week', current_nfl_week, type=int)
     year = request.args.get('year', 2025, type=int)
     
+    # Auto-cleanup obsolete Monday Night Football score predictions
+    try:
+        from mnf_cleanup_utils import cleanup_obsolete_mnf_predictions
+        cleaned_count = cleanup_obsolete_mnf_predictions(DATABASE_PATH, week, year)
+        if cleaned_count > 0:
+            logger.info(f"Auto-cleaned {cleaned_count} obsolete MNF predictions for Week {week}")
+    except Exception as e:
+        logger.warning(f"MNF auto-cleanup failed: {e}")
+    
     # Get dashboard data for the selected week
     dashboard_data = get_dashboard_data(session['user_id'], week, year)
     
