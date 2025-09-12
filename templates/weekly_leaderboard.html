@@ -162,7 +162,7 @@
         <div class="winner-section">
             <h3>🏆 Weekly Winner</h3>
             <p><strong>{{ leaderboard[0].username }}</strong> wins Week {{ current_week }} with {{ leaderboard[0].correct_picks }} correct picks!</p>
-            {% if leaderboard[0].monday_tiebreaker.has_pick %}
+            {% if sunday_deadline_passed and leaderboard[0].monday_tiebreaker.has_pick %}
             <p class="monday-night-prediction">
                 <strong>Monday Night Pick:</strong> {{ leaderboard[0].monday_tiebreaker.selected_team or 'Unknown' }}<br>
                 <strong>Score Prediction:</strong> {{ leaderboard[0].monday_tiebreaker.away_team }} {{ leaderboard[0].monday_tiebreaker.predicted_away }} - {{ leaderboard[0].monday_tiebreaker.predicted_home }} {{ leaderboard[0].monday_tiebreaker.home_team }}
@@ -209,6 +209,7 @@
                 {{ tied_leaders|length }} players tied with 12 correct picks! Only those who pick the WINNING team can win the week.
             </p>
             
+            {% if sunday_deadline_passed %}
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
                 {% for player in tied_leaders %}
                 <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 10px; backdrop-filter: blur(10px);">
@@ -295,6 +296,16 @@
                     {% endfor %}
                 </div>
             </div>
+            {% else %}
+            <div style="text-align: center; padding: 20px;">
+                <p style="font-size: 18px; opacity: 0.9;">
+                    🔒 Monday Night predictions will be revealed after Sunday deadline passes.
+                </p>
+                <p style="font-size: 14px; opacity: 0.7;">
+                    Tiebreaker details hidden until Sunday games deadline.
+                </p>
+            </div>
+            {% endif %}
         </div>
         {% endif %}
         
@@ -366,14 +377,14 @@
                     <td>{{ player.total_picks - player.correct_picks }}</td>
                     <td>{{ player.breakdown.win_percentage }}%</td>
                     <td class="monday-night-prediction">
-                        {% if player.monday_tiebreaker.has_pick %}
+                        {% if sunday_deadline_passed and player.monday_tiebreaker.has_pick %}
                             <strong>Picked: {{ player.monday_tiebreaker.selected_team or 'Unknown' }}</strong><br>
                             <small>Score Prediction: {{ player.monday_tiebreaker.away_team }} {{ player.monday_tiebreaker.predicted_away }} - {{ player.monday_tiebreaker.predicted_home }} {{ player.monday_tiebreaker.home_team }}</small>
                             {% if player.monday_tiebreaker.is_final %}
                                 <br><small style="color: #666;">(Actual: {{ player.monday_tiebreaker.away_team }} {{ player.monday_tiebreaker.actual_away }} - {{ player.monday_tiebreaker.actual_home }} {{ player.monday_tiebreaker.home_team }})</small>
                             {% endif %}
                         {% else %}
-                            <span style="color: #999;">No prediction</span>
+                            <span style="color: #999;">{% if sunday_deadline_passed %}No prediction{% else %}Hidden until Sunday deadline{% endif %}</span>
                         {% endif %}
                     </td>
                 </tr>

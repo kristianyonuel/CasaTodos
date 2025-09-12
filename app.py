@@ -497,6 +497,9 @@ def games():
             # Add actual Monday Night Football detection
             game_dict['is_actual_monday_night'] = (game_dict['id'] == monday_night_game_id)
             
+            # Add Thursday Night Football detection
+            game_dict['is_actual_thursday_night'] = game_dict.get('is_thursday_night', False)
+            
             games_data.append(game_dict)
         
         cursor.execute('''
@@ -571,6 +574,16 @@ def games():
         logger.error(f"Error getting deadlines for games page: {e}")
         simple_deadlines = {}
         simple_status = {}
+    
+    # Add deadline status for game day visibility
+    sunday_deadline_passed = (simple_status.get('sunday', {}).get('passed', False) 
+                             if simple_status else False)
+    thursday_deadline_passed = (simple_status.get('thursday', {}).get('passed', False) 
+                               if simple_status else False)
+    
+    for game in games_data:
+        game['show_mnf_predictions'] = (game.get('is_actual_monday_night', False) and
+                                       sunday_deadline_passed)
         
     return render_template('games.html',
                          games=games_data,
@@ -584,6 +597,7 @@ def games():
                          deadlines=simple_deadlines,
                          deadline_status=simple_status,
                          deadline_summary=deadline_summary,
+                         thursday_deadline_passed=thursday_deadline_passed,
                          # Dashboard data
                          user_picks_count=dashboard_data['user_picks_count'],
                          total_players=dashboard_data['total_players'],
@@ -677,6 +691,65 @@ def submit_picks():
             flash(f'Successfully submitted {successful_picks} picks!', 'success')
         
         return redirect(url_for('games'))
+@app.route('/debug_thursday')
+def debug_thursday():
+    """Debug route to check Thursday pick revelation variables"""
+    if not session.get('is_admin'):
+        return "Admin access required", 403
+    
+    week = 2
+    year = 2025
+    
+    try:
+        # Get deadline status
+        deadline_manager = DeadlineManager()
+        deadline_data = deadline_manager.get_week_deadlines(week, year)
+        
+        simple_status = {}
+        for key, value in deadline_data.items():
+            if value and isinstance(value, dict) and 'deadline' in value:
+                simple_status[key.replace('_night', '').replace('_games', '')] = {
+                    'passed': value['status']['is_closed'],
+                    'hours_until': value['status']['hours_until_deadline']
+                }
+        
+        thursday_deadline_passed = simple_status.get('thursday', {}).get('passed', False)
+        
+        # Get games
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, away_team, home_team, is_thursday_night FROM nfl_games WHERE week = ? AND year = ?', (week, year))
+            games = cursor.fetchall()
+            
+            thursday_games = [g for g in games if g[3] == 1]  # is_thursday_night = 1
+            
+            # Get picks
+            cursor.execute('''
+                SELECT g.id, u.username, up.selected_team
+                FROM user_picks up
+                JOIN nfl_games g ON up.game_id = g.id
+                JOIN users u ON up.user_id = u.id
+                WHERE g.week = ? AND g.year = ? AND g.is_thursday_night = 1
+            ''', (week, year))
+            
+            thursday_picks = cursor.fetchall()
+        
+        debug_info = {
+            'thursday_deadline_passed': thursday_deadline_passed,
+            'simple_status': simple_status,
+            'thursday_games_count': len(thursday_games),
+            'thursday_games': [f"Game {g[0]}: {g[1]} @ {g[2]}" for g in thursday_games],
+            'thursday_picks_count': len(thursday_picks),
+            'thursday_picks': [f"{p[1]}: {p[2]}" for p in thursday_picks],
+            'should_show_revelation': thursday_deadline_passed and len(thursday_games) > 0
+        }
+        
+        return f"<pre>{debug_info}</pre>"
+        
+    except Exception as e:
+        return f"Error: {e}"
+
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -2322,7 +2395,13 @@ def weekly_leaderboard(week=None, year=None):
             all_picks = cursor.fetchall()
             
             # Calculate Monday Night tiebreaker data
-            monday_tiebreaker = {'has_pick': False, 'correct_winner': False}
+            monday_tiebreaker = {
+                'has_pick': False, 
+                'correct_winner': False,
+                'home_diff': 999,
+                'away_diff': 999,
+                'total_diff': 999
+            }
             if monday_pick:
                 pred_home = monday_pick[0] or 0
                 pred_away = monday_pick[1] or 0
@@ -2343,9 +2422,9 @@ def weekly_leaderboard(week=None, year=None):
                 monday_tiebreaker = {
                     'has_pick': True,
                     'correct_winner': correct_winner,
-                    'home_diff': abs(pred_home - actual_home) if is_final and actual_home is not None else None,
-                    'away_diff': abs(pred_away - actual_away) if is_final and actual_away is not None else None,
-                    'total_diff': abs((pred_home + pred_away) - (actual_home + actual_away)) if is_final and actual_home is not None and actual_away is not None else None,
+                    'home_diff': abs(pred_home - actual_home) if is_final and actual_home is not None else 999,
+                    'away_diff': abs(pred_away - actual_away) if is_final and actual_away is not None else 999,
+                    'total_diff': abs((pred_home + pred_away) - (actual_home + actual_away)) if is_final and actual_home is not None and actual_away is not None else 999,
                     'home_team': home_team,
                     'away_team': away_team,
                     'predicted_home': pred_home,
@@ -2447,13 +2526,27 @@ def weekly_leaderboard(week=None, year=None):
             winner_prediction = None
             winner_analysis = None
         
+        # Check Sunday deadline status for Monday Night prediction visibility
+        sunday_deadline_passed = False
+        try:
+            from deadline_manager import DeadlineManager
+            deadline_manager = DeadlineManager()
+            deadline_data = deadline_manager.get_week_deadlines(week, year)
+            sunday_data = deadline_data.get('sunday_games', {})
+            if sunday_data and isinstance(sunday_data, dict):
+                sunday_status = sunday_data.get('status', {})
+                sunday_deadline_passed = sunday_status.get('is_closed', False)
+        except Exception as e:
+            logger.error(f"Error checking Sunday deadline: {e}")
+        
         return render_template('weekly_leaderboard.html', 
                              leaderboard=leaderboard_data,
                              current_week=week,
                              current_year=year,
                              available_weeks=available_weeks,
                              winner_prediction=winner_prediction,
-                             winner_analysis=winner_analysis)
+                             winner_analysis=winner_analysis,
+                             sunday_deadline_passed=sunday_deadline_passed)
     
     except Exception as e:
         logger.error(f"Error in weekly leaderboard: {e}")
