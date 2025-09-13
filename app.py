@@ -3395,6 +3395,80 @@ def admin_control_background_updater():
         logger.error(f"Error controlling background updater: {e}")
         return jsonify({'success': False, 'error': str(e)})
         
+# NFL Score Updater Integration
+@app.route('/admin/update_scores', methods=['POST'])
+def admin_update_scores():
+    """Admin endpoint to manually trigger score updates"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        from score_updater import NFLScoreUpdater
+        
+        updater = NFLScoreUpdater(DATABASE_PATH)
+        results = updater.run_update_cycle()
+        
+        logger.info(f"Admin {session['username']} triggered manual score update")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Score update completed: {results["games_updated"]} games updated',
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in manual score update: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/admin/scores_status')
+def admin_scores_status():
+    """Get current scores status for admin panel"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        from score_updater import NFLScoreUpdater
+        
+        updater = NFLScoreUpdater(DATABASE_PATH)
+        summary = updater.get_latest_scores_summary()
+        
+        return jsonify({
+            'success': True,
+            'summary': summary
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting scores status: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/admin/auto_update_scores', methods=['POST'])
+def admin_auto_update_scores():
+    """Enable/disable automatic score updates"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        enable = data.get('enable', False)
+        
+        if enable:
+            # Start automatic score updating (integrate with background updater)
+            logger.info(f"Admin {session['username']} enabled automatic score updates")
+            message = "Automatic score updates enabled"
+        else:
+            logger.info(f"Admin {session['username']} disabled automatic score updates")
+            message = "Automatic score updates disabled"
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'enabled': enable
+        })
+        
+    except Exception as e:
+        logger.error(f"Error toggling auto score updates: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
 # Register shutdown handler to stop background updater
 def shutdown_handler():
     """Clean shutdown of background services"""

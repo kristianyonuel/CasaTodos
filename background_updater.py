@@ -57,7 +57,7 @@ class BackgroundGameUpdater:
             self.stop_event.wait(self.update_interval)
             
     def _update_games(self):
-        """Update game scores for current week using ESPN API"""
+        """Update game scores for current week using ESPN API and new score updater"""
         try:
             # Check API rate limits first
             if not check_api_rate_limit():
@@ -80,16 +80,32 @@ class BackgroundGameUpdater:
                 
             logger.info(f"Updating live scores for Week {current_week} using ESPN API")
             
-            # Update live scores using ESPN API
-            updated_count = update_live_scores_espn(current_week, 2025)
-            
-            if updated_count > 0:
-                logger.info(f"Successfully updated {updated_count} games via ESPN")
-            else:
-                logger.debug("No games needed updating via ESPN")
+            # Use new comprehensive score updater
+            try:
+                from score_updater import NFLScoreUpdater
+                score_updater = NFLScoreUpdater()
+                results = score_updater.run_update_cycle()
+                
+                updated_count = results.get('games_updated', 0)
+                if updated_count > 0:
+                    logger.info(f"Successfully updated {updated_count} games via new score updater")
+                else:
+                    logger.debug("No games needed updating via new score updater")
+                    
+            except Exception as e:
+                logger.error(f"Error with new score updater: {e}")
+                
+                # Fallback to original ESPN updater
+                logger.info("Falling back to original ESPN API updater")
+                updated_count = update_live_scores_espn(current_week, 2025)
+                
+                if updated_count > 0:
+                    logger.info(f"Successfully updated {updated_count} games via fallback ESPN")
+                else:
+                    logger.debug("No games needed updating via fallback ESPN")
                 
         except Exception as e:
-            logger.error(f"Error updating games via ESPN: {e}")
+            logger.error(f"Error updating games: {e}")
             
     def _get_current_nfl_week(self) -> Optional[int]:
         """Determine current NFL week based on date"""
