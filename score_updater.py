@@ -219,39 +219,42 @@ class NFLScoreUpdater:
                     is_final = 1 if game_info['is_final'] else 0
                     game_status = game_info['game_status']
                     
-                    # Find matching game in database
+                    # Find matching game in database (case-insensitive)
                     cursor.execute('''
-                        SELECT game_id, home_score, away_score, is_final 
-                        FROM nfl_games 
-                        WHERE away_team = ? AND home_team = ?
+                        SELECT game_id, home_score, away_score, is_final
+                        FROM nfl_games
+                        WHERE UPPER(away_team) = UPPER(?)
+                        AND UPPER(home_team) = UPPER(?)
                         AND (is_final = 0 OR home_score != ? OR away_score != ?)
                         ORDER BY game_date DESC
                         LIMIT 1
                     ''', (away_team, home_team, home_score, away_score))
-                    
+
                     existing_game = cursor.fetchone()
-                    
+
                     if existing_game:
                         game_id = existing_game[0]
-                        old_home_score = existing_game[1]
-                        old_away_score = existing_game[2]
                         old_is_final = existing_game[3]
-                        
+
                         # Update the game
                         cursor.execute('''
-                            UPDATE nfl_games 
-                            SET home_score = ?, away_score = ?, is_final = ?, 
+                            UPDATE nfl_games
+                            SET home_score = ?, away_score = ?, is_final = ?,
                                 game_status = ?
                             WHERE game_id = ?
-                        ''', (home_score, away_score, is_final, game_status, game_id))
-                        
+                        ''', (home_score, away_score, is_final, game_status,
+                              game_id))
+
                         # Update user picks correctness if game is final
                         if is_final and not old_is_final:
-                            self.update_pick_correctness(cursor, game_id, away_team, home_team, 
-                                                       away_score, home_score)
-                        
-                        logger.info(f"Updated {away_team}@{home_team}: {away_score}-{home_score} "
-                                  f"({'Final' if is_final else game_status})")
+                            self.update_pick_correctness(
+                                cursor, game_id, away_team, home_team,
+                                away_score, home_score)
+
+                        logger.info(
+                            f"Updated {away_team}@{home_team}: "
+                            f"{away_score}-{home_score} "
+                            f"({'Final' if is_final else game_status})")
                         updated_count += 1
                 
                 except Exception as e:
