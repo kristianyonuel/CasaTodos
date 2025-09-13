@@ -83,7 +83,7 @@ class BackgroundGameUpdater:
             # Use new comprehensive score updater
             try:
                 from score_updater import NFLScoreUpdater
-                score_updater = NFLScoreUpdater()
+                score_updater = NFLScoreUpdater('nfl_fantasy.db')
                 results = score_updater.run_update_cycle()
                 
                 updated_count = results.get('games_updated', 0)
