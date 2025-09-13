@@ -26,6 +26,26 @@ class DeadlineManager:
             'elimination': 10080     # 7 days (7 * 24 * 60) before Saturday
         }
     
+    def _parse_game_time(self, time_str: str) -> Optional[datetime]:
+        """Parse game time string handling multiple formats"""
+        if not isinstance(time_str, str):
+            return None
+            
+        formats_to_try = [
+            '%Y-%m-%d %H:%M:%S',    # Standard: 2025-09-11 20:15:00
+            '%Y-%m-%dT%H:%M',       # ISO: 2025-09-11T20:15
+            '%Y-%m-%dT%H:%M:%S',    # ISO with seconds: 2025-09-11T20:15:00
+        ]
+        
+        for fmt in formats_to_try:
+            try:
+                return datetime.strptime(time_str, fmt)
+            except ValueError:
+                continue
+        
+        print(f"Warning: Could not parse game time '{time_str}'")
+        return None
+    
     def get_week_deadlines(self, week: int, year: int) -> Dict[str, Dict]:
         """Get all deadlines for a specific week"""
         
@@ -63,12 +83,13 @@ class DeadlineManager:
             
             for game in games:
                 try:
-                    # Parse game time - FIXED: The database stores times in AST format already
+                    # Parse game time using the helper function
                     if isinstance(game[0], str):
-                        game_time = datetime.strptime(game[0], '%Y-%m-%d %H:%M:%S')
+                        game_time = self._parse_game_time(game[0])
+                        if game_time is None:
+                            continue
                         
-                        # The stored times are already in AST, so treat them as such
-                        # This fixes the 3.5 hour offset issue where UTC conversion was double-converting
+                        # Times are stored in AST format already
                         game_time_ast = game_time.replace(tzinfo=self.ast_tz)
                         
                     else:
@@ -156,16 +177,17 @@ class DeadlineManager:
             # Calculate elimination deadline (7 days before Saturday)
             if games:
                 first_game = min(games, key=lambda x: x[0])
-                first_game_time = datetime.strptime(first_game[0], '%Y-%m-%d %H:%M:%S')
-                # Find the Saturday before the week
-                days_until_saturday = (5 - first_game_time.weekday()) % 7
-                saturday = first_game_time - timedelta(days=days_until_saturday)
-                elimination_deadline = saturday - timedelta(days=7)
-                
-                deadlines['elimination'] = {
-                    'game_time': convert_to_ast(first_game_time),
-                    'deadline': convert_to_ast(elimination_deadline),
-                    'matchup': f"Week {week} Elimination Format",
+                first_game_time = self._parse_game_time(first_game[0])
+                if first_game_time:
+                    # Find the Saturday before the week
+                    days_until_saturday = (5 - first_game_time.weekday()) % 7
+                    saturday = first_game_time - timedelta(days=days_until_saturday)
+                    elimination_deadline = saturday - timedelta(days=7)
+                    
+                    deadlines['elimination'] = {
+                        'game_time': convert_to_ast(first_game_time),
+                        'deadline': convert_to_ast(elimination_deadline),
+                        'matchup': f"Week {week} Elimination Format",
                     'status': self._get_deadline_status(elimination_deadline, 'elimination')
                 }
             
@@ -275,7 +297,10 @@ class DeadlineManager:
             
             if game_date:
                 # Check specific game
-                game_time = datetime.strptime(game_date, '%Y-%m-%d %H:%M:%S')
+                game_time = self._parse_game_time(game_date)
+                if game_time is None:
+                    return True  # If can't parse, assume deadline passed
+                    
                 game_time_ast = convert_to_ast(game_time)
                 
                 # Determine game type based on day of week
