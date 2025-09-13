@@ -2440,6 +2440,19 @@ def weekly_leaderboard(week=None, year=None):
             for pick in all_picks:
                 selected_team, pred_home, pred_away, home_team, away_team, actual_home, actual_away, is_final, is_correct, game_date = pick
                 
+                # Parse game_date string to datetime object if needed
+                parsed_game_date = None
+                if game_date:
+                    try:
+                        from datetime import datetime
+                        if isinstance(game_date, str):
+                            parsed_game_date = datetime.strptime(game_date, '%Y-%m-%d %H:%M:%S')
+                        else:
+                            parsed_game_date = game_date
+                    except Exception as e:
+                        logger.error(f"Error parsing pick game_date {game_date}: {e}")
+                        parsed_game_date = None  # safer fallback
+                
                 pick_detail = {
                     'home_team': home_team,
                     'away_team': away_team,
@@ -2450,7 +2463,7 @@ def weekly_leaderboard(week=None, year=None):
                     'actual_away': actual_away,
                     'is_final': is_final,
                     'is_correct': is_correct,
-                    'game_date': game_date
+                    'game_date': parsed_game_date
                 }
                 picks_detail.append(pick_detail)
             
@@ -2628,10 +2641,13 @@ def weekly_leaderboard(week=None, year=None):
                 if row[3]:  # game_date
                     try:
                         from datetime import datetime
-                        game_date = datetime.strptime(row[3], '%Y-%m-%d %H:%M:%S')
+                        if isinstance(row[3], str):
+                            game_date = datetime.strptime(row[3], '%Y-%m-%d %H:%M:%S')
+                        else:
+                            game_date = row[3]  # already a datetime object
                     except Exception as e:
                         logger.error(f"Error parsing game_date {row[3]}: {e}")
-                        game_date = row[3]  # fallback to string
+                        game_date = None  # safer fallback to prevent template errors
                 
                 games.append({
                     'id': row[0],
