@@ -752,6 +752,10 @@ def debug_thursday():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    # TEMPORARY: Registration disabled for a couple of months
+    flash('New user registration is temporarily disabled. Please contact an administrator for account creation.', 'info')
+    return redirect(url_for('login'))
+    
     if request.method == 'POST':
         try:
             username: str = request.form.get('username', '').strip()
