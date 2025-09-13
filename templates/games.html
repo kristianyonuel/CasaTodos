@@ -183,40 +183,6 @@
             </form>
         {% endif %}
     </div>
-
-    <!-- Thursday Picks Revelation Section -->
-    {% if thursday_deadline_passed %}
-        {% set thursday_games = games|selectattr('is_actual_thursday_night', 'equalto', true)|list %}
-        {% if thursday_games %}
-            <div class="picks-revelation-section">
-                <h3>🏈 Thursday Night Picks</h3>
-                <p class="revelation-subtitle">Thursday deadline has passed - here's who picked what:</p>
-                
-                {% for game in thursday_games %}
-                    <div class="game-picks-card">
-                        <div class="game-title">
-                            <strong>{{ get_team_name(game.away_team) }} @ {{ get_team_name(game.home_team) }}</strong>
-                            <span class="game-date">{{ game.game_date.strftime('%a %m/%d %I:%M %p') if game.game_date else 'TBD' }}</span>
-                        </div>
-                        
-                        <div class="picks-grid">
-                            {% set game_picks = all_picks|selectattr('game_id', 'equalto', game.id)|list %}
-                            {% if game_picks %}
-                                {% for pick in game_picks %}
-                                    <div class="user-pick">
-                                        <span class="username">{{ pick.username }}</span>
-                                        <span class="selected-team">{{ get_team_name(pick.selected_team) }}</span>
-                                    </div>
-                                {% endfor %}
-                            {% else %}
-                                <p class="no-picks">No picks made for this game yet.</p>
-                            {% endif %}
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
-    {% endif %}
 </div>
 
 <style>

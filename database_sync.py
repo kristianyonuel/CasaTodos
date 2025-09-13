@@ -1,10 +1,11 @@
 """
-Database synchronization with BallDontLie NFL API
+Database synchronization with BallDontLie NFL API and ESPN API
 Includes rate limiting to avoid API abuse (max 5 calls per hour)
 """
 import sqlite3
 from datetime import datetime
 from nfl_api_service import get_season_schedule, get_week_games, get_live_scores
+from espn_api_service import get_espn_live_scores
 from utils.timezone_utils import format_ast_time
 from api_rate_limiter import check_api_rate_limit, record_api_call, get_api_calls_remaining
 import logging
@@ -361,4 +362,89 @@ def recalculate_all_pick_correctness() -> int:
         
     except Exception as e:
         logger.error(f"Error recalculating all pick correctness: {e}")
+        return 0
+
+
+def update_live_scores_espn(week: int, year: int = 2025) -> int:
+    """Update live scores from ESPN API with rate limiting and trigger scoring updates"""
+    try:
+        # Check rate limit before making API call
+        if not check_api_rate_limit():
+            remaining = get_api_calls_remaining()
+            logger.info(f"API rate limit reached. Skipping ESPN update. "
+                       f"Calls remaining: {remaining}")
+            return 0
+        
+        logger.info(f"Updating live scores via ESPN for Week {week}, {year}. "
+                   f"API calls remaining: {get_api_calls_remaining()}")
+        
+        # Get live scores from ESPN API
+        scores_data = get_espn_live_scores(week, year)
+        record_api_call()  # Record the API call
+        
+        if not scores_data:
+            logger.info(f"No ESPN scores data received for Week {week}, {year}")
+            return 0
+        
+        conn = sqlite3.connect('nfl_fantasy.db')
+        cursor = conn.cursor()
+        
+        games_updated = 0
+        games_newly_finalized = 0
+        
+        for game in scores_data:
+            try:
+                # Check if game was already final before this update
+                cursor.execute('''
+                    SELECT is_final FROM nfl_games 
+                    WHERE away_team = ? AND home_team = ? AND week = ? AND year = ?
+                ''', (game['away_team'], game['home_team'], week, year))
+                
+                current_game = cursor.fetchone()
+                was_final_before = current_game[0] if current_game else False
+                
+                # Update scores and status
+                cursor.execute('''
+                    UPDATE nfl_games SET
+                    away_score = ?, home_score = ?, game_status = ?, 
+                    is_final = ?, quarter = ?, time_remaining = ?
+                    WHERE away_team = ? AND home_team = ? AND week = ? AND year = ?
+                ''', (
+                    game['away_score'], game['home_score'], game['game_status'],
+                    game['is_final'], game['quarter'], game['time_remaining'],
+                    game['away_team'], game['home_team'], week, year
+                ))
+                
+                if cursor.rowcount > 0:
+                    games_updated += 1
+                    
+                    # Track if this game was newly finalized
+                    if not was_final_before and game['is_final']:
+                        games_newly_finalized += 1
+                
+            except Exception as e:
+                logger.error(f"Error updating ESPN live score: {e}")
+                continue
+        
+        conn.commit()
+        conn.close()
+        
+        # Trigger scoring update if any games were newly finalized
+        if games_newly_finalized > 0:
+            try:
+                # Update is_correct field for picks on newly finalized games
+                update_pick_correctness(week, year)
+                
+                from scoring_updater import ScoringUpdater
+                updater = ScoringUpdater()
+                updater.trigger_scoring_update_after_game_finalization(week, year)
+                logger.info(f"Triggered scoring update for Week {week}, {year} "
+                           f"- {games_newly_finalized} games newly finalized")
+            except Exception as e:
+                logger.error(f"Error triggering scoring update: {e}")
+        
+        return games_updated
+        
+    except Exception as e:
+        logger.error(f"ESPN live scores update error: {e}")
         return 0

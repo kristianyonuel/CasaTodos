@@ -2526,27 +2526,139 @@ def weekly_leaderboard(week=None, year=None):
             winner_prediction = None
             winner_analysis = None
         
-        # Check Sunday deadline status for Monday Night prediction visibility
+        # Check deadline statuses for pick revelations
+        thursday_deadline_passed = False
+        friday_deadline_passed = False
+        saturday_deadline_passed = False
         sunday_deadline_passed = False
+        
         try:
             from deadline_manager import DeadlineManager
             deadline_manager = DeadlineManager()
             deadline_data = deadline_manager.get_week_deadlines(week, year)
+            
+            # Thursday deadline
+            thursday_data = deadline_data.get('thursday_night')
+            if thursday_data and isinstance(thursday_data, dict):
+                thursday_status = thursday_data.get('status', {})
+                thursday_deadline_passed = thursday_status.get('is_closed', False)
+            
+            # Friday deadline
+            friday_data = deadline_data.get('friday_games')
+            if friday_data and isinstance(friday_data, list):
+                friday_deadline_passed = any(game.get('status', {}).get('is_closed', False) for game in friday_data)
+            
+            # Saturday deadline  
+            saturday_data = deadline_data.get('saturday_games')
+            if saturday_data and isinstance(saturday_data, list):
+                saturday_deadline_passed = any(game.get('status', {}).get('is_closed', False) for game in saturday_data)
+            
+            # Sunday deadline
             sunday_data = deadline_data.get('sunday_games', {})
             if sunday_data and isinstance(sunday_data, dict):
                 sunday_status = sunday_data.get('status', {})
                 sunday_deadline_passed = sunday_status.get('is_closed', False)
+                
         except Exception as e:
-            logger.error(f"Error checking Sunday deadline: {e}")
+            logger.error(f"Error checking deadlines: {e}")
         
-        return render_template('weekly_leaderboard.html', 
-                             leaderboard=leaderboard_data,
-                             current_week=week,
-                             current_year=year,
-                             available_weeks=available_weeks,
-                             winner_prediction=winner_prediction,
-                             winner_analysis=winner_analysis,
-                             sunday_deadline_passed=sunday_deadline_passed)
+        # Check if week is completed (all games final)
+        week_completed = False
+        try:
+            conn = get_db_legacy()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT COUNT(*) as total_games,
+                       SUM(CASE WHEN is_final = 1 THEN 1 ELSE 0 END) as completed_games
+                FROM nfl_games 
+                WHERE week = ? AND year = ?
+            ''', (week, year))
+            
+            game_counts = cursor.fetchone()
+            if game_counts and game_counts[0] > 0:
+                week_completed = game_counts[0] == game_counts[1]
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error checking week completion: {e}")
+        
+        # Get all picks data for Thursday revelation (similar to games route)
+        all_picks = []
+        try:
+            conn = get_db_legacy()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT g.id, u.username, up.selected_team, up.predicted_home_score, up.predicted_away_score
+                FROM user_picks up
+                JOIN nfl_games g ON up.game_id = g.id
+                JOIN users u ON up.user_id = u.id
+                WHERE g.week = ? AND g.year = ? AND u.is_admin = 0
+                ORDER BY g.game_date, u.username
+            ''', (week, year))
+            
+            for row in cursor.fetchall():
+                all_picks.append({
+                    'game_id': row[0],
+                    'username': row[1],
+                    'selected_team': row[2],
+                    'predicted_home_score': row[3],
+                    'predicted_away_score': row[4]
+                })
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error getting all picks data: {e}")
+        
+        # Get games data for Thursday revelation
+        games = []
+        try:
+            conn = get_db_legacy()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT id, away_team, home_team, game_date, is_thursday_night, is_final
+                FROM nfl_games 
+                WHERE week = ? AND year = ?
+                ORDER BY game_date, id
+            ''', (week, year))
+            
+            for row in cursor.fetchall():
+                # Parse game_date string to datetime object
+                game_date = None
+                if row[3]:  # game_date
+                    try:
+                        from datetime import datetime
+                        game_date = datetime.strptime(row[3], '%Y-%m-%d %H:%M:%S')
+                    except Exception as e:
+                        logger.error(f"Error parsing game_date {row[3]}: {e}")
+                        game_date = row[3]  # fallback to string
+                
+                games.append({
+                    'id': row[0],
+                    'away_team': row[1],
+                    'home_team': row[2],
+                    'game_date': game_date,
+                    'is_thursday_night': bool(row[4]),
+                    'is_final': bool(row[5])
+                })
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error getting games data: {e}")
+
+        return render_template('weekly_leaderboard.html',
+                                 leaderboard=leaderboard_data,
+                                 current_week=week,
+                                 current_year=year,
+                                 available_weeks=available_weeks,
+                                 winner_prediction=winner_prediction,
+                                 winner_analysis=winner_analysis,
+                                 sunday_deadline_passed=sunday_deadline_passed,
+                                 thursday_deadline_passed=thursday_deadline_passed,
+                                 friday_deadline_passed=friday_deadline_passed,
+                                 saturday_deadline_passed=saturday_deadline_passed,
+                                 week_completed=week_completed,
+                                 all_picks=all_picks,
+                                 games=games)
     
     except Exception as e:
         logger.error(f"Error in weekly leaderboard: {e}")

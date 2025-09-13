@@ -8,7 +8,7 @@ import time
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
-from database_sync import update_live_scores
+from database_sync import update_live_scores, update_live_scores_espn
 from api_rate_limiter import check_api_rate_limit
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ class BackgroundGameUpdater:
             self.stop_event.wait(self.update_interval)
             
     def _update_games(self):
-        """Update game scores for current week"""
+        """Update game scores for current week using ESPN API"""
         try:
             # Check API rate limits first
             if not check_api_rate_limit():
@@ -78,18 +78,18 @@ class BackgroundGameUpdater:
                 logger.info(f"Not a game day (weekday {current_day}), skipping update")
                 return
                 
-            logger.info(f"Updating live scores for Week {current_week}")
+            logger.info(f"Updating live scores for Week {current_week} using ESPN API")
             
-            # Update live scores
-            updated_count = update_live_scores(current_week, 2025)
+            # Update live scores using ESPN API
+            updated_count = update_live_scores_espn(current_week, 2025)
             
             if updated_count > 0:
-                logger.info(f"Successfully updated {updated_count} games")
+                logger.info(f"Successfully updated {updated_count} games via ESPN")
             else:
-                logger.debug("No games needed updating")
+                logger.debug("No games needed updating via ESPN")
                 
         except Exception as e:
-            logger.error(f"Error updating games: {e}")
+            logger.error(f"Error updating games via ESPN: {e}")
             
     def _get_current_nfl_week(self) -> Optional[int]:
         """Determine current NFL week based on date"""
@@ -129,8 +129,8 @@ class BackgroundGameUpdater:
             'next_update_in_seconds': self.update_interval if self.is_running() else None
         }
 
-# Global instance
-game_updater = BackgroundGameUpdater(update_interval=15)  # 15 minutes
+# Global instance - changed to 30 minutes (1800 seconds) for ESPN API
+game_updater = BackgroundGameUpdater(update_interval=1800)  # 30 minutes
 
 def start_background_updater():
     """Start the global background game updater"""
