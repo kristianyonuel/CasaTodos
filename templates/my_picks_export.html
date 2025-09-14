@@ -51,10 +51,10 @@
 
                     <div class="export-actions">
                         <button onclick="exportSelectedWeek()" class="btn btn-primary btn-large">
-                            📤 Export Selected Week
+                            📤 Export Selected Week (Download or Copy)
                         </button>
                         <button onclick="exportCurrentWeek()" class="btn btn-secondary btn-large">
-                            📤 Export Current Week
+                            📤 Export Current Week (Download or Copy)
                         </button>
                     </div>
                 </div>
@@ -126,23 +126,41 @@
             const selector = document.getElementById('week-year-select');
             const [week, year] = selector.value.split('-');
             
-            // Create a temporary link to download the CSV
-            const link = document.createElement('a');
-            link.href = `{{ url_for('export_my_picks_csv') }}?week=${week}&year=${year}`;
-            link.download = `{{ username }}_picks_week_${week}_${year}.csv`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            // Show options modal
+            const options = confirm("Choose your export option:\n\nOK = Download CSV file\nCancel = View & Copy to Clipboard");
+            
+            if (options) {
+                // Download CSV file
+                const link = document.createElement('a');
+                link.href = `{{ url_for('export_my_picks_csv') }}?week=${week}&year=${year}`;
+                link.download = `{{ username }}_picks_week_${week}_${year}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } else {
+                // Open display view for copy-paste
+                const displayUrl = `{{ url_for('export_my_picks_csv') }}?week=${week}&year=${year}&display_format=true`;
+                window.open(displayUrl, '_blank', 'width=900,height=700,scrollbars=yes,resizable=yes');
+            }
         }
 
         function exportCurrentWeek() {
-            // Create a temporary link to download the CSV for current week
-            const link = document.createElement('a');
-            link.href = `{{ url_for('export_my_picks_csv') }}`;
-            link.download = `{{ username }}_picks_current_week.csv`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            // Show options modal
+            const options = confirm("Choose your export option:\n\nOK = Download CSV file\nCancel = View & Copy to Clipboard");
+            
+            if (options) {
+                // Download CSV file
+                const link = document.createElement('a');
+                link.href = `{{ url_for('export_my_picks_csv') }}`;
+                link.download = `{{ username }}_picks_current_week.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } else {
+                // Open display view for copy-paste
+                const displayUrl = `{{ url_for('export_my_picks_csv') }}?display_format=true`;
+                window.open(displayUrl, '_blank', 'width=900,height=700,scrollbars=yes,resizable=yes');
+            }
         }
     </script>
 

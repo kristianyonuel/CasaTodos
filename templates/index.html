@@ -57,7 +57,7 @@
                 📋 Read Rules
             </a>
             <a href="{{ url_for('my_picks_export') }}" class="action-btn secondary">
-                📤 Export My Picks
+                📤 Export My Picks (Download or Copy)
             </a>
             <!-- ADMIN PANEL LINK - ONLY FOR ACTUAL ADMINS -->
             {% if is_admin %}
@@ -188,17 +188,27 @@
 </div>
 
 <script>
-    // Export user picks function  
+    // Export user picks function with options
     function exportMyPicks() {
         const week = '{{ current_week or 1 }}';
         const year = '{{ current_year or 2025 }}';
         
-        const link = document.createElement('a');
-        link.href = `{{ url_for('export_my_picks_csv') }}?week=${week}&year=${year}`;
-        link.download = `{{ username }}_picks_week_${week}_${year}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Show options modal
+        const options = confirm("Choose your export option:\n\nOK = Download CSV file\nCancel = View & Copy to Clipboard");
+        
+        if (options) {
+            // Download CSV file
+            const link = document.createElement('a');
+            link.href = `{{ url_for('export_my_picks_csv') }}?week=${week}&year=${year}`;
+            link.download = `{{ username }}_picks_week_${week}_${year}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } else {
+            // Open display view for copy-paste
+            const displayUrl = `{{ url_for('export_my_picks_csv') }}?week=${week}&year=${year}&display_format=true`;
+            window.open(displayUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+        }
     }
 
     // Export all users' picks function (admin only)

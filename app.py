@@ -2852,6 +2852,9 @@ def export_my_picks_csv():
     if 'user_id' not in session:
         return jsonify({'error': 'Login required'}), 401
     
+    # Check if user wants display format instead of download
+    display_format = request.args.get('display_format', '').lower() == 'true'
+    
     try:
         week = request.args.get('week', type=int)
         year = request.args.get('year', type=int)
@@ -2905,101 +2908,100 @@ def export_my_picks_csv():
                     'predicted_home_score': row['predicted_home_score'],
                     'predicted_away_score': row['predicted_away_score']
                 }
-        
-        # Find the actual Monday Night Football game (latest game on Monday)
-        cursor.execute('''
-            SELECT id FROM nfl_games 
-            WHERE week = ? AND year = ? 
-            AND strftime('%w', game_date) = '1'  -- Monday
-            ORDER BY game_date DESC, id DESC
-            LIMIT 1
-        ''', (week, year))
-        
-        monday_night_game = cursor.fetchone()
-        monday_night_game_id = monday_night_game[0] if monday_night_game else None
+            
+            # Find the actual Monday Night Football game (latest game on Monday)
+            cursor.execute('''
+                SELECT id FROM nfl_games 
+                WHERE week = ? AND year = ? 
+                AND strftime('%w', game_date) = '1'  -- Monday
+                ORDER BY game_date DESC, id DESC
+                LIMIT 1
+            ''', (week, year))
+            
+            monday_night_game = cursor.fetchone()
+            monday_night_game_id = monday_night_game[0] if monday_night_game else None
 
-        # Create CSV content with beautiful format (similar to admin export)
-        output = io.StringIO()
-        writer = csv.writer(output)
-        
-        # Header row with user info
-        writer.writerow([f'{username} - Week {week}, {year}', 'My Pick', 'Monday Night Score'])
-        
-        # Subheader row
-        writer.writerow(['Game', 'Selected Team', 'Score Prediction'])
-        
-        # Separate regular games and Monday Night
-        regular_games = []
-        monday_night_games = []
-        
-        # Write game picks
-        for game in games:
-            game_id = game['id']
-            is_actual_monday_night = (game_id == monday_night_game_id)
-            game_label = f"{game['away_team']} @ {game['home_team']}"
+            # Create CSV content with beautiful format (similar to admin export)
+            output = io.StringIO()
+            writer = csv.writer(output)
             
-            pick_data = user_picks.get(game_id, {})
-            selected_team = pick_data.get('selected_team', 'No Pick Made')
+            # Header row with user info
+            writer.writerow([f'{username} - Week {week}, {year}', 'My Pick', 'Monday Night Score'])
             
-            if is_actual_monday_night:
-                # For actual Monday Night Football, include score prediction
+            # Subheader row
+            writer.writerow(['Game', 'Selected Team', 'Score Prediction'])
+            
+            # Separate regular games and Monday Night
+            regular_games = []
+            monday_night_games = []
+            
+            # Write game picks
+            for game in games:
+                game_id = game['id']
+                is_actual_monday_night = (game_id == monday_night_game_id)
+                game_label = f"{game['away_team']} @ {game['home_team']}"
+                
+                pick_data = user_picks.get(game_id, {})
+                selected_team = pick_data.get('selected_team', 'No Pick Made')
+                
+                if is_actual_monday_night:
+                    # For actual Monday Night Football, include score prediction
+                    home_score = pick_data.get('predicted_home_score', '')
+                    away_score = pick_data.get('predicted_away_score', '')
+                    score_prediction = f"{home_score}-{away_score}" if home_score and away_score else ''
+                    
+                    monday_night_games.append([game_label, selected_team, score_prediction])
+                else:
+                    regular_games.append([game_label, selected_team, ''])
+            
+            # Write regular games first
+            for game_row in regular_games:
+                writer.writerow(game_row)
+            
+            # Write Monday Night games
+            for game_row in monday_night_games:
+                writer.writerow(game_row)
+            
+            # Add summary section
+            writer.writerow([])  # Empty row
+            writer.writerow(['Summary', '', ''])
+            
+            # Count picks made
+            total_games = len(games)
+            picks_made = len([p for p in user_picks.values() if p.get('selected_team')])
+            
+            writer.writerow([f'Total Games: {total_games}', '', ''])
+            writer.writerow([f'Picks Made: {picks_made}', '', ''])
+            writer.writerow([f'Completion: {picks_made}/{total_games}', '', ''])
+            
+            # Monday Night prediction summary (already have the data from above)
+            monday_prediction = None
+            if monday_night_game_id:
+                pick_data = user_picks.get(monday_night_game_id, {})
                 home_score = pick_data.get('predicted_home_score', '')
                 away_score = pick_data.get('predicted_away_score', '')
-                score_prediction = f"{home_score}-{away_score}" if home_score and away_score else ''
-                
-                monday_night_games.append([game_label, selected_team, score_prediction])
-            else:
-                regular_games.append([game_label, selected_team, ''])
+                if home_score and away_score:
+                    monday_prediction = f"{home_score}-{away_score}"
+            
+            if monday_prediction:
+                writer.writerow([f'Monday Night Prediction: {monday_prediction}', '', ''])
+            
+            # Prepare response
+            csv_content = output.getvalue()
+            output.close()
+            
+            # Check if user wants display format instead of download
+            if display_format:
+                # Return HTML page with CSV content for copy-paste
+                return render_template('picks_display.html',
+                                     username=username,
+                                     week=week,
+                                     year=year,
+                                     csv_content=csv_content,
+                                     total_games=total_games,
+                                     picks_made=picks_made)
         
-        # Write regular games first
-        for game_row in regular_games:
-            writer.writerow(game_row)
-        
-        # Write Monday Night games
-        for game_row in monday_night_games:
-            writer.writerow(game_row)
-        
-        # Add summary section
-        writer.writerow([])  # Empty row
-        writer.writerow(['Summary', '', ''])
-        
-        # Count picks made
-        total_games = len(games)
-        picks_made = len([p for p in user_picks.values() if p.get('selected_team')])
-        
-        writer.writerow([f'Total Games: {total_games}', '', ''])
-        writer.writerow([f'Picks Made: {picks_made}', '', ''])
-        writer.writerow([f'Completion: {picks_made}/{total_games}', '', ''])
-        
-        # Monday Night prediction summary (only for the actual Monday Night Football game)
-        monday_prediction = None
-        
-        # Find the actual Monday Night Football game (latest game on Monday)
-        cursor.execute('''
-            SELECT id FROM nfl_games 
-            WHERE week = ? AND year = ? 
-            AND strftime('%w', game_date) = '1'  -- Monday
-            ORDER BY game_date DESC, id DESC
-            LIMIT 1
-        ''', (week, year))
-        
-        monday_night_game = cursor.fetchone()
-        
-        if monday_night_game:
-            monday_night_game_id = monday_night_game[0]
-            pick_data = user_picks.get(monday_night_game_id, {})
-            home_score = pick_data.get('predicted_home_score', '')
-            away_score = pick_data.get('predicted_away_score', '')
-            if home_score and away_score:
-                monday_prediction = f"{home_score}-{away_score}"
-        
-        if monday_prediction:
-            writer.writerow([f'Monday Night Prediction: {monday_prediction}', '', ''])
-        
-        # Prepare response
-        csv_content = output.getvalue()
-        output.close()
-        
+        # Default: return downloadable CSV
         response = app.response_class(
             csv_content,
             mimetype='text/csv',
