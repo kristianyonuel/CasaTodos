@@ -700,6 +700,7 @@ def submit_picks():
         cursor = conn.cursor()
         successful_picks = 0
         failed_picks = 0
+        rejected_games = []
         
         for pick in picks:
             game_id = pick.get('game_id')
@@ -709,11 +710,11 @@ def submit_picks():
             
             if game_id and selected_team:
                 # Get game info to check deadline
-                cursor.execute('SELECT week, year, game_date FROM nfl_games WHERE id = ?', (game_id,))
+                cursor.execute('SELECT week, year, game_date, away_team, home_team FROM nfl_games WHERE id = ?', (game_id,))
                 game_info = cursor.fetchone()
                 
                 if game_info:
-                    week, year, game_date = game_info
+                    week, year, game_date, away_team, home_team = game_info
                     
                     # Check if picks are still allowed for this game
                     if deadline_manager.can_make_picks(week, year, game_date):
@@ -725,7 +726,8 @@ def submit_picks():
                         successful_picks += 1
                     else:
                         failed_picks += 1
-                        logger.warning(f"Pick submission after deadline for game {game_id} by user {session['user_id']}")
+                        rejected_games.append(f"{away_team} @ {home_team}")
+                        logger.warning(f"Pick submission after deadline for game {game_id} ({away_team} @ {home_team}) by user {session['user_id']}")
         
         conn.commit()
     
@@ -733,16 +735,18 @@ def submit_picks():
     if request.is_json:
         # JSON response for AJAX requests
         if failed_picks > 0:
+            rejected_list = ", ".join(rejected_games)
             return jsonify({
                 'success': False, 
-                'message': f'Some picks were rejected due to deadline. {successful_picks} picks saved, {failed_picks} rejected.',
+                'message': f'Some picks were rejected due to deadline. {successful_picks} picks saved, {failed_picks} rejected: {rejected_list}',
                 'partial': True
             })
         return jsonify({'success': True, 'message': f'Successfully submitted {successful_picks} picks!'})
     else:
         # Form submission response with flash messages and redirect
         if failed_picks > 0:
-            flash(f'Some picks were rejected due to deadline. {successful_picks} picks saved, {failed_picks} rejected.', 'warning')
+            rejected_list = ", ".join(rejected_games)
+            flash(f'Some picks were rejected due to deadline. {successful_picks} picks saved, {failed_picks} rejected: {rejected_list}', 'warning')
         else:
             flash(f'Successfully submitted {successful_picks} picks!', 'success')
         
