@@ -629,14 +629,17 @@ def games():
         simple_status = {}
     
     # Add deadline status for game day visibility
-    sunday_deadline_passed = (simple_status.get('sunday', {}).get('passed', False) 
-                             if simple_status else False)
     thursday_deadline_passed = (simple_status.get('thursday', {}).get('passed', False) 
                                if simple_status else False)
     
+    # Monday deadline status - same as Sunday deadline
+    monday_deadline_passed = (simple_status.get('monday', {}).get('passed', False)
+                             if simple_status else False)
+    
     for game in games_data:
+        # Show Monday Night predictions if it's Monday game and deadline open
         game['show_mnf_predictions'] = (game.get('is_actual_monday_night', False) and
-                                       sunday_deadline_passed)
+                                       not monday_deadline_passed)
         
     return render_template('games.html',
                          games=games_data,
@@ -3022,18 +3025,108 @@ def my_picks_export():
         return redirect(url_for('login'))
     
     try:
-        # Get available weeks
+        # Get current week for default selection
+        from nfl_week_calculator import get_current_nfl_week
+        current_week = get_current_nfl_week(2025)
+        
+        # Get selected week from query params
+        selected_week = request.args.get('week', current_week, type=int)
+        selected_year = request.args.get('year', 2025, type=int)
+        
         with get_db() as conn:
             cursor = conn.cursor()
+            
+            # Get available weeks
             cursor.execute('''
                 SELECT DISTINCT week, year FROM nfl_games 
                 ORDER BY year DESC, week DESC
             ''')
             available_weeks = cursor.fetchall()
+            
+            # Get user's picks for selected week if specified
+            user_picks_data = None
+            games_data = None
+            total_games = 0
+            picks_made = 0
+            
+            if selected_week and selected_year:
+                # Get all games for the selected week
+                cursor.execute('''
+                    SELECT id, away_team, home_team, game_date, is_monday_night
+                    FROM nfl_games 
+                    WHERE week = ? AND year = ?
+                    ORDER BY game_date
+                ''', (selected_week, selected_year))
+                
+                games_data = [dict(row) for row in cursor.fetchall()]
+                total_games = len(games_data)
+                
+                if games_data:
+                    # Get user's picks for this week
+                    cursor.execute('''
+                        SELECT up.game_id, up.selected_team, 
+                               up.predicted_home_score, up.predicted_away_score
+                        FROM user_picks up
+                        JOIN nfl_games g ON up.game_id = g.id
+                        WHERE up.user_id = ? AND g.week = ? AND g.year = ?
+                    ''', (session['user_id'], selected_week, selected_year))
+                    
+                    user_picks = {}
+                    for row in cursor.fetchall():
+                        user_picks[row['game_id']] = {
+                            'selected_team': row['selected_team'],
+                            'predicted_home_score': row['predicted_home_score'],
+                            'predicted_away_score': row['predicted_away_score']
+                        }
+                    
+                    # Find Monday Night game
+                    cursor.execute('''
+                        SELECT id FROM nfl_games 
+                        WHERE week = ? AND year = ? 
+                        AND strftime('%w', game_date) = '1'
+                        ORDER BY game_date DESC, id DESC
+                        LIMIT 1
+                    ''', (selected_week, selected_year))
+                    
+                    monday_night_game = cursor.fetchone()
+                    monday_night_game_id = monday_night_game[0] if monday_night_game else None
+                    
+                    # Build picks display data
+                    picks_display = []
+                    for game in games_data:
+                        game_id = game['id']
+                        pick_data = user_picks.get(game_id, {})
+                        selected_team = pick_data.get('selected_team', 'No Pick Made')
+                        
+                        is_monday_night = (game_id == monday_night_game_id)
+                        home_score = pick_data.get('predicted_home_score', '') if is_monday_night else ''
+                        away_score = pick_data.get('predicted_away_score', '') if is_monday_night else ''
+                        
+                        picks_display.append({
+                            'game_label': f"{game['away_team']} @ {game['home_team']}",
+                            'away_team': game['away_team'],
+                            'home_team': game['home_team'],
+                            'selected_team': selected_team,
+                            'has_pick': selected_team != 'No Pick Made',
+                            'is_monday_night': is_monday_night,
+                            'predicted_home_score': home_score,
+                            'predicted_away_score': away_score,
+                            'game_id': game_id
+                        })
+                    
+                    user_picks_data = picks_display
+                    picks_made = len([p for p in picks_display if p['has_pick']])
         
         return render_template('my_picks_export.html', 
                                username=session['username'],
-                               available_weeks=available_weeks)
+                               available_weeks=available_weeks,
+                               current_week=current_week,
+                               selected_week=selected_week,
+                               selected_year=selected_year,
+                               user_picks_data=user_picks_data,
+                               total_games=total_games,
+                               picks_made=picks_made)
+                               
     except Exception as e:
         logger.error(f"Error loading export page: {e}")
         flash('Error loading export page', 'error')

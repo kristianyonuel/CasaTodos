@@ -40,21 +40,70 @@
                 <div class="export-form">
                     <div class="form-group">
                         <label for="week-year-select">Select Week to Export:</label>
-                        <select id="week-year-select" class="form-control">
+                        <select id="week-year-select" class="form-control" onchange="loadWeekPicks()">
                             {% for week_data in available_weeks %}
-                            <option value="{{ week_data.week }}-{{ week_data.year }}">
+                            <option value="{{ week_data.week }}-{{ week_data.year }}" 
+                                    {% if week_data.week == selected_week and week_data.year == selected_year %}selected{% endif %}>
                                 Week {{ week_data.week }}, {{ week_data.year }}
                             </option>
                             {% endfor %}
                         </select>
                     </div>
 
+                    {% if user_picks_data %}
+                    <!-- Display User's Picks -->
+                    <div class="picks-display" id="picks-display">
+                        <h3>Your Picks for Week {{ selected_week }}, {{ selected_year }}</h3>
+                        <div class="picks-summary">
+                            <p><strong>Progress:</strong> {{ picks_made }} of {{ total_games }} picks made 
+                               ({{ "%.1f"|format((picks_made/total_games*100) if total_games > 0 else 0) }}% complete)</p>
+                        </div>
+                        
+                        <div class="picks-table-container">
+                            <table class="picks-table">
+                                <thead>
+                                    <tr>
+                                        <th>Game</th>
+                                        <th>Away Team</th>
+                                        <th>Home Team</th>
+                                        <th>Your Pick</th>
+                                        <th>MNF Score Prediction</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for pick in user_picks_data %}
+                                    <tr class="{% if not pick.has_pick %}no-pick{% endif %} {% if pick.is_monday_night %}monday-night{% endif %}">
+                                        <td>{{ pick.game_label }}</td>
+                                        <td>{{ pick.away_team }}</td>
+                                        <td>{{ pick.home_team }}</td>
+                                        <td class="{% if pick.has_pick %}has-pick{% else %}missing-pick{% endif %}">
+                                            {{ pick.selected_team }}
+                                        </td>
+                                        <td>
+                                            {% if pick.is_monday_night and pick.predicted_home_score and pick.predicted_away_score %}
+                                                {{ pick.predicted_home_score }}-{{ pick.predicted_away_score }}
+                                            {% elif pick.is_monday_night %}
+                                                <span class="missing-prediction">No prediction</span>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <div class="export-actions">
+                        {% if user_picks_data %}
                         <button onclick="exportSelectedWeek()" class="btn btn-primary btn-large">
-                            📤 Export Selected Week (Download or Copy)
+                            📤 Export Week {{ selected_week }} (Download or Copy)
                         </button>
+                        {% endif %}
                         <button onclick="exportCurrentWeek()" class="btn btn-secondary btn-large">
-                            📤 Export Current Week (Download or Copy)
+                            📤 Export Current Week {{ current_week }} (Download or Copy)
                         </button>
                     </div>
                 </div>
@@ -122,6 +171,14 @@
     </div>
 
     <script>
+        function loadWeekPicks() {
+            const selector = document.getElementById('week-year-select');
+            const [week, year] = selector.value.split('-');
+            
+            // Reload page with selected week
+            window.location.href = `{{ url_for('my_picks_export') }}?week=${week}&year=${year}`;
+        }
+
         function exportSelectedWeek() {
             const selector = document.getElementById('week-year-select');
             const [week, year] = selector.value.split('-');
@@ -282,6 +339,97 @@
 
         .preview tbody tr:nth-child(even) {
             background-color: #fafafa;
+        }
+
+        /* Picks Display Styling */
+        .picks-display {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .picks-display h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        .picks-summary {
+            background: #e8f4fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .picks-summary p {
+            margin: 0;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .picks-table-container {
+            overflow-x: auto;
+        }
+
+        .picks-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .picks-table th,
+        .picks-table td {
+            border: 1px solid #ddd;
+            padding: 12px 8px;
+            text-align: left;
+        }
+
+        .picks-table th {
+            background-color: #34495e;
+            color: white;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        .picks-table tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .picks-table tbody tr:hover {
+            background-color: #e8f4fd;
+        }
+
+        .picks-table .has-pick {
+            color: #27ae60;
+            font-weight: 600;
+        }
+
+        .picks-table .missing-pick {
+            color: #e74c3c;
+            font-style: italic;
+        }
+
+        .picks-table .missing-prediction {
+            color: #f39c12;
+            font-style: italic;
+            font-size: 12px;
+        }
+
+        .picks-table tr.monday-night {
+            background-color: #fff3cd !important;
+            border-left: 4px solid #ffc107;
+        }
+
+        .picks-table tr.monday-night:hover {
+            background-color: #ffeaa7 !important;
+        }
+
+        .picks-table tr.no-pick {
+            background-color: #ffeaa7;
         }
 
         @media (max-width: 768px) {
