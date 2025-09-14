@@ -2955,7 +2955,8 @@ def export_my_picks_csv():
                     # For actual Monday Night Football, include score prediction
                     home_score = pick_data.get('predicted_home_score', '')
                     away_score = pick_data.get('predicted_away_score', '')
-                    score_prediction = f"{home_score}-{away_score}" if home_score and away_score else ''
+                    # Format as text to prevent Excel from converting numbers to months
+                    score_prediction = f"'{home_score}-{away_score}" if home_score and away_score else ''
                     
                     monday_night_games.append([game_label, selected_team, score_prediction])
                 else:
@@ -2988,7 +2989,8 @@ def export_my_picks_csv():
                 home_score = pick_data.get('predicted_home_score', '')
                 away_score = pick_data.get('predicted_away_score', '')
                 if home_score and away_score:
-                    monday_prediction = f"{home_score}-{away_score}"
+                    # Format as text to prevent Excel conversion
+                    monday_prediction = f"'{home_score}-{away_score}"
             
             if monday_prediction:
                 writer.writerow([f'Monday Night Prediction: {monday_prediction}', '', ''])
@@ -3491,9 +3493,10 @@ def export_all_users_picks_csv():
                     
                     scores = cursor.fetchone()
                     if scores and scores[0] is not None and scores[1] is not None:
-                        home_score = scores[0]
-                        away_score = scores[1]
-                        monday_scores_header.append(f"{home_score}-{away_score}")
+                        home_score = str(scores[0])  # Ensure it's treated as text
+                        away_score = str(scores[1])  # Ensure it's treated as text
+                        # Format as text to prevent Excel from converting to months
+                        monday_scores_header.append(f"'{home_score}-{away_score}")
                     else:
                         monday_scores_header.append("")
                 else:
