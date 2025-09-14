@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, make_response
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, make_response, after_this_request
 import sqlite3
 import os
 import logging
@@ -118,8 +118,36 @@ def get_dashboard_data(user_id: int, week: int, year: int) -> Dict[str, int]:
         }
 
 
-@app.route('/')
+# Security middleware to handle suspicious requests
+@app.before_request
+def security_headers():
+    """Add security headers and block suspicious requests"""
+    # Block requests for common vulnerability scan paths
+    suspicious_paths = [
+        '/.env', '/.env.save', '/.env.backup', '/hudson', 
+        '/jenkins', '/wp-admin', '/admin.php', '/config.php',
+        '/phpinfo.php', '/wp-config.php'
+    ]
+    
+    if request.path in suspicious_paths:
+        logger.warning(f"Blocked suspicious request: {request.remote_addr} -> {request.path}")
+        return "Not Found", 404
+    
+    # Add security headers to all responses
+    @after_this_request
+    def add_security_headers(response):
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        return response
+
+@app.route('/', methods=['GET', 'POST'])
 def index():
+    # Handle POST requests (often from bots/crawlers)
+    if request.method == 'POST':
+        return redirect(url_for('login')), 302
+    
     # Check if user is logged in
     if 'user_id' not in session:
         return redirect(url_for('login'))
@@ -186,6 +214,31 @@ def index():
     response.headers['Last-Modified'] = datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT')
     
     return response
+
+
+# Health check endpoint for monitoring
+@app.route('/health')
+def health_check():
+    """Simple health check endpoint"""
+    try:
+        # Quick database connectivity test
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+        
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'version': '1.0'
+        }), 200
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 503
 
 
 @app.after_request
@@ -1566,12 +1619,28 @@ def admin_update_scoring():
 
 @app.errorhandler(404)
 def not_found_error(error):
+    # Log suspicious 404s but don't spam logs for common paths
+    path = request.path
+    suspicious_paths = ['/.env', '/hudson', '/wp-admin', '.php', '.asp']
+    
+    if any(sus in path for sus in suspicious_paths):
+        logger.warning(f"404 blocked suspicious path: {request.remote_addr} -> {path}")
+    else:
+        logger.info(f"404 Not Found: {path}")
+    
     return render_template('error.html', error="Page not found"), 404
 
 
 @app.errorhandler(500)
 def internal_error(error):
+    logger.error(f"500 Internal Server Error: {error}")
     return render_template('error.html', error="Internal server error"), 500
+
+
+@app.errorhandler(405)
+def method_not_allowed_error(error):
+    logger.warning(f"405 Method Not Allowed: {request.method} {request.path} from {request.remote_addr}")
+    return jsonify({'error': 'Method not allowed'}), 405
 
 
 @app.route('/force_create_games/<int:week>/<int:year>')
