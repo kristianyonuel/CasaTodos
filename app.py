@@ -216,31 +216,6 @@ def index():
     return response
 
 
-# Health check endpoint for monitoring
-@app.route('/health')
-def health_check():
-    """Simple health check endpoint"""
-    try:
-        # Quick database connectivity test
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT 1')
-            cursor.fetchone()
-        
-        return jsonify({
-            'status': 'healthy',
-            'timestamp': datetime.now().isoformat(),
-            'version': '1.0'
-        }), 200
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return jsonify({
-            'status': 'unhealthy',
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 503
-
-
 @app.after_request
 def add_cache_busting_headers(response):
     """Add cache-busting headers to prevent browser caching issues"""
