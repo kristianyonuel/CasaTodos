@@ -2369,12 +2369,35 @@ def weekly_leaderboard(week=None, year=None):
     
     # Default to current week if still not specified
     if week is None:
-        # Use smart NFL week calculation based on game completion
+        # Use smart NFL week calculation - default to most recent week with completed games
         try:
-            from nfl_week_calculator import get_current_nfl_week
-            week = get_current_nfl_week(2025)
+            conn = get_db_legacy()
+            cursor = conn.cursor()
+            
+            # First, try to find the most recent week with significant completed games (at least 8 games)
+            cursor.execute('''
+                SELECT week, COUNT(*) as completed_games
+                FROM nfl_games 
+                WHERE year = 2025 AND is_final = 1
+                GROUP BY week
+                HAVING completed_games >= 8
+                ORDER BY week DESC
+                LIMIT 1
+            ''')
+            recent_completed = cursor.fetchone()
+            
+            if recent_completed:
+                week = recent_completed[0]
+                logger.info(f"Weekly leaderboard defaulting to Week {week} (most recent with {recent_completed[1]} completed games)")
+            else:
+                # Fallback to current NFL week if no completed weeks found
+                from nfl_week_calculator import get_current_nfl_week
+                week = get_current_nfl_week(2025)
+                logger.info(f"Weekly leaderboard defaulting to current Week {week} (no completed weeks found)")
+            
+            conn.close()
         except Exception as e:
-            logger.error(f"Error calculating current week: {e}")
+            logger.error(f"Error calculating leaderboard week: {e}")
             # Fallback to calendar calculation
             from datetime import datetime
             current_date = datetime.now()
