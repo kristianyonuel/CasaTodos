@@ -35,6 +35,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Helper function for flexible datetime parsing
+def parse_game_date(date_string):
+    """Parse game_date string with multiple format support"""
+    if not date_string:
+        return None
+    
+    if not isinstance(date_string, str):
+        return date_string  # Already a datetime object
+    
+    # Try multiple datetime formats
+    formats = ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S']
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_string, fmt)
+        except ValueError:
+            continue
+    
+    # If none worked, log and return None
+    logger.error(f"Unable to parse date format: {date_string}")
+    return None
+
 app = Flask(__name__)
 app.secret_key = 'nfl-fantasy-secret-key-2024'
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -2519,17 +2540,7 @@ def weekly_leaderboard(week=None, year=None):
                 selected_team, pred_home, pred_away, home_team, away_team, actual_home, actual_away, is_final, is_correct, game_date = pick
                 
                 # Parse game_date string to datetime object if needed
-                parsed_game_date = None
-                if game_date:
-                    try:
-                        from datetime import datetime
-                        if isinstance(game_date, str):
-                            parsed_game_date = datetime.strptime(game_date, '%Y-%m-%d %H:%M:%S')
-                        else:
-                            parsed_game_date = game_date
-                    except Exception as e:
-                        logger.error(f"Error parsing pick game_date {game_date}: {e}")
-                        parsed_game_date = None  # safer fallback
+                parsed_game_date = parse_game_date(game_date)
                 
                 pick_detail = {
                     'home_team': home_team,
@@ -2740,17 +2751,7 @@ def weekly_leaderboard(week=None, year=None):
             
             for row in cursor.fetchall():
                 # Parse game_date string to datetime object
-                game_date = None
-                if row[3]:  # game_date
-                    try:
-                        from datetime import datetime
-                        if isinstance(row[3], str):
-                            game_date = datetime.strptime(row[3], '%Y-%m-%d %H:%M:%S')
-                        else:
-                            game_date = row[3]  # already a datetime object
-                    except Exception as e:
-                        logger.error(f"Error parsing game_date {row[3]}: {e}")
-                        game_date = None  # safer fallback to prevent template errors
+                game_date = parse_game_date(row[3])
                 
                 games.append({
                     'id': row[0],
