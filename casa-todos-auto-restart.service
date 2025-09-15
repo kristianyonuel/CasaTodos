@@ -1,0 +1,39 @@
+[Unit]
+Description=La Casa de Todos NFL Fantasy Server (Auto-Restart)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/home/casa/CasaTodos
+Environment=PATH=/home/casa/CasaTodos/venv/bin
+ExecStart=/home/casa/CasaTodos/venv/bin/python app.py production
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+
+# Auto-restart configuration
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=5
+
+# Health monitoring
+WatchdogSec=30
+NotifyAccess=none
+
+# Logging
+StandardOutput=append:/home/casa/CasaTodos/app.log
+StandardError=append:/home/casa/CasaTodos/error.log
+SyslogIdentifier=casa-todos
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/casa/CasaTodos
+
+[Install]
+WantedBy=multi-user.target

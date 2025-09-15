@@ -1,0 +1,47 @@
+[Unit]
+Description=La Casa de Todos NFL Fantasy League Server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/home/casa/CasaTodos
+Environment=PATH=/home/casa/CasaTodos/venv/bin
+ExecStart=/home/casa/CasaTodos/venv/bin/python app.py production
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+
+# Auto-restart configuration
+Restart=always
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=300
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Resource limits
+LimitNOFILE=65536
+
+# Environment variables
+Environment=PYTHONPATH=/home/casa/CasaTodos
+Environment=FLASK_ENV=production
+Environment=PYTHONUNBUFFERED=1
+
+# Logging
+StandardOutput=append:/home/casa/CasaTodos/app.log
+StandardError=append:/home/casa/CasaTodos/app.log
+SyslogIdentifier=lacasadetodos
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/home/casa/CasaTodos
+
+# Network access (required for ports 80/443)
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

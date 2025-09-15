@@ -3660,6 +3660,57 @@ def admin_auto_update_scores():
         logger.error(f"Error toggling auto score updates: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/health')
+def health_check():
+    """Health check endpoint for monitoring and auto-restart systems"""
+    try:
+        # Check database connectivity
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM users LIMIT 1')
+            user_count = cursor.fetchone()[0]
+        
+        # Check background updater status (if available)
+        updater_status = "unknown"
+        try:
+            from background_updater import get_updater_status
+            status = get_updater_status()
+            updater_status = "running" if status.get('running') else "stopped"
+        except:
+            updater_status = "not_available"
+        
+        # Return health status
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'database': 'connected',
+            'users_count': user_count,
+            'background_updater': updater_status,
+            'version': '1.0.0'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            'status': 'unhealthy',
+            'timestamp': datetime.now().isoformat(),
+            'error': str(e),
+            'version': '1.0.0'
+        }), 500
+        
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            'status': 'unhealthy',
+            'timestamp': datetime.now().isoformat(),
+            'error': str(e)
+        }), 500
+
+@app.route('/health/simple')
+def simple_health_check():
+    """Simple health check that just returns OK"""
+    return "OK", 200
+
 # Register shutdown handler to stop background updater
 def shutdown_handler():
     """Clean shutdown of background services"""

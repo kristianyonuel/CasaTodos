@@ -1,0 +1,19 @@
+[Unit]
+Description=La Casa de Todos Watchdog Monitor
+After=lacasadetodos.service
+Requires=lacasadetodos.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/casa/CasaTodos
+ExecStart=/home/casa/CasaTodos/lacasadetodos_watchdog.sh
+Restart=always
+RestartSec=30
+
+# Logging
+StandardOutput=append:/home/casa/CasaTodos/watchdog.log
+StandardError=append:/home/casa/CasaTodos/watchdog.log
+
+[Install]
+WantedBy=multi-user.target

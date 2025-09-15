@@ -44,11 +44,15 @@ conn.close()
 "
 
 # Restart the application service
-echo "🔄 Restarting application service..."
+echo "🔄 Restarting lacasadetodos service..."
 
-# Option 1: If using systemd service
-if systemctl is-active --quiet nfl-fantasy; then
-    echo "Restarting systemd service..."
+# Check if lacasadetodos service exists and restart it
+if systemctl is-active --quiet lacasadetodos; then
+    echo "Restarting lacasadetodos service..."
+    sudo systemctl restart lacasadetodos
+    sudo systemctl status lacasadetodos --no-pager
+elif systemctl is-active --quiet nfl-fantasy; then
+    echo "Restarting nfl-fantasy service..."
     sudo systemctl restart nfl-fantasy
     sudo systemctl status nfl-fantasy --no-pager
 elif systemctl is-active --quiet casa-todos; then
@@ -56,7 +60,17 @@ elif systemctl is-active --quiet casa-todos; then
     sudo systemctl restart casa-todos
     sudo systemctl status casa-todos --no-pager
 else
-    echo "⚠️  No systemd service found. Please restart manually:"
+    echo "⚠️  No systemd service found. Setting up lacasadetodos service..."
+    
+    # Copy service file and start service
+    sudo cp lacasadetodos.service /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl enable lacasadetodos
+    sudo systemctl start lacasadetodos
+    sudo systemctl status lacasadetodos --no-pager
+    
+    echo ""
+    echo "📋 Manual restart options if needed:"
     echo "   Option A: Kill existing processes and restart"
     echo "   pkill -f 'python.*app.py' && nohup python app.py > app.log 2>&1 &"
     echo ""
