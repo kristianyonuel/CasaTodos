@@ -2673,14 +2673,17 @@ def weekly_leaderboard(week=None, year=None):
         except Exception as e:
             logger.error(f"Error checking week completion: {e}")
         
-        # Get all picks data for Thursday revelation (similar to games route)
+        # Get all picks data with game results for CSV-style display
         all_picks = []
+        picks_by_game = {}
         try:
             conn = get_db_legacy()
             cursor = conn.cursor()
             
             cursor.execute('''
-                SELECT g.id, u.username, up.selected_team, up.predicted_home_score, up.predicted_away_score
+                SELECT g.id, u.username, up.selected_team, up.predicted_home_score, up.predicted_away_score,
+                       up.is_correct, g.away_team, g.home_team, g.home_score, g.away_score, g.is_final,
+                       g.is_monday_night
                 FROM user_picks up
                 JOIN nfl_games g ON up.game_id = g.id
                 JOIN users u ON up.user_id = u.id
@@ -2689,13 +2692,35 @@ def weekly_leaderboard(week=None, year=None):
             ''', (week, year))
             
             for row in cursor.fetchall():
-                all_picks.append({
+                pick_data = {
                     'game_id': row[0],
                     'username': row[1],
                     'selected_team': row[2],
                     'predicted_home_score': row[3],
-                    'predicted_away_score': row[4]
-                })
+                    'predicted_away_score': row[4],
+                    'is_correct': row[5],
+                    'away_team': row[6],
+                    'home_team': row[7],
+                    'home_score': row[8],
+                    'away_score': row[9],
+                    'is_final': row[10],
+                    'is_monday_night': row[11]
+                }
+                all_picks.append(pick_data)
+                
+                # Group picks by game for CSV-style display
+                if row[0] not in picks_by_game:
+                    picks_by_game[row[0]] = {
+                        'game_id': row[0],
+                        'away_team': row[6],
+                        'home_team': row[7],
+                        'home_score': row[8],
+                        'away_score': row[9],
+                        'is_final': row[10],
+                        'is_monday_night': row[11],
+                        'picks': []
+                    }
+                picks_by_game[row[0]]['picks'].append(pick_data)
             conn.close()
         except Exception as e:
             logger.error(f"Error getting all picks data: {e}")
@@ -2752,6 +2777,7 @@ def weekly_leaderboard(week=None, year=None):
                                  saturday_deadline_passed=saturday_deadline_passed,
                                  week_completed=week_completed,
                                  all_picks=all_picks,
+                                 picks_by_game=picks_by_game,
                                  games=games)
     
     except Exception as e:
