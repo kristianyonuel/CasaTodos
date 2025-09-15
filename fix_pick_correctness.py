@@ -10,7 +10,7 @@ import sqlite3
 import sys
 import os
 
-def fix_pick_correctness(database_path='database.db'):
+def fix_pick_correctness(database_path='nfl_fantasy.db'):
     """Fix pick correctness for all completed games"""
     
     print(f"🔧 Fixing pick correctness in database: {database_path}")
@@ -119,7 +119,7 @@ def fix_pick_correctness(database_path='database.db'):
 
 if __name__ == "__main__":
     # Allow custom database path as command line argument
-    database_path = sys.argv[1] if len(sys.argv) > 1 else 'database.db'
+    database_path = sys.argv[1] if len(sys.argv) > 1 else 'nfl_fantasy.db'
     
     print("🏈 NFL Fantasy Pick Correctness Fixer")
     print("=" * 50)

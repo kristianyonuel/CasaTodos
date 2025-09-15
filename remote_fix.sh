@@ -14,7 +14,7 @@ git pull origin main
 
 # Run the pick correctness fix
 echo "🔧 Fixing pick correctness calculation..."
-python3 fix_pick_correctness.py
+python3 fix_pick_correctness.py nfl_fantasy.db
 
 # Restart the application
 echo "🔄 Restarting application..."
