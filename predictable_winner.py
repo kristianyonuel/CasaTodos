@@ -295,7 +295,7 @@ def get_winner_prediction_summary(week: int = 1, year: int = 2025) -> str:
             conn = sqlite3.connect('nfl_fantasy.db')
             cursor = conn.cursor()
             
-            # Get current leader
+            # Get current top standings
             cursor.execute('''
                 SELECT u.username, COUNT(CASE WHEN g.is_final = 1 AND p.is_correct = 1 THEN 1 END) as wins
                 FROM users u
@@ -304,38 +304,64 @@ def get_winner_prediction_summary(week: int = 1, year: int = 2025) -> str:
                 WHERE g.week = ? AND g.year = ? AND u.is_admin = 0
                 GROUP BY u.id, u.username
                 ORDER BY wins DESC, u.username
-                LIMIT 1
             ''', (week, year))
             
-            leader_data = cursor.fetchone()
-            if leader_data:
-                current_leader, current_wins = leader_data
+            all_standings = cursor.fetchall()
+            if all_standings:
+                # Check if there's a tie at the top
+                max_wins = all_standings[0][1]
+                leaders = [user for user, wins in all_standings
+                          if wins == max_wins]
                 
-                # Check who has Houston pick
+                # Get Houston pickers who could benefit
                 cursor.execute('''
-                    SELECT u.username FROM users u
+                    SELECT u.username, COUNT(CASE WHEN g.is_final = 1
+                           AND p.is_correct = 1 THEN 1 END) as current_wins
+                    FROM users u
                     JOIN user_picks p ON u.id = p.user_id
                     JOIN nfl_games g ON p.game_id = g.id
-                    WHERE g.week = ? AND g.year = ? AND g.home_team = 'HOU' 
-                    AND p.selected_team = 'HOU' AND u.is_admin = 0
-                ''', (week, year))
+                    WHERE g.week = ? AND g.year = ? AND u.is_admin = 0
+                    GROUP BY u.id, u.username
+                    HAVING u.id IN (
+                        SELECT up.user_id FROM user_picks up
+                        JOIN nfl_games ng ON up.game_id = ng.id
+                        WHERE ng.week = ? AND ng.year = ?
+                        AND ng.home_team = 'HOU'
+                        AND up.selected_team = 'HOU'
+                    )
+                    ORDER BY current_wins DESC
+                ''', (week, year, week, year))
                 
-                houston_pickers = [row[0] for row in cursor.fetchall()]
-                
+                houston_beneficiaries = cursor.fetchall()
                 conn.close()
                 
-                # Create progressive summary
-                if houston_pickers:
-                    houston_names = ', '.join(houston_pickers[:2])
-                    if len(houston_pickers) > 2:
-                        houston_names += f" +{len(houston_pickers)-2}"
+                # Create accurate summary
+                if len(leaders) == 1:
+                    leader_text = f"{leaders[0]} leads with {max_wins} wins"
+                else:
+                    leader_names = ', '.join(leaders)
+                    leader_text = f"{leader_names} tied at {max_wins} wins"
+                
+                # Focus on who can catch up or benefit from Houston win
+                relevant_beneficiaries = [
+                    name for name, wins in houston_beneficiaries
+                    if wins >= max_wins - 1
+                ]
+                
+                if relevant_beneficiaries:
+                    benefit_text = ', '.join(relevant_beneficiaries[:2])
+                    if len(relevant_beneficiaries) > 2:
+                        benefit_text += f" +{len(relevant_beneficiaries)-2}"
                     
-                    return (f"🎯 {current_leader} leads with {current_wins} wins → "
-                           f"If HOU wins: {houston_names} catch up → "
-                           f"Then {game2} + score predictions decide winner")
+                    return (f"🎯 {leader_text} → "
+                            f"If HOU wins: {benefit_text} benefit → "
+                            f"Then {game2} + score predictions decide winner")
+                else:
+                    return (f"🎯 {leader_text} → "
+                            f"TB@HOU then {game2} outcomes determine winner")
                 
             conn.close()
-        except Exception as e:
+        except Exception:
             pass
         
         # Fallback to scenario analysis
