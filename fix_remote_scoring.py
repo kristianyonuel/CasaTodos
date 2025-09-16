@@ -15,7 +15,37 @@ def fix_pick_scoring():
         conn = sqlite3.connect('nfl_fantasy.db')
         cursor = conn.cursor()
         
-        print("🔍 Checking for NULL picks in final games...")
+        print("🔍 Checking for games that need scoring updates...")
+        
+        # First, check for Monday Night game that might need final score update
+        print("\n📺 Checking Monday Night Football games...")
+        cursor.execute('''
+            SELECT id, away_team, home_team, away_score, home_score, 
+                   is_final, game_date, week, year
+            FROM nfl_games 
+            WHERE (is_monday_night = 1 OR strftime('%w', game_date) = '1')
+            AND is_final = 0
+            AND date(game_date) <= date('now')
+            ORDER BY game_date DESC
+        ''')
+        
+        incomplete_mnf = cursor.fetchall()
+        
+        if incomplete_mnf:
+            print(f"⚠️  Found {len(incomplete_mnf)} Monday Night games that should be completed:")
+            for game in incomplete_mnf:
+                game_id, away, home, away_score, home_score, is_final, date, week, year = game
+                print(f"   Game {game_id}: {away} @ {home} - Week {week}, {year} ({date})")
+                
+                # Special fix for LAC @ LV Monday Night game (Game 166)
+                if game_id == 166 and away == 'LAC' and home == 'LV':
+                    print(f"   🔧 Fixing LAC @ LV Monday Night game with correct score...")
+                    cursor.execute('''
+                        UPDATE nfl_games 
+                        SET away_score = 22, home_score = 10, is_final = 1, game_status = 'Final'
+                        WHERE id = 166
+                    ''')
+                    print(f"   ✅ Updated: LAC 22 - 10 LV (Final)")
         
         # Find all picks for final games that are marked as NULL
         cursor.execute('''
