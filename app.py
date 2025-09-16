@@ -886,29 +886,43 @@ def leaderboard():
     conn = get_db_legacy()
     cursor = conn.cursor()
     
-    # Calculate leaderboard directly from picks and games (like weekly leaderboard)
-    # This ensures it shows current data even if weekly_results isn't populated
+    # Calculate leaderboard using subqueries to avoid Cartesian product from multiple JOINs
     cursor.execute('''
         SELECT u.username,
-               COUNT(DISTINCT CASE WHEN wr.is_winner = 1 THEN wr.week || '-' || wr.year END) as weekly_wins,
-               SUM(CASE WHEN p.is_correct = 1 AND g.is_final = 1 THEN 1 ELSE 0 END) as total_games_won,
-               COUNT(DISTINCT CASE WHEN g.is_final = 1 THEN g.week || '-' || g.year END) as weeks_played,
-               COUNT(CASE WHEN g.is_final = 1 THEN 1 END) as total_games_played,
+               (SELECT COUNT(*) FROM weekly_results wr WHERE wr.user_id = u.id AND wr.is_winner = 1) as weekly_wins,
+               (SELECT SUM(CASE WHEN p2.is_correct = 1 AND g2.is_final = 1 THEN 1 ELSE 0 END) 
+                FROM user_picks p2 
+                JOIN nfl_games g2 ON p2.game_id = g2.id 
+                WHERE p2.user_id = u.id) as total_games_won,
+               (SELECT COUNT(DISTINCT g3.week || '-' || g3.year) 
+                FROM user_picks p3 
+                JOIN nfl_games g3 ON p3.game_id = g3.id 
+                WHERE p3.user_id = u.id AND g3.is_final = 1) as weeks_played,
+               (SELECT COUNT(*) 
+                FROM user_picks p4 
+                JOIN nfl_games g4 ON p4.game_id = g4.id 
+                WHERE p4.user_id = u.id AND g4.is_final = 1) as total_games_played,
                ROUND(
                    CASE 
-                       WHEN COUNT(DISTINCT CASE WHEN g.is_final = 1 THEN g.week || '-' || g.year END) > 0
-                       THEN CAST(SUM(CASE WHEN p.is_correct = 1 AND g.is_final = 1 THEN 1 ELSE 0 END) AS FLOAT) / 
-                            COUNT(DISTINCT CASE WHEN g.is_final = 1 THEN g.week || '-' || g.year END)
+                       WHEN (SELECT COUNT(DISTINCT g5.week || '-' || g5.year) 
+                             FROM user_picks p5 
+                             JOIN nfl_games g5 ON p5.game_id = g5.id 
+                             WHERE p5.user_id = u.id AND g5.is_final = 1) > 0
+                       THEN CAST((SELECT SUM(CASE WHEN p6.is_correct = 1 AND g6.is_final = 1 THEN 1 ELSE 0 END) 
+                                  FROM user_picks p6 
+                                  JOIN nfl_games g6 ON p6.game_id = g6.id 
+                                  WHERE p6.user_id = u.id) AS FLOAT) / 
+                            (SELECT COUNT(DISTINCT g7.week || '-' || g7.year) 
+                             FROM user_picks p7 
+                             JOIN nfl_games g7 ON p7.game_id = g7.id 
+                             WHERE p7.user_id = u.id AND g7.is_final = 1)
                        ELSE 0 
                    END, 1
                ) as avg_games_won_per_week
         FROM users u
-        LEFT JOIN user_picks p ON u.id = p.user_id
-        LEFT JOIN nfl_games g ON p.game_id = g.id
-        LEFT JOIN weekly_results wr ON u.id = wr.user_id
-        WHERE u.is_admin = 0
-        GROUP BY u.id, u.username
-        HAVING COUNT(CASE WHEN g.is_final = 1 THEN 1 END) > 0 OR COUNT(CASE WHEN wr.is_winner = 1 THEN 1 END) > 0
+        WHERE u.is_admin = 0 
+        AND ((SELECT COUNT(*) FROM user_picks p8 JOIN nfl_games g8 ON p8.game_id = g8.id WHERE p8.user_id = u.id AND g8.is_final = 1) > 0 
+             OR (SELECT COUNT(*) FROM weekly_results wr WHERE wr.user_id = u.id AND wr.is_winner = 1) > 0)
         ORDER BY weekly_wins DESC, total_games_won DESC, avg_games_won_per_week DESC, u.username
     ''')
     
