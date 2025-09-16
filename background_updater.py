@@ -14,13 +14,33 @@ from api_rate_limiter import check_api_rate_limit
 logger = logging.getLogger(__name__)
 
 class BackgroundGameUpdater:
-    """Handles automatic game score updates every 15 minutes"""
+    """Handles automatic game score updates with intelligent frequency"""
     
-    def __init__(self, update_interval: int = 15):
-        self.update_interval = update_interval * 60  # Convert minutes to seconds
+    def __init__(self, update_interval: int = 5):
+        self.default_interval = update_interval * 60  # Convert minutes to seconds
         self.running = False
         self.thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
+        
+    def _get_dynamic_interval(self) -> int:
+        """Get dynamic update interval based on current time and game status"""
+        try:
+            current_day = datetime.now().weekday()  # 0=Monday, 6=Sunday
+            current_hour = datetime.now().hour
+            
+            # Game days: Thursday (3), Saturday (5), Sunday (6), Monday (0), Tuesday (1)
+            game_days = [0, 1, 3, 5, 6]
+            
+            # During game days and peak game hours (11 AM - 11 PM)
+            if current_day in game_days and 11 <= current_hour <= 23:
+                return 5 * 60  # 5 minutes during game times
+            # Non-game days or off-peak hours
+            else:
+                return 30 * 60  # 30 minutes during quiet periods
+                
+        except Exception as e:
+            logger.error(f"Error calculating dynamic interval: {e}")
+            return self.default_interval
         
     def start(self):
         """Start the background updater"""
@@ -32,7 +52,7 @@ class BackgroundGameUpdater:
         self.stop_event.clear()
         self.thread = threading.Thread(target=self._update_loop, daemon=True)
         self.thread.start()
-        logger.info(f"Background game updater started (updates every {self.update_interval//60} minutes)")
+        logger.info("Background game updater started with dynamic intervals")
         
     def stop(self):
         """Stop the background updater"""
@@ -46,15 +66,23 @@ class BackgroundGameUpdater:
         logger.info("Background game updater stopped")
         
     def _update_loop(self):
-        """Main update loop that runs in background thread"""
+        """Main update loop with dynamic intervals"""
         while self.running and not self.stop_event.is_set():
             try:
+                # Get current interval (5 min during games, 30 min otherwise)
+                current_interval = self._get_dynamic_interval()
+                
+                # Log current interval for monitoring
+                interval_min = current_interval // 60
+                logger.info(f"Update cycle starting (next in {interval_min} min)")
+                
                 self._update_games()
             except Exception as e:
                 logger.error(f"Error in background game update: {e}")
                 
-            # Wait for next update interval or stop event
-            self.stop_event.wait(self.update_interval)
+            # Wait for dynamic interval or stop event
+            current_interval = self._get_dynamic_interval()
+            self.stop_event.wait(current_interval)
             
     def _update_games(self):
         """Update game scores for current week using ESPN API and new score updater"""
@@ -138,24 +166,31 @@ class BackgroundGameUpdater:
         
     def get_status(self) -> dict:
         """Get current status of the background updater"""
+        current_interval = self._get_dynamic_interval() if self.is_running() else None
         return {
             'running': self.is_running(),
-            'update_interval_minutes': self.update_interval // 60,
+            'update_interval_minutes': current_interval // 60 if current_interval else None,
+            'dynamic_intervals': True,
+            'game_time_interval': '5 minutes',
+            'off_peak_interval': '30 minutes',
             'current_week': self._get_current_nfl_week(),
-            'next_update_in_seconds': self.update_interval if self.is_running() else None
+            'next_update_in_seconds': current_interval if self.is_running() else None
         }
 
-# Global instance - changed to 30 minutes (1800 seconds) for ESPN API
-game_updater = BackgroundGameUpdater(update_interval=1800)  # 30 minutes
+# Global instance - dynamic intervals: 5 min during games, 30 min off-peak
+game_updater = BackgroundGameUpdater(update_interval=5)
+
 
 def start_background_updater():
     """Start the global background game updater"""
     game_updater.start()
     
+
 def stop_background_updater():
     """Stop the global background game updater"""
     game_updater.stop()
     
+
 def get_updater_status():
     """Get status of the global background updater"""
     return game_updater.get_status()

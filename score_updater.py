@@ -312,6 +312,18 @@ class NFLScoreUpdater:
         except Exception as e:
             logger.error(f"Error updating pick correctness for game {game_id}: {e}")
     
+    def trigger_leaderboard_refresh(self):
+        """Trigger leaderboard cache refresh after game updates"""
+        try:
+            # This could be used to clear cache, trigger webhooks, etc.
+            logger.info("Triggering leaderboard refresh after game updates")
+            
+            # You could add cache clearing logic here if you implement caching
+            # For now, just log that updates occurred
+            
+        except Exception as e:
+            logger.error(f"Error triggering leaderboard refresh: {e}")
+    
     def run_update_cycle(self) -> Dict:
         """Run a complete update cycle - fetch and update scores"""
         start_time = datetime.now()
@@ -341,6 +353,10 @@ class NFLScoreUpdater:
                 updated_count = self.update_game_scores(scores_data)
                 results['games_updated'] = updated_count
                 results['success'] = True
+                
+                # Trigger leaderboard refresh if any games were updated
+                if updated_count > 0:
+                    self.trigger_leaderboard_refresh()
                 
                 logger.info(f"Update cycle completed: {updated_count} games updated")
             else:
