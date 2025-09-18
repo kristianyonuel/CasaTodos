@@ -57,7 +57,8 @@ class ScoringUpdater:
                 # Get Monday Night pick data for this user
                 cursor.execute('''
                     SELECT p.predicted_home_score, p.predicted_away_score, p.selected_team,
-                           g.home_score, g.away_score, p.created_at
+                           g.home_score, g.away_score, p.created_at,
+                           g.home_team, g.away_team
                     FROM user_picks p
                     JOIN nfl_games g ON p.game_id = g.id
                     WHERE p.user_id = ? AND g.week = ? AND g.year = ? 
@@ -81,10 +82,19 @@ class ScoringUpdater:
                     pred_away = monday_pick['predicted_away_score'] or 0
                     actual_home = monday_pick['home_score'] or 0
                     actual_away = monday_pick['away_score'] or 0
+                    home_team = monday_pick['home_team']
+                    away_team = monday_pick['away_team']
                     
                     # Check if user predicted correct winner based on selected_team field
                     selected_team = monday_pick['selected_team']
-                    actual_winner = 'MIN' if actual_away > actual_home else 'CHI'  # MIN is away, CHI is home
+                    # Determine actual winner from the game scores
+                    if actual_home > actual_away:
+                        actual_winner = home_team  # Home team won
+                    elif actual_away > actual_home:
+                        actual_winner = away_team  # Away team won
+                    else:
+                        actual_winner = None  # Tie game (rare in NFL)
+                    
                     correct_winner = selected_team == actual_winner
                     
                     monday_tiebreaker = {
