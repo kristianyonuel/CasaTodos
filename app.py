@@ -101,6 +101,17 @@ def initialize_app():
         print("Weekly results table verified")
     except Exception as e:
         logger.error(f"Error initializing weekly results table: {e}")
+    
+    # Auto-update scoring for any final games that may not have been scored yet
+    try:
+        from database_sync import recalculate_all_pick_correctness
+        updated_picks = recalculate_all_pick_correctness()
+        if updated_picks > 0:
+            print(f"✅ Auto-updated scoring for {updated_picks} picks on app startup")
+        else:
+            print("✅ All pick scoring is up to date")
+    except Exception as e:
+        logger.error(f"Error auto-updating pick scoring on startup: {e}")
 
 def get_dashboard_data(user_id: int, week: int, year: int) -> Dict[str, int]:
     """Get dashboard data with accurate game counts"""
@@ -1785,6 +1796,69 @@ def admin_delete_user():
         
     except Exception as e:
         logger.error(f"Admin delete user error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/force_finalize_game', methods=['POST'])
+def admin_force_finalize_game():
+    """Admin endpoint to manually finalize a game and trigger scoring"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        game_id = data.get('game_id')
+        away_score = data.get('away_score')
+        home_score = data.get('home_score')
+        
+        if not all([game_id, away_score is not None, home_score is not None]):
+            return jsonify({'error': 'Game ID, away_score, and home_score are required'}), 400
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Get game details
+            cursor.execute('SELECT away_team, home_team, week, year FROM nfl_games WHERE id = ?', (game_id,))
+            game = cursor.fetchone()
+            if not game:
+                return jsonify({'error': 'Game not found'}), 404
+            
+            away_team, home_team, week, year = game
+            
+            # Update game with final scores
+            cursor.execute('''
+                UPDATE nfl_games 
+                SET away_score = ?, home_score = ?, is_final = 1, game_status = 'FINAL'
+                WHERE id = ?
+            ''', (away_score, home_score, game_id))
+            
+            # Update pick correctness
+            winner = home_team if home_score > away_score else away_team if away_score > home_score else None
+            if winner:
+                cursor.execute('''
+                    UPDATE user_picks 
+                    SET is_correct = CASE 
+                        WHEN selected_team = ? THEN 1 
+                        ELSE 0 
+                    END
+                    WHERE game_id = ?
+                ''', (winner, game_id))
+                
+                picks_updated = cursor.rowcount
+            else:
+                picks_updated = 0  # Tie game
+            
+            conn.commit()
+            
+            logger.info(f"Admin {session['username']} force-finalized game {game_id}: {away_team} {away_score} - {home_team} {home_score}")
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Game finalized: {away_team} {away_score} - {home_team} {home_score}',
+            'picks_updated': picks_updated
+        })
+        
+    except Exception as e:
+        logger.error(f"Error force-finalizing game: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/admin/update_scoring', methods=['POST'])
