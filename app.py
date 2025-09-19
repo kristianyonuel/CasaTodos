@@ -464,6 +464,58 @@ def updater_status():
     return jsonify(status)
 
 
+@app.route('/debug_week3_data')
+def debug_week3_data():
+    """Debug route to check Week 3 data in real-time"""
+    try:
+        conn = get_db_legacy()
+        cursor = conn.cursor()
+        
+        # Check completed games
+        cursor.execute('''
+            SELECT COUNT(*) FROM nfl_games 
+            WHERE week = 3 AND year = 2025 AND is_final = 1
+        ''')
+        completed_games = cursor.fetchone()[0]
+        
+        # Check leaderboard data
+        cursor.execute('''
+            SELECT u.username, COUNT(p.id) as total_picks,
+                   SUM(CASE WHEN p.is_correct = 1 THEN 1 ELSE 0 END) as correct_picks
+            FROM users u
+            JOIN user_picks p ON u.id = p.user_id
+            JOIN nfl_games g ON p.game_id = g.id
+            WHERE g.week = 3 AND g.year = 2025 AND g.is_final = 1 AND u.is_admin = 0
+            GROUP BY u.id, u.username
+            HAVING total_picks > 0
+            ORDER BY correct_picks DESC, u.username
+        ''')
+        
+        leaderboard_data = []
+        for row in cursor.fetchall():
+            leaderboard_data.append({
+                'username': row[0],
+                'total_picks': row[1], 
+                'correct_picks': row[2]
+            })
+        
+        conn.close()
+        
+        return jsonify({
+            'status': 'success',
+            'completed_games': completed_games,
+            'leaderboard_users': len(leaderboard_data),
+            'leaderboard_data': leaderboard_data,
+            'message': 'This route tests real-time database access'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 @app.route('/admin/force_update_scores')
 def admin_force_update_scores():
     """Force immediate score update using ESPN API (admin only)"""
