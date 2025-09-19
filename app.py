@@ -516,6 +516,83 @@ def debug_week3_data():
         }), 500
 
 
+@app.route('/debug_deadline_logic')
+def debug_deadline_logic():
+    """Debug route to test the new deadline-based leaderboard logic"""
+    try:
+        conn = get_db_legacy()
+        cursor = conn.cursor()
+        
+        # Check games past deadline
+        cursor.execute('''
+            SELECT COUNT(*) FROM nfl_games 
+            WHERE week = 3 AND year = 2025 AND game_date < datetime('now')
+        ''')
+        games_past_deadline = cursor.fetchone()[0]
+        
+        # Check current time for context
+        cursor.execute("SELECT datetime('now') as current_time")
+        current_time = cursor.fetchone()[0]
+        
+        # Check which specific games are past deadline
+        cursor.execute('''
+            SELECT id, away_team, home_team, game_date, is_final
+            FROM nfl_games 
+            WHERE week = 3 AND year = 2025 
+            ORDER BY game_date
+        ''')
+        all_games = cursor.fetchall()
+        
+        # Check leaderboard data with new deadline logic
+        cursor.execute('''
+            SELECT u.username, COUNT(p.id) as total_picks,
+                   SUM(CASE WHEN p.is_correct = 1 THEN 1 ELSE 0 END) as correct_picks
+            FROM users u
+            JOIN user_picks p ON u.id = p.user_id
+            JOIN nfl_games g ON p.game_id = g.id
+            WHERE g.week = 3 AND g.year = 2025 AND g.game_date < datetime('now') AND u.is_admin = 0
+            GROUP BY u.id, u.username
+            HAVING total_picks > 0
+            ORDER BY correct_picks DESC, u.username
+        ''')
+        
+        leaderboard_data = []
+        for row in cursor.fetchall():
+            leaderboard_data.append({
+                'username': row[0],
+                'total_picks': row[1], 
+                'correct_picks': row[2]
+            })
+            
+        games_info = []
+        for game in all_games:
+            games_info.append({
+                'id': game[0],
+                'matchup': f"{game[1]} @ {game[2]}",
+                'game_date': game[3],
+                'is_final': game[4],
+                'past_deadline': game[3] < current_time if game[3] else False
+            })
+        
+        conn.close()
+        
+        return jsonify({
+            'status': 'success',
+            'current_time': current_time,
+            'games_past_deadline': games_past_deadline,
+            'leaderboard_users': len(leaderboard_data),
+            'leaderboard_data': leaderboard_data,
+            'games_info': games_info[:5],  # Show first 5 games
+            'message': 'This tests the deadline-based logic (shows picks only after game start time)'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 @app.route('/admin/force_update_scores')
 def admin_force_update_scores():
     """Force immediate score update using ESPN API (admin only)"""
@@ -2552,19 +2629,19 @@ def weekly_leaderboard(week=None, year=None):
         conn = get_db_legacy()
         cursor = conn.cursor()
         
-        # First, check if we have any completed games for this week
+        # First, check if we have any games past their deadline for this week
         cursor.execute('''
             SELECT COUNT(*) FROM nfl_games 
-            WHERE week = ? AND year = ? AND is_final = 1
+            WHERE week = ? AND year = ? AND game_date < datetime('now')
         ''', (week, year))
-        completed_games = cursor.fetchone()[0]
+        games_past_deadline = cursor.fetchone()[0]
         
-        if completed_games == 0:
-            # No completed games, show message
+        if games_past_deadline == 0:
+            # No games past deadline yet, show message
             cursor.execute('''
                 SELECT DISTINCT week, year 
                 FROM nfl_games 
-                WHERE is_final = 1
+                WHERE game_date < datetime('now')
                 ORDER BY year DESC, week DESC
                 LIMIT 10
             ''')
@@ -2576,9 +2653,10 @@ def weekly_leaderboard(week=None, year=None):
                                  current_week=week,
                                  current_year=year,
                                  available_weeks=available_weeks,
-                                 no_data_message=f"No completed games for Week {week}, {year}")
+                                 no_data_message=f"No games past deadline yet for Week {week}, {year}")
         
         # Get users who made picks for this week with simplified scoring (1 point per win)
+        # Only show picks for games that have passed their deadline (game_date < current time)
         cursor.execute('''
             SELECT u.id, u.username,
                    COUNT(p.id) as total_picks,
@@ -2586,7 +2664,7 @@ def weekly_leaderboard(week=None, year=None):
             FROM users u
             JOIN user_picks p ON u.id = p.user_id
             JOIN nfl_games g ON p.game_id = g.id
-            WHERE g.week = ? AND g.year = ? AND g.is_final = 1 AND u.is_admin = 0
+            WHERE g.week = ? AND g.year = ? AND g.game_date < datetime('now') AND u.is_admin = 0
             GROUP BY u.id, u.username
             HAVING total_picks > 0
             ORDER BY correct_picks DESC, u.username
