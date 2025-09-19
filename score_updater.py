@@ -221,7 +221,7 @@ class NFLScoreUpdater:
                     
                     # Find matching game in database (case-insensitive)
                     cursor.execute('''
-                        SELECT game_id, home_score, away_score, is_final
+                        SELECT game_id, home_score, away_score, is_final, id
                         FROM nfl_games
                         WHERE UPPER(away_team) = UPPER(?)
                         AND UPPER(home_team) = UPPER(?)
@@ -233,22 +233,33 @@ class NFLScoreUpdater:
                     existing_game = cursor.fetchone()
 
                     if existing_game:
-                        game_id = existing_game[0]
+                        string_game_id = existing_game[0]
                         old_is_final = existing_game[3]
+                        numeric_game_id = existing_game[4]
 
-                        # Update the game
+                        # Update the game using string game_id (for new system)
                         cursor.execute('''
                             UPDATE nfl_games
                             SET home_score = ?, away_score = ?, is_final = ?,
                                 game_status = ?
                             WHERE game_id = ?
                         ''', (home_score, away_score, is_final, game_status,
-                              game_id))
+                              string_game_id))
+
+                        # Also update by numeric ID (for picks compatibility)
+                        cursor.execute('''
+                            UPDATE nfl_games
+                            SET home_score = ?, away_score = ?, is_final = ?,
+                                game_status = ?
+                            WHERE id = ?
+                        ''', (home_score, away_score, is_final, game_status,
+                              numeric_game_id))
 
                         # Update user picks correctness if game is final
                         if is_final and not old_is_final:
+                            # Update picks using numeric game_id (what picks actually reference)
                             self.update_pick_correctness(
-                                cursor, game_id, away_team, home_team,
+                                cursor, numeric_game_id, away_team, home_team,
                                 away_score, home_score)
 
                         logger.info(
