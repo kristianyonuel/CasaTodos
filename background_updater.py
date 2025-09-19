@@ -98,16 +98,25 @@ class BackgroundGameUpdater:
                 logger.info("No current NFL week determined, skipping update")
                 return
                 
-            # Update during game days (Thursday, Sunday, Monday) and Tuesday (for MNF results)
-            current_day = datetime.now().weekday()  # 0=Monday, 1=Tuesday, ..., 6=Sunday
+            # First, check if there are any games that need updating
+            games_needing_update = self._check_games_needing_update(current_week)
+            
+            # Get current day for game day logic
+            current_day = datetime.now().weekday()  # 0=Mon, 6=Sun
             game_days = [3, 6, 0, 1]  # Thursday, Sunday, Monday, Tuesday
             
-            if current_day not in game_days:
-                logger.info(f"Not a game day (weekday {current_day}), skipping update")
+            # If it's not a game day but no games need updating, skip
+            if current_day not in game_days and games_needing_update == 0:
+                logger.info(f"Not a game day (weekday {current_day}) "
+                            f"and no games need updating, skipping")
                 return
+            elif current_day not in game_days and games_needing_update > 0:
+                logger.info(f"Not a game day (weekday {current_day}) but "
+                            f"{games_needing_update} games need updating")
+            else:
+                logger.info(f"Game day (weekday {current_day}), "
+                            f"updating live scores for Week {current_week}")
                 
-            logger.info(f"Updating live scores for Week {current_week} using ESPN API")
-            
             # Use new comprehensive score updater
             try:
                 from score_updater import NFLScoreUpdater
@@ -116,9 +125,11 @@ class BackgroundGameUpdater:
                 
                 updated_count = results.get('games_updated', 0)
                 if updated_count > 0:
-                    logger.info(f"Successfully updated {updated_count} games via new score updater")
+                    logger.info(f"Successfully updated {updated_count} games "
+                                f"via new score updater")
                 else:
-                    logger.debug("No games needed updating via new score updater")
+                    logger.debug("No games needed updating via new score "
+                                 "updater")
                     
             except Exception as e:
                 logger.error(f"Error with new score updater: {e}")
@@ -128,12 +139,39 @@ class BackgroundGameUpdater:
                 updated_count = update_live_scores_espn(current_week, 2025)
                 
                 if updated_count > 0:
-                    logger.info(f"Successfully updated {updated_count} games via fallback ESPN")
+                    logger.info(f"Successfully updated {updated_count} games "
+                                f"via fallback ESPN")
                 else:
                     logger.debug("No games needed updating via fallback ESPN")
                 
         except Exception as e:
             logger.error(f"Error updating games: {e}")
+            
+    def _check_games_needing_update(self, week: int) -> int:
+        """Check how many games in the current week need score updates"""
+        try:
+            # Import here to avoid circular imports
+            import sqlite3
+            
+            conn = sqlite3.connect('nfl_fantasy.db')
+            cursor = conn.cursor()
+            
+            # Check for games that are not final but should be
+            # (game time was more than 4 hours ago)
+            cursor.execute('''
+                SELECT COUNT(*) FROM nfl_games
+                WHERE week = ? AND year = 2025
+                AND is_final = 0
+                AND datetime(game_date) < datetime('now', '-4 hours')
+            ''', (week,))
+            
+            count = cursor.fetchone()[0]
+            conn.close()
+            return count
+            
+        except Exception as e:
+            logger.error(f"Error checking games needing update: {e}")
+            return 0
             
     def _get_current_nfl_week(self) -> Optional[int]:
         """Determine current NFL week based on date"""
@@ -166,16 +204,23 @@ class BackgroundGameUpdater:
         
     def get_status(self) -> dict:
         """Get current status of the background updater"""
-        current_interval = self._get_dynamic_interval() if self.is_running() else None
+        if self.is_running():
+            current_interval = self._get_dynamic_interval()
+        else:
+            current_interval = None
+            
         return {
             'running': self.is_running(),
-            'update_interval_minutes': current_interval // 60 if current_interval else None,
+            'update_interval_minutes': (current_interval // 60
+                                        if current_interval else None),
             'dynamic_intervals': True,
             'game_time_interval': '5 minutes',
             'off_peak_interval': '30 minutes',
             'current_week': self._get_current_nfl_week(),
-            'next_update_in_seconds': current_interval if self.is_running() else None
+            'next_update_in_seconds': (current_interval
+                                       if self.is_running() else None)
         }
+
 
 # Global instance - dynamic intervals: 5 min during games, 30 min off-peak
 game_updater = BackgroundGameUpdater(update_interval=5)
