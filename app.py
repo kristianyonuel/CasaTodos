@@ -2617,9 +2617,9 @@ def weekly_leaderboard(week=None, year=None):
         except Exception as e:
             logger.error(f"Error calculating leaderboard week: {e}")
             # Fallback to calendar calculation
-            from datetime import datetime
-            current_date = datetime.now()
-            season_start = datetime(2025, 9, 5)  # 2025 season start
+            from datetime import datetime as dt
+            current_date = dt.now()
+            season_start = dt(2025, 9, 5)  # 2025 season start
             days_since_start = (current_date - season_start).days
             week = max(1, min(18, (days_since_start // 7) + 1))
     if year is None:
@@ -3062,7 +3062,6 @@ def debug_leaderboard():
         
         # Current week calculation
         debug_info.append("\n=== CURRENT WEEK CALCULATION ===")
-        from datetime import datetime
         current_date = datetime.now()
         season_start = datetime(2025, 9, 4)
         days_since_start = (current_date - season_start).days
@@ -3124,7 +3123,6 @@ def export_my_picks_csv():
                 year = 2025
             except Exception as e:
                 logger.error(f"Error calculating current week: {e}")
-                from datetime import datetime
                 now = datetime.now()
                 week = 1  # Default fallback
                 year = now.year
