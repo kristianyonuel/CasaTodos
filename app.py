@@ -2921,7 +2921,8 @@ def weekly_leaderboard(week=None, year=None):
                 FROM user_picks up
                 JOIN nfl_games g ON up.game_id = g.id
                 JOIN users u ON up.user_id = u.id
-                WHERE g.week = ? AND g.year = ? AND u.is_admin = 0
+                WHERE g.week = ? AND g.year = ? AND u.is_admin = 0 
+                  AND g.game_date < datetime('now')
                 ORDER BY g.game_date, u.username
             ''', (week, year))
             
