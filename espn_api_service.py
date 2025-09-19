@@ -137,9 +137,16 @@ class ESPNAPIService:
             status = competition.get('status', {})
             status_type = status.get('type', {})
             status_name = status_type.get('name', '').lower()
+            status_description = status_type.get('description', '').lower()
+            completed = status_type.get('completed', False)
             
-            # Determine if game is final
-            is_final = status_name in ['final', 'final/ot']
+            # Determine if game is final - improved logic to handle ESPN's different status formats
+            is_final = (
+                completed or
+                status_name in ['final', 'final/ot', 'status_final'] or
+                status_description == 'final' or
+                'final' in status_name
+            )
             
             # Get game status details
             game_status = status.get('type', {}).get('description', 'Scheduled')
