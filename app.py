@@ -456,6 +456,67 @@ def api_status():
         'can_make_call': remaining > 0
     })
 
+
+@app.route('/updater_status')
+def updater_status():
+    """Check background updater status"""
+    status = get_updater_status()
+    return jsonify(status)
+
+
+@app.route('/admin/force_update_scores')
+def admin_force_update_scores():
+    """Force immediate score update using ESPN API (admin only)"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+        
+    try:
+        from score_updater import NFLScoreUpdater
+        updater = NFLScoreUpdater('nfl_fantasy.db')
+        results = updater.run_update_cycle()
+        
+        return jsonify({
+            'success': True,
+            'message': f"Updated {results.get('games_updated', 0)} games",
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in force update: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/admin/ensure_updater_running')
+def admin_ensure_updater_running():
+    """Ensure background updater is running (admin only)"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+        
+    try:
+        status = get_updater_status()
+        if not status['running']:
+            start_background_updater()
+            # Wait a moment and check again
+            import time
+            time.sleep(2)
+            status = get_updater_status()
+            
+        return jsonify({
+            'success': status['running'],
+            'message': 'Started' if status['running'] else 'Failed to start',
+            'status': status
+        })
+        
+    except Exception as e:
+        logger.error(f"Error ensuring updater running: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/games')
 def games():
     # Check if user is logged in
