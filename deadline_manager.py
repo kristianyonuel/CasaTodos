@@ -89,8 +89,8 @@ class DeadlineManager:
                         if game_time is None:
                             continue
                         
-                        # Times are stored in AST format already
-                        game_time_ast = game_time.replace(tzinfo=self.ast_tz)
+                        # Times are stored in UTC format, convert to AST
+                        game_time_ast = convert_to_ast(game_time)
                         
                     else:
                         game_time_ast = convert_to_ast(game[0])
