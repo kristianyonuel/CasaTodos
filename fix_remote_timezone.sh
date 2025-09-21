@@ -31,6 +31,7 @@ echo "🕒 Testing timezone conversion..."
 python3 -c "
 from datetime import datetime
 from utils.timezone_utils import convert_to_ast
+import sys
 dt = datetime(2025, 9, 21, 17, 0, 0)  # 5 PM UTC
 ast_dt = convert_to_ast(dt)
 print(f'UTC: {dt}')
@@ -41,8 +42,11 @@ if '01:00 PM AST' in formatted:
     print('✅ Timezone conversion working correctly')
 else:
     print('❌ Timezone conversion failed')
+    sys.exit(1)
+" || {
+    echo "❌ Timezone conversion test failed"
     exit 1
-"
+}
 
 # 5. Restart the Flask application
 echo "🔄 Restarting Flask application..."
