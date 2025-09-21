@@ -2882,26 +2882,42 @@ def weekly_leaderboard(week=None, year=None):
             x['username']                                      # Alphabetical as final tiebreaker
         ))
         
+        # Check if week is completed (all games final) for winner determination
+        cursor.execute('''
+            SELECT COUNT(*) as total_games,
+                   SUM(CASE WHEN is_final = 1 THEN 1 ELSE 0 END) as completed
+            FROM nfl_games
+            WHERE week = ? AND year = ?
+        ''', (week, year))
+        
+        game_counts = cursor.fetchone()
+        week_completed = False
+        if game_counts and game_counts[0] > 0:
+            week_completed = game_counts[0] == game_counts[1]
+        
         # Update ranks after sorting
         for i, user in enumerate(leaderboard_data, 1):
             user['rank'] = i
             # Only mark as winner if:
-            # 1. They have more correct picks than others, OR
-            # 2. Monday Night game is final and they're ranked first
+            # 1. Week is completed AND they have the most correct picks, OR
+            # 2. They have significantly more correct picks than others, OR
+            # 3. All remaining games are Monday Night only AND they're ahead
             if i == 1:
                 # Check if this user is actually ahead or tied
                 if len(leaderboard_data) > 1:
                     second_place_score = leaderboard_data[1]['correct_picks']
                     user_score = user['correct_picks']
                     
-                    # Check if Monday Night game is final
-                    mnf_is_final = user['monday_tiebreaker'].get('is_final', False)
-                    
-                    # Only mark as winner if clearly ahead OR MNF is final and properly sorted
-                    user['is_winner'] = (user_score > second_place_score) or mnf_is_final
+                    # Only mark as winner if:
+                    # - Week is completely finished, OR
+                    # - They have a commanding lead (5+ point difference)
+                    lead = user_score - second_place_score
+                    user['is_winner'] = ((week_completed and
+                                          user_score >= second_place_score) or
+                                         lead >= 5)
                 else:
-                    # Only one user, they win
-                    user['is_winner'] = True
+                    # Only one user, they win only if week is completed
+                    user['is_winner'] = week_completed
             else:
                 user['is_winner'] = False
         
