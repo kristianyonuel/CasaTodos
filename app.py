@@ -2868,7 +2868,7 @@ def weekly_leaderboard(week=None, year=None):
                 },
                 'monday_tiebreaker': monday_tiebreaker,
                 'picks_detail': picks_detail,  # Add detailed picks
-                'is_winner': i == 1
+                'is_winner': False  # Determined later
             })
         
         # Re-sort with Monday Night tiebreaker logic if there are ties
