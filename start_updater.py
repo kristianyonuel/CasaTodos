@@ -60,8 +60,28 @@ def main():
                 if status['running']:
                     interval = status['update_interval_minutes']
                     week = status['current_week']
-                    logger.info(f"Background updater running - "
-                                f"Interval: {interval} min, Week: {week}")
+                    
+                    # Also check games needing update for detailed status
+                    try:
+                        import sqlite3
+                        conn = sqlite3.connect('nfl_fantasy.db')
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            SELECT COUNT(*) FROM nfl_games
+                            WHERE week = ? AND year = 2025
+                            AND is_final = 0
+                            AND datetime(game_date) < datetime('now', '-4 hours')
+                        ''', (week,))
+                        games_needing_update = cursor.fetchone()[0]
+                        conn.close()
+                        
+                        logger.info(f"Background updater running - "
+                                    f"Interval: {interval} min, Week: {week}, "
+                                    f"Games needing update: "
+                                    f"{games_needing_update}")
+                    except Exception:
+                        logger.info(f"Background updater running - "
+                                    f"Interval: {interval} min, Week: {week}")
                 else:
                     logger.warning("Background updater stopped unexpectedly, "
                                    "restarting...")
