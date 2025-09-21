@@ -122,7 +122,7 @@
                     <div class="game-card">
                         <div class="game-header">
                             <strong>{{ get_team_name(game.away_team) }} @ {{ get_team_name(game.home_team) }}</strong>
-                            <span class="game-date">{{ game.game_date.strftime('%a %m/%d %I:%M %p') if game.game_date else 'TBD' }}</span>
+                            <span class="game-date">{{ game.game_date.strftime('%a %m/%d %I:%M %p AST') if game.game_date else 'TBD' }}</span>
                             {% if game.is_actual_monday_night %}
                                 <span class="monday-night-badge">🏈 Monday Night</span>
                             {% endif %}
