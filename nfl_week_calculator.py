@@ -41,8 +41,18 @@ def get_current_nfl_week(year=2025):
             return get_calendar_week(current_time, year)
         
         season_start_str = result['season_start']
-        season_start = datetime.strptime(season_start_str, '%Y-%m-%d %H:%M:%S')
-        season_start_ast = ast_tz.localize(season_start)
+        try:
+            # Try ISO format first (with T)
+            season_start = datetime.fromisoformat(season_start_str.replace('T', ' '))
+        except ValueError:
+            # Fallback to original format
+            season_start = datetime.strptime(season_start_str, '%Y-%m-%d %H:%M:%S')
+        
+        # Convert to AST if naive
+        if season_start.tzinfo is None:
+            season_start_ast = ast_tz.localize(season_start)
+        else:
+            season_start_ast = season_start.astimezone(ast_tz)
         
         # If we're before the season starts, return Week 1
         if current_time < season_start_ast:
@@ -50,11 +60,12 @@ def get_current_nfl_week(year=2025):
             return 1
         
         # Check each week to find the current one
+        # Logic: Return the first week with incomplete games, 
+        # or advance past all complete weeks
         for week in range(1, 19):  # NFL has 18 weeks
             cursor.execute('''
                 SELECT COUNT(*) as total_games,
-                       COUNT(CASE WHEN is_final = 1 THEN 1 END) as completed_games,
-                       MAX(game_date) as last_game_time
+                       COUNT(CASE WHEN is_final = 1 THEN 1 END) as completed_games
                 FROM nfl_games 
                 WHERE week = ? AND year = ?
             ''', (week, year))
@@ -67,55 +78,32 @@ def get_current_nfl_week(year=2025):
             
             total_games = week_data['total_games']
             completed_games = week_data['completed_games']
-            last_game_str = week_data['last_game_time']
-            
-            # Parse the last game time
-            last_game_time = datetime.strptime(last_game_str, '%Y-%m-%d %H:%M:%S')
-            last_game_ast = ast_tz.localize(last_game_time)
             
             # If not all games are complete, this is the current week
             if completed_games < total_games:
-                # But check if we're past the last game time + 4 hours (for MNF completion)
-                game_completion_buffer = last_game_ast + timedelta(hours=4)
-                
-                if current_time < game_completion_buffer:
-                    conn.close()
-                    return week
-                # If we're past the buffer and games aren't marked final, 
-                # still consider it current week (manual scoring needed)
-                else:
-                    conn.close()
-                    return week
+                conn.close()
+                return week
             
-            # All games are complete - check if we should advance to next week
-            if completed_games == total_games:
-                # Add 4-hour buffer after last game for processing
-                week_completion_time = last_game_ast + timedelta(hours=4)
-                
-                if current_time >= week_completion_time:
-                    # This week is complete, check if there's a next week
-                    cursor.execute('''
-                        SELECT COUNT(*) as next_week_games
-                        FROM nfl_games 
-                        WHERE week = ? AND year = ?
-                    ''', (week + 1, year))
-                    
-                    next_week_data = cursor.fetchone()
-                    if next_week_data and next_week_data['next_week_games'] > 0:
-                        # Continue to check next week
-                        continue
-                    else:
-                        # No more weeks, this is the final week
-                        conn.close()
-                        return week
-                else:
-                    # Still in completion buffer
-                    conn.close()
-                    return week
+            # All games are complete - this week is done, continue to next week
         
-        # If we get here, we're past all weeks
+        # If we get here, all weeks with games are complete
+        # Return the next week after the last week with games
+        cursor.execute('''
+            SELECT MAX(week) as last_week
+            FROM nfl_games 
+            WHERE year = ?
+        ''', (year,))
+        
+        last_week_result = cursor.fetchone()
+        if last_week_result and last_week_result['last_week']:
+            last_week = last_week_result['last_week']
+            next_week = min(last_week + 1, 18)
+            conn.close()
+            return next_week
+        
+        # Fallback
         conn.close()
-        return 18  # Final week
+        return 1
         
     except Exception as e:
         print(f"Error calculating NFL week: {e}")
