@@ -145,6 +145,19 @@ class ScoringUpdater:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
+            # Check if the week is completely finished before declaring winners
+            cursor.execute('''
+                SELECT COUNT(*) as total_games,
+                       COUNT(CASE WHEN is_final = 1 THEN 1 END) as completed_games
+                FROM nfl_games 
+                WHERE week = ? AND year = ?
+            ''', (week, year))
+            
+            total_games, completed_games = cursor.fetchone()
+            week_completed = (total_games == completed_games and total_games > 0)
+            
+            logger.info(f"Week {week}, {year}: {completed_games}/{total_games} games completed - Week completed: {week_completed}")
+            
             # Clear existing results for this week/year
             cursor.execute('''
                 DELETE FROM weekly_results 
@@ -153,7 +166,8 @@ class ScoringUpdater:
             
             # Insert new results
             for rank, result in enumerate(results, 1):
-                is_winner = rank == 1  # First place is the winner
+                # Only mark as winner if the week is completely finished
+                is_winner = rank == 1 and week_completed
                 
                 cursor.execute('''
                     INSERT INTO weekly_results 
