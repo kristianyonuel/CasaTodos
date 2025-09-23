@@ -730,10 +730,18 @@ def games():
             if game_dict['game_date']:
                 try:
                     if isinstance(game_dict['game_date'], str):
-                        dt = datetime.strptime(game_dict['game_date'], '%Y-%m-%d %H:%M:%S')
+                        # Handle both formats: with T and with space
+                        date_str = game_dict['game_date']
+                        if 'T' in date_str:
+                            # ISO format with T
+                            dt = datetime.fromisoformat(date_str.replace('T', ' '))
+                        else:
+                            # Standard format with space
+                            dt = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
                         # Convert to AST
                         game_dict['game_date'] = convert_to_ast(dt)
-                except (ValueError, TypeError):
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Failed to parse game date '{game_dict['game_date']}': {e}")
                     game_dict['game_date'] = None
             
             # Add team names to game data for easy access in template
