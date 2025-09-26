@@ -2823,12 +2823,31 @@ def weekly_leaderboard(week=None, year=None):
                 else:
                     correct_winner = False
                 
+                # NEW MONDAY NIGHT TIEBREAKER RULES (Starting Week 4, 2025):
+                # 1. Total points (home + away) - closest to actual total
+                # 2. Winning team score - closest to actual winner's score
+                # 3. Losing team score - closest to actual loser's score
+                if is_final and actual_home is not None and actual_away is not None:
+                    if actual_home > actual_away:
+                        # Home team won
+                        winner_diff = abs(pred_home - actual_home)
+                        loser_diff = abs(pred_away - actual_away)
+                    else:
+                        # Away team won  
+                        winner_diff = abs(pred_away - actual_away)
+                        loser_diff = abs(pred_home - actual_home)
+                else:
+                    winner_diff = 999
+                    loser_diff = 999
+                
                 monday_tiebreaker = {
                     'has_pick': True,
                     'correct_winner': correct_winner,
                     'home_diff': abs(pred_home - actual_home) if is_final and actual_home is not None else 999,
                     'away_diff': abs(pred_away - actual_away) if is_final and actual_away is not None else 999,
                     'total_diff': abs((pred_home + pred_away) - (actual_home + actual_away)) if is_final and actual_home is not None and actual_away is not None else 999,
+                    'winner_diff': winner_diff,  # NEW: Difference from winning team's score
+                    'loser_diff': loser_diff,    # NEW: Difference from losing team's score
                     'home_team': home_team,
                     'away_team': away_team,
                     'predicted_home': pred_home,
@@ -2879,14 +2898,14 @@ def weekly_leaderboard(week=None, year=None):
                 'is_winner': False  # Determined later
             })
         
-        # Re-sort with Monday Night tiebreaker logic if there are ties
-        # Simplified: 1 point per win, then Monday Night tiebreakers
+        # Re-sort with NEW Monday Night tiebreaker logic (updated rules)
+        # NEW RULES: 1) Total points closest, 2) Winner closest, 3) Loser closest
         leaderboard_data.sort(key=lambda x: (
             -x['correct_picks'],                               # Most games won (1 point each)
             not x['monday_tiebreaker'].get('correct_winner', False),  # Correct winner first
-            x['monday_tiebreaker'].get('home_diff', 999),      # Closest to home team
-            x['monday_tiebreaker'].get('away_diff', 999),      # Closest to away team
-            x['monday_tiebreaker'].get('total_diff', 999),     # Closest to total
+            x['monday_tiebreaker'].get('total_diff', 999),     # NEW: 1st - Closest to total points
+            x['monday_tiebreaker'].get('winner_diff', 999),    # NEW: 2nd - Closest to winner score  
+            x['monday_tiebreaker'].get('loser_diff', 999),     # NEW: 3rd - Closest to loser score
             x['username']                                      # Alphabetical as final tiebreaker
         ))
         
