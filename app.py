@@ -834,12 +834,12 @@ def games():
         simple_status = {}
     
     # Add deadline status for game day visibility
-    thursday_deadline_passed = (simple_status.get('thursday', {}).get('passed', False) 
-                               if simple_status else False)
+    thursday_deadline_passed = False
+    monday_deadline_passed = False
     
-    # Monday deadline status - same as Sunday deadline
-    monday_deadline_passed = (simple_status.get('monday', {}).get('passed', False)
-                             if simple_status else False)
+    if simple_status:
+        thursday_deadline_passed = simple_status.get('thursday', {}).get('passed', False) if simple_status.get('thursday') else False
+        monday_deadline_passed = simple_status.get('monday', {}).get('passed', False) if simple_status.get('monday') else False
     
     for game in games_data:
         # Show Monday Night predictions if it's Monday game and deadline open
