@@ -2711,19 +2711,28 @@ def weekly_leaderboard(week=None, year=None):
         conn = get_db_legacy()
         cursor = conn.cursor()
         
-        # First, check if we have any games past their deadline for this week
+        # Check for games that are either past deadline OR completed (final)
+        # This allows ongoing weeks to show leaderboard as games finish
         cursor.execute('''
             SELECT COUNT(*) FROM nfl_games 
-            WHERE week = ? AND year = ? AND game_date < datetime('now')
+            WHERE week = ? AND year = ? 
+            AND (game_date < datetime('now') OR is_final = 1)
         ''', (week, year))
-        games_past_deadline = cursor.fetchone()[0]
+        games_available = cursor.fetchone()[0]
         
-        if games_past_deadline == 0:
-            # No games past deadline yet, show message
+        # Also check for completed games specifically
+        cursor.execute('''
+            SELECT COUNT(*) FROM nfl_games 
+            WHERE week = ? AND year = ? AND is_final = 1
+        ''', (week, year))
+        completed_games = cursor.fetchone()[0]
+        
+        if games_available == 0:
+            # No games available yet (not past deadline AND not final)
             cursor.execute('''
                 SELECT DISTINCT week, year 
                 FROM nfl_games 
-                WHERE game_date < datetime('now')
+                WHERE game_date < datetime('now') OR is_final = 1
                 ORDER BY year DESC, week DESC
                 LIMIT 10
             ''')
@@ -2735,10 +2744,10 @@ def weekly_leaderboard(week=None, year=None):
                                  current_week=week,
                                  current_year=year,
                                  available_weeks=available_weeks,
-                                 no_data_message=f"No games past deadline yet for Week {week}, {year}")
+                                 no_data_message=f"No games available yet for Week {week}, {year}. Games must be past deadline or completed.")
         
         # Get users who made picks for this week with simplified scoring (1 point per win)
-        # Only show picks for games that have passed their deadline (game_date < current time)
+        # Show picks for games that are either past deadline OR completed (allows ongoing weeks)
         cursor.execute('''
             SELECT u.id, u.username,
                    COUNT(p.id) as total_picks,
@@ -2746,7 +2755,9 @@ def weekly_leaderboard(week=None, year=None):
             FROM users u
             JOIN user_picks p ON u.id = p.user_id
             JOIN nfl_games g ON p.game_id = g.id
-            WHERE g.week = ? AND g.year = ? AND g.game_date < datetime('now') AND u.is_admin = 0
+            WHERE g.week = ? AND g.year = ? 
+            AND (g.game_date < datetime('now') OR g.is_final = 1) 
+            AND u.is_admin = 0
             GROUP BY u.id, u.username
             HAVING total_picks > 0
             ORDER BY correct_picks DESC, u.username
@@ -3039,7 +3050,7 @@ def weekly_leaderboard(week=None, year=None):
                 JOIN nfl_games g ON up.game_id = g.id
                 JOIN users u ON up.user_id = u.id
                 WHERE g.week = ? AND g.year = ? AND u.is_admin = 0 
-                  AND g.game_date < datetime('now')
+                  AND (g.game_date < datetime('now') OR g.is_final = 1)
                 ORDER BY g.game_date, u.username
             ''', (week, year))
             
@@ -3126,6 +3137,119 @@ def weekly_leaderboard(week=None, year=None):
         logger.error(f"Error in weekly leaderboard: {e}")
         flash(f'Error loading weekly leaderboard: {str(e)}', 'error')
         return redirect(url_for('leaderboard'))
+
+@app.route('/debug_games_status')
+def debug_games_status():
+    """Debug route to check current game status for leaderboard issues"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        week = request.args.get('week', 4, type=int)  # Default to week 4
+        year = request.args.get('year', 2025, type=int)
+        
+        debug_info = []
+        conn = get_db_legacy()
+        cursor = conn.cursor()
+        
+        debug_info.append(f"=== GAMES STATUS DEBUG FOR WEEK {week}, {year} ===")
+        debug_info.append(f"Current Time (UTC): {datetime.utcnow()}")
+        debug_info.append(f"Current Time (Local): {datetime.now()}")
+        debug_info.append("")
+        
+        # Check all games for the week
+        cursor.execute('''
+            SELECT game_id, away_team, home_team, game_date, is_final, 
+                   home_score, away_score, is_monday_night,
+                   datetime('now') as current_time,
+                   CASE 
+                       WHEN game_date < datetime('now') THEN 'Past Deadline'
+                       ELSE 'Future'
+                   END as deadline_status
+            FROM nfl_games 
+            WHERE week = ? AND year = ?
+            ORDER BY game_date
+        ''', (week, year))
+        
+        games = cursor.fetchall()
+        
+        if not games:
+            debug_info.append("❌ NO GAMES FOUND FOR THIS WEEK!")
+        else:
+            debug_info.append(f"📊 Found {len(games)} games for Week {week}")
+            debug_info.append("")
+            
+            past_deadline = 0
+            completed = 0
+            available_for_leaderboard = 0
+            
+            for game in games:
+                game_id, away, home, game_date, is_final, home_score, away_score, is_mnf, current_time, deadline_status = game
+                
+                # Check if available for leaderboard
+                past_deadline_check = game_date < current_time if current_time else False
+                available = past_deadline_check or is_final
+                
+                if past_deadline_check:
+                    past_deadline += 1
+                if is_final:
+                    completed += 1
+                if available:
+                    available_for_leaderboard += 1
+                
+                status_icon = "✅" if available else "⏳"
+                final_icon = "🏁" if is_final else "🕐"
+                mnf_icon = "🌙" if is_mnf else "  "
+                
+                debug_info.append(f"{status_icon} {final_icon} {mnf_icon} Game {game_id}: {away} @ {home}")
+                debug_info.append(f"    📅 Scheduled: {game_date}")
+                debug_info.append(f"    🕒 Status: {deadline_status}")
+                debug_info.append(f"    🏁 Final: {'Yes' if is_final else 'No'}")
+                if is_final and home_score is not None:
+                    debug_info.append(f"    📊 Score: {away} {away_score}, {home} {home_score}")
+                debug_info.append(f"    📈 Available for Leaderboard: {'Yes' if available else 'No'}")
+                debug_info.append("")
+        
+        debug_info.append("=== SUMMARY ===")
+        debug_info.append(f"Games Past Deadline: {past_deadline}")
+        debug_info.append(f"Games Completed (Final): {completed}")
+        debug_info.append(f"Games Available for Leaderboard: {available_for_leaderboard}")
+        debug_info.append("")
+        
+        # Check if any picks exist
+        cursor.execute('''
+            SELECT COUNT(*) as pick_count
+            FROM user_picks p
+            JOIN nfl_games g ON p.game_id = g.id
+            WHERE g.week = ? AND g.year = ?
+        ''', (week, year))
+        pick_count = cursor.fetchone()[0]
+        debug_info.append(f"Total User Picks Made: {pick_count}")
+        
+        # Check scoring status
+        cursor.execute('''
+            SELECT COUNT(*) as scored_picks
+            FROM user_picks p
+            JOIN nfl_games g ON p.game_id = g.id
+            WHERE g.week = ? AND g.year = ? AND p.is_correct IS NOT NULL
+        ''', (week, year))
+        scored_picks = cursor.fetchone()[0]
+        debug_info.append(f"Picks Already Scored: {scored_picks}")
+        
+        conn.close()
+        
+        # Return debug info as HTML
+        debug_html = "<pre style='font-family: monospace; font-size: 14px;'>"
+        debug_html += "\n".join(debug_info)
+        debug_html += "</pre>"
+        debug_html += f"<p><a href='/debug_games_status?week={week-1}&year={year}'>← Week {week-1}</a> | "
+        debug_html += f"<a href='/debug_games_status?week={week+1}&year={year}'>Week {week+1} →</a></p>"
+        debug_html += f"<p><a href='/weekly_leaderboard/{week}/{year}'>View Leaderboard for Week {week}</a></p>"
+        
+        return debug_html
+        
+    except Exception as e:
+        return f'<pre>Error in games status debug: {str(e)}</pre>'
 
 @app.route('/debug_leaderboard')
 def debug_leaderboard():
