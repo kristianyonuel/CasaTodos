@@ -1,12 +1,149 @@
 #!/bin/bash
-# Ubuntu Deployment Script for NFL Fantasy App Monday Night Fixes
-# Run this script on your Ubuntu server to deploy the latest fixes
+# Ubuntu Flask Deployment Script
+# Run this on your Ubuntu server after cloning the repository
 
-echo "🏈 Deploying NFL Fantasy App Monday Night Fixes to Ubuntu"
-echo "=========================================================="
+set -e  # Exit on any error
 
-# Navigate to the application directory
-cd /path/to/your/CasaTodos  # Update this path to your actual app directory
+echo "🚀 Casa Todos Flask App - Ubuntu Deployment Script"
+echo "=================================================="
+
+# Check if we're in the right directory
+if [ ! -f "app.py" ]; then
+    echo "❌ ERROR: app.py not found. Please run this script from the CasaTodos directory."
+    exit 1
+fi
+
+echo "📂 Current directory: $(pwd)"
+
+# Update system packages
+echo "📦 Updating system packages..."
+sudo apt update
+
+# Install required system packages
+echo "📦 Installing system dependencies..."
+sudo apt install -y python3 python3-pip python3-venv sqlite3 git
+
+# Check Python version
+PYTHON_VERSION=$(python3 --version)
+echo "🐍 Python version: $PYTHON_VERSION"
+
+# Create virtual environment if it doesn't exist
+if [ ! -d ".venv" ]; then
+    echo "🔧 Creating virtual environment..."
+    python3 -m venv .venv
+fi
+
+# Activate virtual environment
+echo "⚡ Activating virtual environment..."
+source .venv/bin/activate
+
+# Upgrade pip
+echo "📦 Upgrading pip..."
+pip install --upgrade pip
+
+# Install requirements
+echo "📦 Installing Python dependencies..."
+pip install -r requirements.txt
+
+# Add gunicorn if not in requirements
+echo "📦 Installing Gunicorn for production..."
+pip install gunicorn
+
+# Check Flask installation
+echo "🔍 Verifying Flask installation..."
+if python -c "import flask; print('✅ Flask import: OK')" 2>/dev/null; then
+    echo "✅ Flask is properly installed"
+else
+    echo "❌ Flask import failed, attempting to install..."
+    pip install Flask
+fi
+
+# Check database files
+echo "🗄️  Checking database files..."
+for db in "database.db" "nfl_fantasy.db"; do
+    if [ -f "$db" ]; then
+        size=$(stat -c%s "$db")
+        echo "✅ $db: ${size} bytes"
+    else
+        echo "❌ $db: NOT FOUND"
+    fi
+done
+
+# Test app import
+echo "🧪 Testing Flask app import..."
+if python -c "import app; print('✅ App import: OK')" 2>/dev/null; then
+    echo "✅ Flask app imports successfully"
+else
+    echo "❌ Flask app import failed"
+    exit 1
+fi
+
+# Check available ports
+echo "🔌 Checking port availability..."
+for port in 5000 8000 3000; do
+    if ! lsof -i :$port >/dev/null 2>&1; then
+        echo "✅ Port $port: Available"
+    else
+        echo "⚠️  Port $port: In use"
+    fi
+done
+
+# Create systemd service file
+echo "🔧 Creating systemd service..."
+SERVICE_FILE="/etc/systemd/system/casa-todos.service"
+CURRENT_DIR=$(pwd)
+CURRENT_USER=$(whoami)
+
+sudo tee $SERVICE_FILE > /dev/null <<EOF
+[Unit]
+Description=Casa Todos NFL Fantasy App
+After=network.target
+
+[Service]
+Type=simple
+User=$CURRENT_USER
+WorkingDirectory=$CURRENT_DIR
+Environment=PATH=$CURRENT_DIR/.venv/bin
+ExecStart=$CURRENT_DIR/.venv/bin/python app.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "✅ Service file created at $SERVICE_FILE"
+
+# Reload systemd and enable service
+echo "🔄 Configuring systemd service..."
+sudo systemctl daemon-reload
+sudo systemctl enable casa-todos
+
+# Configure firewall
+echo "🔥 Configuring firewall..."
+sudo ufw allow 5000/tcp
+echo "✅ Firewall configured for port 5000"
+
+echo ""
+echo "🎉 DEPLOYMENT COMPLETE!"
+echo "======================"
+echo ""
+echo "📋 Next Steps:"
+echo "1. Start the service: sudo systemctl start casa-todos"
+echo "2. Check status: sudo systemctl status casa-todos"
+echo "3. View logs: sudo journalctl -u casa-todos -f"
+echo "4. Test app: curl http://localhost:5000/health"
+echo ""
+echo "🔧 Manual Testing (if needed):"
+echo "1. Activate environment: source .venv/bin/activate"
+echo "2. Run directly: python app.py"
+echo "3. Run with Gunicorn: gunicorn -w 4 -b 0.0.0.0:5000 app:app"
+echo ""
+echo "🌐 Access your app at: http://your-server-ip:5000"
+echo ""
+echo "📝 For troubleshooting, check FLASK_CRASH_ANALYSIS_FOR_UBUNTU.md"
 
 # Pull the latest changes
 echo "📥 Pulling latest changes from git..."
