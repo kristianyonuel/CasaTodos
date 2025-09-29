@@ -276,7 +276,7 @@ def analyze_multiple_monday_games(monday_games, picks_by_game, user_standings):
 def get_winner_prediction_summary(week: int = 1, year: int = 2025) -> str:
     """
     Get a concise summary for displaying on the weekly dashboard
-    Updated to show progressive tiebreaker scenarios
+    Updated to show progressive tiebreaker scenarios with dynamic Monday game detection
     """
     analysis = analyze_predictable_winners(week, year)
     
@@ -287,13 +287,32 @@ def get_winner_prediction_summary(week: int = 1, year: int = 2025) -> str:
     
     # Handle two Monday games case with progressive analysis
     if 'game1' in game_info and 'game2' in game_info:
-        game1 = game_info['game1']  # TB@HOU
-        game2 = game_info['game2']  # LAC@LV
+        game1 = game_info['game1']  # First Monday game
+        game2 = game_info['game2']  # Second Monday game
         
-        # Get current standings
+        # Get current standings and first Monday game info
         try:
             conn = sqlite3.connect('nfl_fantasy.db')
             cursor = conn.cursor()
+            
+            # Get the first Monday game details
+            cursor.execute('''
+                SELECT id, home_team, away_team
+                FROM nfl_games
+                WHERE week = ? AND year = ?
+                AND strftime('%w', game_date) = '1'
+                AND is_final = 0
+                ORDER BY game_date, game_time
+                LIMIT 1
+            ''', (week, year))
+            
+            first_monday_game = cursor.fetchone()
+            
+            if not first_monday_game:
+                conn.close()
+                return f"🎯 {game1} & {game2}: Monday analysis pending"
+            
+            game_id, home_team, away_team = first_monday_game
             
             # Get current top standings
             cursor.execute('''
@@ -313,7 +332,7 @@ def get_winner_prediction_summary(week: int = 1, year: int = 2025) -> str:
                 leaders = [user for user, wins in all_standings
                           if wins == max_wins]
                 
-                # Get Houston pickers who could benefit
+                # Get home team pickers who could benefit from the first Monday game
                 cursor.execute('''
                     SELECT u.username, COUNT(CASE WHEN g.is_final = 1
                            AND p.is_correct = 1 THEN 1 END) as current_wins
@@ -324,15 +343,13 @@ def get_winner_prediction_summary(week: int = 1, year: int = 2025) -> str:
                     GROUP BY u.id, u.username
                     HAVING u.id IN (
                         SELECT up.user_id FROM user_picks up
-                        JOIN nfl_games ng ON up.game_id = ng.id
-                        WHERE ng.week = ? AND ng.year = ?
-                        AND ng.home_team = 'HOU'
-                        AND up.selected_team = 'HOU'
+                        WHERE up.game_id = ?
+                        AND up.selected_team = ?
                     )
                     ORDER BY current_wins DESC
-                ''', (week, year, week, year))
+                ''', (week, year, game_id, home_team))
                 
-                houston_beneficiaries = cursor.fetchall()
+                home_team_beneficiaries = cursor.fetchall()
                 conn.close()
                 
                 # Create accurate summary
@@ -342,9 +359,9 @@ def get_winner_prediction_summary(week: int = 1, year: int = 2025) -> str:
                     leader_names = ', '.join(leaders)
                     leader_text = f"{leader_names} tied at {max_wins} wins"
                 
-                # Focus on who can catch up or benefit from Houston win
+                # Focus on who can catch up or benefit from home team win
                 relevant_beneficiaries = [
-                    name for name, wins in houston_beneficiaries
+                    name for name, wins in home_team_beneficiaries
                     if wins >= max_wins - 1
                 ]
                 
@@ -354,11 +371,11 @@ def get_winner_prediction_summary(week: int = 1, year: int = 2025) -> str:
                         benefit_text += f" +{len(relevant_beneficiaries)-2}"
                     
                     return (f"🎯 {leader_text} → "
-                            f"If HOU wins: {benefit_text} benefit → "
+                            f"If {home_team} wins: {benefit_text} benefit → "
                             f"Then {game2} + score predictions decide winner")
                 else:
                     return (f"🎯 {leader_text} → "
-                            f"TB@HOU then {game2} outcomes determine winner")
+                            f"{game1} then {game2} outcomes determine winner")
                 
             conn.close()
         except Exception:
