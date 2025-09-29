@@ -4260,6 +4260,139 @@ def get_team_display(abbreviation):
     full_name = NFL_TEAM_NAMES.get(abbreviation, abbreviation)
     return f"{abbreviation} - {full_name}"
 
+@app.route('/winner_dashboard')
+@app.route('/winner_dashboard/<int:week>')
+@app.route('/winner_dashboard/<int:week>/<int:year>')
+def winner_dashboard(week=None, year=None):
+    """Simple dashboard focused on winner prediction analysis"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Default to current week if not specified
+    if week is None:
+        # Use smart NFL week calculation
+        try:
+            conn = get_db_legacy()
+            cursor = conn.cursor()
+            
+            # Get current week based on games
+            current_date = datetime.now()
+            season_start = datetime(2025, 9, 5)
+            days_since_start = (current_date - season_start).days
+            calculated_week = max(1, min(18, (days_since_start // 7) + 1))
+            
+            # Check if calculated week has games
+            cursor.execute('''
+                SELECT COUNT(*) FROM nfl_games 
+                WHERE week = ? AND year = ?
+            ''', (calculated_week, 2025))
+            
+            current_week_data = cursor.fetchone()
+            
+            if current_week_data and current_week_data[0] > 0:
+                week = calculated_week
+            else:
+                # Fallback to latest week with games
+                cursor.execute('''
+                    SELECT MAX(week) FROM nfl_games 
+                    WHERE year = ? AND game_date <= datetime('now')
+                ''', (2025,))
+                latest_week = cursor.fetchone()
+                week = latest_week[0] if latest_week and latest_week[0] else 1
+            
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error calculating dashboard week: {e}")
+            week = 4  # Default fallback
+    
+    if year is None:
+        year = 2025
+    
+    try:
+        # Get current standings
+        conn = get_db_legacy()
+        cursor = conn.cursor()
+        
+        # Get top standings
+        cursor.execute('''
+            SELECT u.username, COUNT(CASE WHEN g.is_final = 1 AND p.is_correct = 1 THEN 1 END) as wins
+            FROM users u
+            JOIN user_picks p ON u.id = p.user_id  
+            JOIN nfl_games g ON p.game_id = g.id
+            WHERE g.week = ? AND g.year = ? AND u.is_admin = 0
+            GROUP BY u.id, u.username
+            ORDER BY wins DESC, u.username
+            LIMIT 8
+        ''', (week, year))
+        
+        standings = cursor.fetchall()
+        
+        # Get Monday Night games info
+        cursor.execute('''
+            SELECT away_team, home_team, game_date, is_final
+            FROM nfl_games 
+            WHERE week = ? AND year = ? 
+            AND strftime('%w', game_date) = '1'
+            ORDER BY game_date
+        ''', (week, year))
+        
+        monday_games = cursor.fetchall()
+        
+        # Get winner prediction
+        try:
+            winner_prediction = get_winner_prediction_summary(week, year)
+            winner_analysis = analyze_predictable_winners(week, year)
+        except Exception as e:
+            logger.error(f"Error getting winner prediction: {e}")
+            winner_prediction = "Analysis temporarily unavailable"
+            winner_analysis = None
+        
+        # Get picks for Monday games
+        monday_picks_data = []
+        for away, home, game_date, is_final in monday_games:
+            status = "FINAL" if is_final else "Scheduled"
+            
+            # Get picks for this game
+            cursor.execute('''
+                SELECT u.username, up.selected_team 
+                FROM users u 
+                JOIN user_picks up ON u.id = up.user_id 
+                JOIN nfl_games g ON up.game_id = g.id
+                WHERE g.away_team = ? AND g.home_team = ? 
+                AND g.week = ? AND g.year = ? AND u.is_admin = 0
+                ORDER BY u.username
+            ''', (away, home, week, year))
+            
+            picks = cursor.fetchall()
+            
+            # Group picks by team
+            team_picks = {}
+            for username, pick in picks:
+                if pick not in team_picks:
+                    team_picks[pick] = []
+                team_picks[pick].append(username)
+            
+            monday_picks_data.append({
+                'game': f"{away} @ {home}",
+                'status': status,
+                'picks': team_picks
+            })
+        
+        conn.close()
+        
+        return render_template('winner_dashboard.html',
+                             week=week,
+                             year=year,
+                             standings=standings,
+                             monday_games=monday_picks_data,
+                             winner_prediction=winner_prediction,
+                             winner_analysis=winner_analysis)
+    
+    except Exception as e:
+        logger.error(f"Error in winner dashboard: {e}")
+        flash(f'Error loading winner dashboard: {str(e)}', 'error')
+        return redirect(url_for('weekly_leaderboard'))
+
 # Add team names to template context
 @app.context_processor
 def inject_team_names():

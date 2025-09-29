@@ -20,6 +20,7 @@
                 <a href="{{ url_for('games') }}" class="nav-link {% if request.endpoint == 'games' %}active{% endif %}">Make Picks</a>
                 <a href="{{ url_for('leaderboard') }}" class="nav-link {% if request.endpoint == 'leaderboard' %}active{% endif %}">Season Leaderboard</a>
                 <a href="{{ url_for('weekly_leaderboard') }}" class="nav-link {% if request.endpoint == 'weekly_leaderboard' %}active{% endif %}">Weekly Leaderboard</a>
+                <a href="{{ url_for('winner_dashboard') }}" class="nav-link {% if request.endpoint == 'winner_dashboard' %}active{% endif %}">🎯 Winner Predictor</a>
                 <a href="{{ url_for('rules') }}" class="nav-link {% if request.endpoint == 'rules' %}active{% endif %}">Rules</a>
                 {% if session.get('is_admin') %}
                 <a href="{{ url_for('admin') }}" class="nav-link admin {% if request.endpoint == 'admin' %}active{% endif %}">Admin</a>
