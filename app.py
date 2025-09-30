@@ -710,11 +710,11 @@ def games():
         ''', (week, year))
         games_raw = cursor.fetchall()
         
-        # Find the actual Monday Night Football game (latest game on Monday)
+        # Find the actual Monday Night Football game (using database flag)
         cursor.execute('''
             SELECT id FROM nfl_games 
             WHERE week = ? AND year = ? 
-            AND strftime('%w', game_date) = '1'  -- Monday
+            AND is_monday_night = 1
             ORDER BY game_date DESC, id DESC
             LIMIT 1
         ''', (week, year))
@@ -2774,7 +2774,7 @@ def weekly_leaderboard(week=None, year=None):
             cursor.execute('''
                 SELECT id FROM nfl_games 
                 WHERE week = ? AND year = ? 
-                AND strftime('%w', game_date) = '1'  -- Monday
+                AND is_monday_night = 1
                 ORDER BY game_date DESC, id DESC
                 LIMIT 1
             ''', (week, year))
@@ -3404,11 +3404,11 @@ def export_my_picks_csv():
                     'predicted_away_score': row['predicted_away_score']
                 }
             
-            # Find the actual Monday Night Football game (latest game on Monday)
+            # Find the actual Monday Night Football game (using database flag)
             cursor.execute('''
                 SELECT id FROM nfl_games 
                 WHERE week = ? AND year = ? 
-                AND strftime('%w', game_date) = '1'  -- Monday
+                AND is_monday_night = 1
                 ORDER BY game_date DESC, id DESC
                 LIMIT 1
             ''', (week, year))
@@ -3577,7 +3577,7 @@ def my_picks_export():
                     cursor.execute('''
                         SELECT id FROM nfl_games 
                         WHERE week = ? AND year = ? 
-                        AND strftime('%w', game_date) = '1'
+                        AND is_monday_night = 1
                         ORDER BY game_date DESC, id DESC
                         LIMIT 1
                     ''', (selected_week, selected_year))
@@ -3898,11 +3898,11 @@ def export_all_users_picks_csv():
                 header_row.append(user[1])  # username
             writer.writerow(header_row)
             
-            # Find the actual Monday Night Football game (latest game on Monday)
+            # Find the actual Monday Night Football game (using database flag)
             cursor.execute('''
                 SELECT id FROM nfl_games 
                 WHERE week = ? AND year = ? 
-                AND strftime('%w', game_date) = '1'  -- Monday
+                AND is_monday_night = 1
                 ORDER BY game_date DESC, id DESC
                 LIMIT 1
             ''', (week, year))
@@ -3956,11 +3956,11 @@ def export_all_users_picks_csv():
             # Add Monday Night total scores row (only for the actual Monday Night Football game)
             monday_scores_header = ['Monday Night Scores']
             
-            # Find the actual Monday Night Football game (latest game on Monday)
+            # Find the actual Monday Night Football game (using database flag)
             cursor.execute('''
                 SELECT id FROM nfl_games 
                 WHERE week = ? AND year = ? 
-                AND strftime('%w', game_date) = '1'  -- Monday (0=Sunday, 1=Monday, etc.)
+                AND is_monday_night = 1
                 ORDER BY game_date DESC, id DESC
                 LIMIT 1
             ''', (week, year))
