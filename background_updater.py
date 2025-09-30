@@ -127,6 +127,9 @@ class BackgroundGameUpdater:
                 if updated_count > 0:
                     logger.info(f"Successfully updated {updated_count} games "
                                 f"via new score updater")
+                    
+                    # IMPORTANT: Update weekly results after updating scores
+                    self._update_weekly_results(current_week)
                 else:
                     logger.debug("No games needed updating via new score "
                                  "updater")
@@ -141,6 +144,9 @@ class BackgroundGameUpdater:
                 if updated_count > 0:
                     logger.info(f"Successfully updated {updated_count} games "
                                 f"via fallback ESPN")
+                    
+                    # IMPORTANT: Update weekly results after updating scores
+                    self._update_weekly_results(current_week)
                 else:
                     logger.debug("No games needed updating via fallback ESPN")
                 
@@ -197,6 +203,29 @@ class BackgroundGameUpdater:
         except Exception as e:
             logger.error(f"Error determining current NFL week: {e}")
             return None
+    
+    def _update_weekly_results(self, week: int):
+        """Update weekly results after game scores are updated"""
+        try:
+            from scoring_updater import ScoringUpdater
+            
+            logger.info(f"Updating weekly results for Week {week}, 2025...")
+            updater = ScoringUpdater('nfl_fantasy.db')
+            success = updater.update_weekly_results(week, 2025)
+            
+            if success:
+                logger.info(f"✅ Weekly results updated for Week {week}")
+                
+                # Also update previous week if it might have been affected
+                if week > 1:
+                    prev_success = updater.update_weekly_results(week - 1, 2025)
+                    if prev_success:
+                        logger.info(f"✅ Previous week ({week - 1}) results also updated")
+            else:
+                logger.warning(f"❌ Failed to update weekly results for Week {week}")
+                
+        except Exception as e:
+            logger.error(f"Error updating weekly results for Week {week}: {e}")
             
     def is_running(self) -> bool:
         """Check if the updater is currently running"""

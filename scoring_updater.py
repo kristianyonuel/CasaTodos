@@ -77,6 +77,17 @@ class ScoringUpdater:
                     'submission_time': '9999-12-31 23:59:59'
                 }
                 
+                # Get earliest pick submission time for this user for ANY game this week
+                cursor.execute('''
+                    SELECT MIN(p.created_at) as earliest_pick
+                    FROM user_picks p
+                    JOIN nfl_games g ON p.game_id = g.id
+                    WHERE p.user_id = ? AND g.week = ? AND g.year = ?
+                ''', (user_id, week, year))
+                
+                earliest_pick_row = cursor.fetchone()
+                earliest_submission = earliest_pick_row['earliest_pick'] if earliest_pick_row and earliest_pick_row['earliest_pick'] else '9999-12-31 23:59:59'
+                
                 if monday_pick:
                     pred_home = monday_pick['predicted_home_score'] or 0
                     pred_away = monday_pick['predicted_away_score'] or 0
@@ -90,20 +101,42 @@ class ScoringUpdater:
                     # Determine actual winner from the game scores
                     if actual_home > actual_away:
                         actual_winner = home_team  # Home team won
+                        winner_score = actual_home
+                        loser_score = actual_away
+                        pred_winner_score = pred_home
+                        pred_loser_score = pred_away
                     elif actual_away > actual_home:
                         actual_winner = away_team  # Away team won
+                        winner_score = actual_away
+                        loser_score = actual_home
+                        pred_winner_score = pred_away
+                        pred_loser_score = pred_home
                     else:
                         actual_winner = None  # Tie game (rare in NFL)
+                        winner_score = actual_home
+                        loser_score = actual_away
+                        pred_winner_score = pred_home
+                        pred_loser_score = pred_away
                     
                     correct_winner = selected_team == actual_winner
+                    
+                    # NEW TIEBREAKER RULES: 1) Total points, 2) Winner score, 3) Loser score
+                    total_diff = abs((pred_home + pred_away) - (actual_home + actual_away))
+                    winner_diff = abs(pred_winner_score - winner_score)
+                    loser_diff = abs(pred_loser_score - loser_score)
                     
                     monday_tiebreaker = {
                         'correct_winner': correct_winner,
                         'home_diff': abs(pred_home - actual_home),
                         'away_diff': abs(pred_away - actual_away),
-                        'total_diff': abs((pred_home + pred_away) - (actual_home + actual_away)),
-                        'submission_time': monday_pick['created_at'] or '9999-12-31 23:59:59'
+                        'total_diff': total_diff,
+                        'winner_diff': winner_diff,  # NEW: Closest to winner score
+                        'loser_diff': loser_diff,    # NEW: Closest to loser score
+                        'submission_time': earliest_submission
                     }
+                else:
+                    # No Monday Night pick - use earliest submission time as tiebreaker
+                    monday_tiebreaker['submission_time'] = earliest_submission
                 
                 results.append({
                     'user_id': user_id,
@@ -115,15 +148,16 @@ class ScoringUpdater:
             
             conn.close()
             
-            # Sort with Monday Night tiebreaker logic
+            # Sort with NEW Monday Night tiebreaker logic
+            # NEW RULES: 1) Most wins, 2) Total points closest, 3) Winner closest, 4) Loser closest
             results.sort(key=lambda x: (
-                -x['correct_picks'],                                    # Most games won (1 point each)
-                not x['monday_tiebreaker'].get('correct_winner', False), # Correct winner first (False sorts before True)
-                x['monday_tiebreaker']['home_diff'],                    # Closest to home team score
-                x['monday_tiebreaker']['away_diff'],                    # Closest to away team score
-                x['monday_tiebreaker']['total_diff'],                   # Closest to total score
-                x['monday_tiebreaker']['submission_time'],              # Earlier submission time
-                x['username']                                           # Alphabetical as final tiebreaker
+                -x['correct_picks'],                                    # Most games won
+                not x['monday_tiebreaker'].get('correct_winner', False),  # Correct winner first
+                x['monday_tiebreaker'].get('total_diff', 999),          # 1st: Closest to total
+                x['monday_tiebreaker'].get('winner_diff', 999),         # 2nd: Closest to winner
+                x['monday_tiebreaker'].get('loser_diff', 999),          # 3rd: Closest to loser
+                x['monday_tiebreaker']['submission_time'],              # Earlier submission
+                x['username']                                           # Alphabetical final
             ))
             
             return results
@@ -141,10 +175,10 @@ class ScoringUpdater:
             if not results:
                 logger.info(f"No results to update for Week {week}, {year}")
                 return True
-            
+
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            
+
             # Check if the week is completely finished before declaring winners
             cursor.execute('''
                 SELECT COUNT(*) as total_games,
@@ -152,23 +186,37 @@ class ScoringUpdater:
                 FROM nfl_games 
                 WHERE week = ? AND year = ?
             ''', (week, year))
-            
+
             total_games, completed_games = cursor.fetchone()
             week_completed = (total_games == completed_games and total_games > 0)
-            
+
             logger.info(f"Week {week}, {year}: {completed_games}/{total_games} games completed - Week completed: {week_completed}")
-            
+
             # Clear existing results for this week/year
             cursor.execute('''
                 DELETE FROM weekly_results 
                 WHERE week = ? AND year = ?
             ''', (week, year))
-            
+
             # Insert new results
             for rank, result in enumerate(results, 1):
-                # Only mark as winner if the week is completely finished
-                is_winner = rank == 1 and week_completed
-                
+                # Mark as winner if they're ranked #1 and the week is completed
+                # OR if they have a clear lead in points (no ties at the top)
+                is_winner = False
+                if rank == 1 and week_completed:
+                    # Check if there's a tie at the top
+                    top_score = results[0]['correct_picks']
+                    tied_count = sum(1 for r in results if r['correct_picks'] == top_score)
+                    
+                    if tied_count == 1:
+                        # Clear winner - no ties
+                        is_winner = True
+                    else:
+                        # Tie exists - use tiebreaker logic
+                        # First player in the sorted results wins the tiebreaker
+                        is_winner = True
+                        logger.info(f"Week {week}: Tiebreaker resolved - {result['username']} wins with {top_score} points")
+
                 cursor.execute('''
                     INSERT INTO weekly_results 
                     (user_id, week, year, total_picks, correct_picks, is_winner, weekly_rank, created_at)
@@ -183,17 +231,17 @@ class ScoringUpdater:
                     rank,
                     datetime.now()
                 ))
-            
+
             conn.commit()
             conn.close()
-            
+
             logger.info(f"Updated weekly results for Week {week}, {year} - {len(results)} users processed")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error updating weekly results for Week {week}, {year}: {e}")
             return False
-    
+
     def update_all_completed_weeks(self) -> int:
         """
         Update weekly results for all weeks that have completed games
