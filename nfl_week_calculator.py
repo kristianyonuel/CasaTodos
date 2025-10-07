@@ -11,110 +11,143 @@ import pytz
 
 def get_current_nfl_week(year=2025):
     """
-    Calculate the current NFL week based on game completion and dates
+    Calculate the current NFL week based on calendar dates and NFL week cycle
+    
+    NFL Week Cycle Logic:
+    - NFL weeks run Thursday to Monday Night
+    - Tuesday/Wednesday = Next week's prep (advance to next week)
+    - Thursday-Monday = Current week's games
     
     Logic:
-    1. If it's before the first NFL game, return Week 1
-    2. If all games for a week are complete, advance to next week
-    3. Otherwise, return the week with incomplete games
+    1. Use calendar-based calculation with NFL week boundaries
+    2. Check for Tuesday/Wednesday advancement rule
+    3. Validate against database games if available
     """
     
     try:
+        # Get the current date in EST (NFL operates on Eastern Time)
+        est_tz = pytz.timezone('US/Eastern')
+        current_time = datetime.now(est_tz)
+        
+        # Get calendar-based week first (this respects the Thursday start)
+        calendar_week = get_calendar_week_with_boundaries(current_time, year)
+        
+        # Connect to database to validate
         conn = sqlite3.connect('nfl_fantasy.db')
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        # Get the current date in AST
-        ast_tz = pytz.timezone('America/Puerto_Rico')
-        current_time = datetime.now(ast_tz)
-        
-        # Get season start date from first game
+        # Check if we have games for the calendar week
         cursor.execute('''
-            SELECT MIN(game_date) as season_start 
+            SELECT COUNT(*) as total_games,
+                   COUNT(CASE WHEN is_final = 1 THEN 1 END) as completed_games,
+                   MAX(game_date) as latest_game
             FROM nfl_games 
-            WHERE year = ?
-        ''', (year,))
+            WHERE week = ? AND year = ?
+        ''', (calendar_week, year))
         
-        result = cursor.fetchone()
-        if not result or not result['season_start']:
-            # No games in database, use calendar calculation
-            return get_calendar_week(current_time, year)
+        week_data = cursor.fetchone()
         
-        season_start_str = result['season_start']
-        try:
-            # Try ISO format first (with T)
-            season_start = datetime.fromisoformat(season_start_str.replace('T', ' '))
-        except ValueError:
-            # Fallback to original format
-            season_start = datetime.strptime(season_start_str, '%Y-%m-%d %H:%M:%S')
-        
-        # Convert to AST if naive
-        if season_start.tzinfo is None:
-            season_start_ast = ast_tz.localize(season_start)
-        else:
-            season_start_ast = season_start.astimezone(ast_tz)
-        
-        # If we're before the season starts, return Week 1
-        if current_time < season_start_ast:
-            conn.close()
-            return 1
-        
-        # Check each week to find the current one
-        # Logic: Return the first week with incomplete games, 
-        # or advance past all complete weeks
-        for week in range(1, 19):  # NFL has 18 weeks
-            cursor.execute('''
-                SELECT COUNT(*) as total_games,
-                       COUNT(CASE WHEN is_final = 1 THEN 1 END) as completed_games
-                FROM nfl_games 
-                WHERE week = ? AND year = ?
-            ''', (week, year))
-            
-            week_data = cursor.fetchone()
-            
-            if not week_data or week_data['total_games'] == 0:
-                # No games this week, move to next
-                continue
-            
+        if week_data and week_data['total_games'] > 0:
+            # We have games for this week
             total_games = week_data['total_games']
             completed_games = week_data['completed_games']
             
-            # If not all games are complete, this is the current week
-            if completed_games < total_games:
-                conn.close()
-                return week
+            # Additional check: if it's Tuesday/Wednesday and previous week exists and is mostly done
+            if current_time.weekday() in [1, 2]:  # Tuesday = 1, Wednesday = 2
+                # Check if previous week is complete or nearly complete
+                prev_week = calendar_week - 1
+                if prev_week >= 1:
+                    cursor.execute('''
+                        SELECT COUNT(*) as total_games,
+                               COUNT(CASE WHEN is_final = 1 THEN 1 END) as completed_games
+                        FROM nfl_games 
+                        WHERE week = ? AND year = ?
+                    ''', (prev_week, year))
+                    
+                    prev_week_data = cursor.fetchone()
+                    if (prev_week_data and prev_week_data['total_games'] > 0 and 
+                        prev_week_data['completed_games'] >= prev_week_data['total_games'] - 1):
+                        # Previous week is done/nearly done, advance to current calendar week
+                        conn.close()
+                        return calendar_week
             
-            # All games are complete - this week is done, continue to next week
-        
-        # If we get here, all weeks with games are complete
-        # Return the next week after the last week with games
-        cursor.execute('''
-            SELECT MAX(week) as last_week
-            FROM nfl_games 
-            WHERE year = ?
-        ''', (year,))
-        
-        last_week_result = cursor.fetchone()
-        if last_week_result and last_week_result['last_week']:
-            last_week = last_week_result['last_week']
-            next_week = min(last_week + 1, 18)
             conn.close()
-            return next_week
+            return calendar_week
         
-        # Fallback
+        # No games for calendar week, check if we need to look ahead
+        if calendar_week < 18:
+            # Check if next week has games
+            cursor.execute('''
+                SELECT COUNT(*) as total_games
+                FROM nfl_games 
+                WHERE week = ? AND year = ?
+            ''', (calendar_week + 1, year))
+            
+            next_week_data = cursor.fetchone()
+            if next_week_data and next_week_data['total_games'] > 0:
+                conn.close()
+                return calendar_week + 1
+        
         conn.close()
-        return 1
+        return calendar_week
         
     except Exception as e:
         print(f"Error calculating NFL week: {e}")
         # Fallback to calendar calculation
-        current_time = datetime.now(pytz.timezone('America/Puerto_Rico'))
-        return get_calendar_week(current_time, year)
+        current_time = datetime.now(pytz.timezone('US/Eastern'))
+        return get_calendar_week_with_boundaries(current_time, year)
+
+
+def get_calendar_week_with_boundaries(current_time, year=2025):
+    """
+    Calendar-based week calculation with NFL week boundaries
+    NFL weeks run Thursday to Monday Night
+    Tuesday/Wednesday = prep for next week
+    """
+    try:
+        # NFL season starts September 5, 2025 (Thursday)
+        season_start = datetime(year, 9, 5)  # September 5, 2025 (Thursday)
+        
+        # If before season start
+        if current_time.replace(tzinfo=None) < season_start:
+            return 1
+        
+        # Calculate days since season start
+        days_since_start = (current_time.replace(tzinfo=None) - season_start).days
+        
+        # Get the current weekday (0=Monday, 1=Tuesday, ..., 6=Sunday)
+        current_weekday = current_time.weekday()
+        
+        # Calculate base week (Thursday to Monday Night = 1 week)
+        base_week = (days_since_start // 7) + 1
+        
+        # NFL Week Advancement Logic:
+        # - Thursday to Monday Night = Current week
+        # - Tuesday/Wednesday = Next week (prep period)
+        
+        # If it's Tuesday (1) or Wednesday (2), advance to next week
+        if current_weekday in [1, 2]:  # Tuesday or Wednesday
+            # We're in the "between weeks" prep period
+            # Check if enough days have passed to be in next week
+            week_day_offset = days_since_start % 7
+            
+            # Season started Friday Sept 5, so:
+            # Fri=0, Sat=1, Sun=2, Mon=3, Tue=4, Wed=5, Thu=6
+            # Tuesday (4) and Wednesday (5) should advance to next week
+            if week_day_offset >= 4:  # Tuesday (4) or Wednesday (5)
+                base_week += 1
+        
+        return max(1, min(18, base_week))
+        
+    except Exception as e:
+        print(f"Error in calendar calculation: {e}")
+        return 1
 
 
 def get_calendar_week(current_time, year=2025):
     """
-    Fallback calendar-based week calculation
+    Fallback calendar-based week calculation (original)
     """
     try:
         # NFL season typically starts first Thursday of September
