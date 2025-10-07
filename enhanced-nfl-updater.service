@@ -1,0 +1,27 @@
+[Unit]
+Description=Enhanced NFL Fantasy Background Updater
+After=network.target
+
+[Service]
+Type=simple
+User=casa
+Group=casa
+WorkingDirectory=/home/casa/CasaTodos
+Environment=PATH=/usr/bin:/usr/local/bin
+ExecStart=/usr/bin/python3 /home/casa/CasaTodos/enhanced_background_updater.py
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+# Logging
+SyslogIdentifier=enhanced-nfl-updater
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/casa/CasaTodos
+
+[Install]
+WantedBy=multi-user.target
