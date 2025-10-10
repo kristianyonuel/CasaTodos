@@ -2188,6 +2188,158 @@ def admin_deadline_overrides():
         logger.error(f"Error getting deadline overrides: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/admin/picks_table')
+def admin_picks_table():
+    """Admin interface for setting all player picks in table format"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        flash('Admin access required')
+        return redirect(url_for('login'))
+    
+    try:
+        # Get current NFL week
+        from nfl_week_calculator import get_current_nfl_week
+        current_week = request.args.get('week', get_current_nfl_week(), type=int)
+        current_year = request.args.get('year', 2025, type=int)
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Get all games for the week
+            cursor.execute('''
+                SELECT * FROM nfl_games 
+                WHERE week = ? AND year = ? 
+                ORDER BY game_date
+            ''', (current_week, current_year))
+            games = cursor.fetchall()
+            
+            # Get all users
+            cursor.execute('SELECT id, username FROM users ORDER BY username')
+            users_raw = cursor.fetchall()
+            
+            # Get all existing picks for this week
+            cursor.execute('''
+                SELECT u.username, up.game_id, up.selected_team
+                FROM user_picks up
+                JOIN users u ON up.user_id = u.id
+                JOIN nfl_games g ON up.game_id = g.id
+                WHERE g.week = ? AND g.year = ?
+            ''', (current_week, current_year))
+            picks_raw = cursor.fetchall()
+            
+        # Organize picks by user and game
+        user_picks = {}
+        for username, game_id, selected_team in picks_raw:
+            if username not in user_picks:
+                user_picks[username] = {}
+            user_picks[username][game_id] = selected_team
+        
+        # Add pick count to users
+        users = []
+        for user_id, username in users_raw:
+            picks_made = len(user_picks.get(username, {}))
+            users.append({
+                'id': user_id,
+                'username': username,
+                'picks_made': picks_made
+            })
+        
+        # Calculate stats
+        total_players = len(users)
+        total_games = len(games)
+        total_picks = sum(len(picks) for picks in user_picks.values())
+        
+        return render_template('admin_picks_table.html',
+                             users=users,
+                             games=games,
+                             user_picks=user_picks,
+                             current_week=current_week,
+                             current_year=current_year,
+                             total_players=total_players,
+                             total_games=total_games,
+                             total_picks=total_picks)
+        
+    except Exception as e:
+        logger.error(f"Admin picks table error: {e}")
+        flash(f'Error loading picks table: {str(e)}')
+        return redirect(url_for('admin'))
+
+@app.route('/admin/submit_all_picks', methods=['POST'])
+def submit_all_picks():
+    """Submit all picks from the admin table interface"""
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        week = request.form.get('week', type=int)
+        year = request.form.get('year', type=int)
+        
+        # Track weeks that need scoring updates
+        weeks_to_update = set()
+        weeks_to_update.add((week, year))
+        
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Get all users
+            cursor.execute('SELECT id, username FROM users')
+            users = {username: user_id for user_id, username in cursor.fetchall()}
+            
+            successful_picks = 0
+            
+            # Process all form data
+            for field_name, selected_team in request.form.items():
+                if field_name.startswith('pick_') and selected_team:
+                    # Parse field name: pick_username_gameid
+                    parts = field_name.split('_')
+                    if len(parts) >= 3:
+                        username = parts[1]
+                        game_id = parts[2]
+                        
+                        if username in users:
+                            user_id = users[username]
+                            
+                            # Insert or update the pick
+                            cursor.execute('''
+                                INSERT OR REPLACE INTO user_picks 
+                                (user_id, game_id, selected_team, created_at)
+                                VALUES (?, ?, ?, ?)
+                            ''', (user_id, game_id, selected_team, datetime.now()))
+                            successful_picks += 1
+            
+            conn.commit()
+        
+        # Auto-update scoring for affected weeks
+        scoring_updates = []
+        for week_num, year_num in weeks_to_update:
+            try:
+                from database_sync import update_pick_correctness
+                from scoring_updater import ScoringUpdater
+                
+                # Update pick correctness
+                picks_updated = update_pick_correctness(week_num, year_num)
+                
+                # Update weekly results for this specific week
+                updater = ScoringUpdater()
+                updater.update_weekly_results(week_num, year_num)
+                
+                # Update season standings
+                total_weeks_updated = updater.update_all_completed_weeks()
+                
+                scoring_updates.append(f"Week {week_num}/{year_num}: {picks_updated} picks updated")
+                logger.info(f"Auto-updated scoring for Week {week_num}, {year_num} after bulk pick submission")
+                
+            except Exception as e:
+                logger.error(f"Failed to auto-update scoring for Week {week_num}, {year_num}: {e}")
+                scoring_updates.append(f"Week {week_num}/{year_num}: Scoring update failed")
+        
+        flash(f'Successfully saved {successful_picks} picks for Week {week}!')
+        return redirect(url_for('admin_picks_table', week=week, year=year))
+        
+    except Exception as e:
+        logger.error(f"Submit all picks error: {e}")
+        flash(f'Error saving picks: {str(e)}')
+        return redirect(url_for('admin_picks_table'))
+
 @app.route('/admin/create_deadline_override', methods=['POST'])
 def admin_create_deadline_override():
     """Create a new deadline override"""

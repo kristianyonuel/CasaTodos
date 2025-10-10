@@ -30,6 +30,7 @@
                     <button onclick="loadSimplePicks()" class="btn btn-secondary">View Simple Picks</button>
                     <button onclick="loadUsers()" class="btn btn-info">Manage Users</button>
                     <button onclick="loadUserPicks()" class="btn btn-warning">Set User Picks</button>
+                    <button onclick="openPicksTable()" class="btn btn-success">🎯 Set All Picks (Table)</button>
                     <button onclick="loadSchedule()" class="btn btn-success">Manage Schedule</button>
                     <button onclick="loadGameResults()" class="btn btn-warning">Update Game Results</button>
                     <button onclick="loadDeadlineOverrides()" class="btn btn-danger">Deadline Overrides</button>
@@ -885,6 +886,12 @@
                 console.error('Error clearing user picks:', error);
                 alert('Error clearing picks: ' + error.message);
             }
+        }
+
+        function openPicksTable() {
+            // Open the picks table in a new window or redirect
+            const url = `/admin/picks_table?week=${currentWeek}&year=${currentYear}`;
+            window.open(url, '_blank');
         }
 
         async function exportUserData() {

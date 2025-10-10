@@ -1,0 +1,550 @@
+{% extends "base.html" %}
+
+{% block title %}Set All Picks - Week {{ current_week }}{% endblock %}
+
+{% block content %}
+<div class="admin-picks-container">
+    <!-- Header Section -->
+    <div class="picks-header">
+        <h2>🎯 Set All Player Picks - Week {{ current_week }}</h2>
+        <p class="picks-subtitle">Set picks for all players in a convenient table format</p>
+        
+        <div class="picks-stats">
+            <div class="stat-item">
+                <div class="stat-value">{{ total_players }}</div>
+                <div class="stat-label">Players</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{{ total_games }}</div>
+                <div class="stat-label">Games</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{{ total_picks }}</div>
+                <div class="stat-label">Total Picks Made</div>
+            </div>
+        </div>
+    </div>
+
+    {% if total_games == 0 %}
+        <div class="no-games-message">
+            <h3>⚠️ No games available for Week {{ current_week }}</h3>
+            <p>Games haven't been created yet for this week.</p>
+        </div>
+    {% else %}
+        <!-- Picks Table -->
+        <form method="POST" action="{{ url_for('submit_all_picks') }}" class="all-picks-form">
+            <input type="hidden" name="week" value="{{ current_week }}">
+            <input type="hidden" name="year" value="{{ current_year }}">
+            
+            <div class="picks-table-container">
+                <table class="picks-table">
+                    <thead>
+                        <tr>
+                            <th class="player-header">Player</th>
+                            {% for game in games %}
+                                <th class="game-header">
+                                    <div class="game-matchup">
+                                        <div class="teams">
+                                            <img src="{{ get_team_logo_url(game.away_team) }}" alt="{{ game.away_team }}" class="mini-logo">
+                                            <span class="vs">@</span>
+                                            <img src="{{ get_team_logo_url(game.home_team) }}" alt="{{ game.home_team }}" class="mini-logo">
+                                        </div>
+                                        <div class="game-info">
+                                            <div class="team-names">{{ get_team_name(game.away_team) }} @ {{ get_team_name(game.home_team) }}</div>
+                                            <div class="game-time">{{ game.game_date.strftime('%a %m/%d %I:%M %p') if game.game_date else 'TBD' }}</div>
+                                            {% if game.is_actual_monday_night %}
+                                                <div class="mnf-badge">MNF</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </th>
+                            {% endfor %}
+                            <th class="actions-header">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                            <tr class="player-row" data-username="{{ user.username }}">
+                                <td class="player-cell">
+                                    <div class="player-info">
+                                        <strong>{{ user.username }}</strong>
+                                        <div class="player-stats">
+                                            <span class="picks-count">{{ user.picks_made }}/{{ total_games }} picks</span>
+                                            <div class="progress-mini">
+                                                <div class="progress-fill-mini" style="width: {{ (user.picks_made / total_games * 100) if total_games > 0 else 0 }}%"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                
+                                {% for game in games %}
+                                    <td class="pick-cell" data-game-id="{{ game.id }}">
+                                        <div class="pick-options">
+                                            <!-- Away Team Option -->
+                                            <label class="team-pick {% if user_picks.get(user.username, {}).get(game.id) == game.away_team %}selected{% endif %}">
+                                                <input type="radio" 
+                                                       name="pick_{{ user.username }}_{{ game.id }}" 
+                                                       value="{{ game.away_team }}"
+                                                       {% if user_picks.get(user.username, {}).get(game.id) == game.away_team %}checked{% endif %}>
+                                                <img src="{{ get_team_logo_url(game.away_team) }}" alt="{{ game.away_team }}" class="pick-logo">
+                                                <span class="team-abbr">{{ game.away_team }}</span>
+                                            </label>
+                                            
+                                            <!-- Home Team Option -->
+                                            <label class="team-pick {% if user_picks.get(user.username, {}).get(game.id) == game.home_team %}selected{% endif %}">
+                                                <input type="radio" 
+                                                       name="pick_{{ user.username }}_{{ game.id }}" 
+                                                       value="{{ game.home_team }}"
+                                                       {% if user_picks.get(user.username, {}).get(game.id) == game.home_team %}checked{% endif %}>
+                                                <img src="{{ get_team_logo_url(game.home_team) }}" alt="{{ game.home_team }}" class="pick-logo">
+                                                <span class="team-abbr">{{ game.home_team }}</span>
+                                            </label>
+                                        </div>
+                                    </td>
+                                {% endfor %}
+                                
+                                <td class="actions-cell">
+                                    <button type="button" class="btn-clear-row" onclick="clearUserPicks('{{ user.username }}')">
+                                        Clear All
+                                    </button>
+                                    <button type="button" class="btn-random-row" onclick="randomUserPicks('{{ user.username }}')">
+                                        Random
+                                    </button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="form-actions">
+                <div class="bulk-actions">
+                    <button type="button" class="btn btn-secondary" onclick="clearAllPicks()">
+                        🗑️ Clear All Picks
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="randomAllPicks()">
+                        🎲 Random All Picks
+                    </button>
+                </div>
+                
+                <div class="submit-actions">
+                    <button type="button" class="btn btn-secondary" onclick="history.back()">
+                        ← Back
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        💾 Save All Picks
+                    </button>
+                </div>
+            </div>
+        </form>
+    {% endif %}
+</div>
+
+<style>
+.admin-picks-container {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.picks-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.picks-header h2 {
+    color: #2c3e50;
+    margin-bottom: 10px;
+}
+
+.picks-subtitle {
+    color: #7f8c8d;
+    margin-bottom: 20px;
+}
+
+.picks-stats {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-top: 20px;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 2em;
+    font-weight: bold;
+    color: #27ae60;
+}
+
+.stat-label {
+    color: #7f8c8d;
+    font-size: 0.9em;
+}
+
+.no-games-message {
+    text-align: center;
+    padding: 40px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin: 20px 0;
+}
+
+.picks-table-container {
+    overflow-x: auto;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.picks-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    min-width: 1200px;
+}
+
+.picks-table th,
+.picks-table td {
+    border: 1px solid #dee2e6;
+    padding: 8px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.picks-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.player-header {
+    min-width: 150px;
+    position: sticky;
+    left: 0;
+    z-index: 11;
+    background: #e9ecef !important;
+}
+
+.game-header {
+    min-width: 120px;
+    max-width: 140px;
+}
+
+.actions-header {
+    min-width: 100px;
+}
+
+.player-cell {
+    position: sticky;
+    left: 0;
+    background: #f8f9fa;
+    z-index: 5;
+    min-width: 150px;
+}
+
+.player-info {
+    text-align: left;
+    padding: 5px;
+}
+
+.player-stats {
+    margin-top: 5px;
+}
+
+.picks-count {
+    font-size: 0.8em;
+    color: #6c757d;
+}
+
+.progress-mini {
+    width: 100%;
+    height: 4px;
+    background: #e9ecef;
+    border-radius: 2px;
+    margin-top: 3px;
+}
+
+.progress-fill-mini {
+    height: 100%;
+    background: #28a745;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.game-matchup {
+    padding: 5px;
+}
+
+.teams {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    margin-bottom: 5px;
+}
+
+.mini-logo {
+    width: 20px;
+    height: 20px;
+}
+
+.vs {
+    font-size: 0.8em;
+    color: #6c757d;
+}
+
+.team-names {
+    font-size: 0.75em;
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.game-time {
+    font-size: 0.7em;
+    color: #6c757d;
+}
+
+.mnf-badge {
+    background: #ff6b35;
+    color: white;
+    font-size: 0.6em;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-top: 2px;
+}
+
+.pick-cell {
+    padding: 5px;
+}
+
+.pick-options {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.team-pick {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 5px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.team-pick:hover {
+    background: #f8f9fa;
+    border-color: #dee2e6;
+}
+
+.team-pick.selected {
+    background: #d4edda;
+    border-color: #28a745;
+}
+
+.team-pick input[type="radio"] {
+    display: none;
+}
+
+.pick-logo {
+    width: 16px;
+    height: 16px;
+}
+
+.team-abbr {
+    font-size: 0.75em;
+    font-weight: 500;
+}
+
+.actions-cell {
+    padding: 5px;
+}
+
+.btn-clear-row,
+.btn-random-row {
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 3px 6px;
+    border-radius: 3px;
+    font-size: 0.7em;
+    cursor: pointer;
+    margin: 1px;
+    width: 100%;
+}
+
+.btn-random-row {
+    background: #ffc107;
+    color: #212529;
+}
+
+.btn-clear-row:hover {
+    background: #c82333;
+}
+
+.btn-random-row:hover {
+    background: #e0a800;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 0;
+    border-top: 1px solid #dee2e6;
+}
+
+.bulk-actions,
+.submit-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #0056b3;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #545b62;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .picks-stats {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .bulk-actions,
+    .submit-actions {
+        width: 100%;
+        justify-content: center;
+    }
+}
+</style>
+
+<script>
+function clearUserPicks(username) {
+    const inputs = document.querySelectorAll(`input[name^="pick_${username}_"]`);
+    inputs.forEach(input => {
+        input.checked = false;
+        input.closest('.team-pick').classList.remove('selected');
+    });
+    updateUserProgress(username);
+}
+
+function randomUserPicks(username) {
+    const gameIds = [...new Set(Array.from(document.querySelectorAll(`input[name^="pick_${username}_"]`))
+        .map(input => input.name.split('_')[2]))];
+    
+    gameIds.forEach(gameId => {
+        const radios = document.querySelectorAll(`input[name="pick_${username}_${gameId}"]`);
+        if (radios.length === 2) {
+            const randomIndex = Math.floor(Math.random() * 2);
+            // Clear previous selections
+            radios.forEach(radio => {
+                radio.checked = false;
+                radio.closest('.team-pick').classList.remove('selected');
+            });
+            // Set random selection
+            radios[randomIndex].checked = true;
+            radios[randomIndex].closest('.team-pick').classList.add('selected');
+        }
+    });
+    updateUserProgress(username);
+}
+
+function clearAllPicks() {
+    if (confirm('Are you sure you want to clear ALL picks for ALL players?')) {
+        const allInputs = document.querySelectorAll('input[type="radio"]');
+        allInputs.forEach(input => {
+            input.checked = false;
+            input.closest('.team-pick').classList.remove('selected');
+        });
+        updateAllProgress();
+    }
+}
+
+function randomAllPicks() {
+    if (confirm('Are you sure you want to set random picks for ALL players?')) {
+        const usernames = Array.from(document.querySelectorAll('.player-row')).map(row => row.dataset.username);
+        usernames.forEach(username => randomUserPicks(username));
+    }
+}
+
+function updateUserProgress(username) {
+    const userInputs = document.querySelectorAll(`input[name^="pick_${username}_"]:checked`);
+    const totalGames = {{ total_games }};
+    const picksMade = userInputs.length;
+    
+    const row = document.querySelector(`[data-username="${username}"]`);
+    const picksCount = row.querySelector('.picks-count');
+    const progressFill = row.querySelector('.progress-fill-mini');
+    
+    picksCount.textContent = `${picksMade}/${totalGames} picks`;
+    progressFill.style.width = `${(picksMade / totalGames * 100)}%`;
+}
+
+function updateAllProgress() {
+    const usernames = Array.from(document.querySelectorAll('.player-row')).map(row => row.dataset.username);
+    usernames.forEach(username => updateUserProgress(username));
+}
+
+// Add click handlers for radio button styling
+document.addEventListener('DOMContentLoaded', function() {
+    const teamPicks = document.querySelectorAll('.team-pick');
+    teamPicks.forEach(pick => {
+        pick.addEventListener('click', function() {
+            const radio = this.querySelector('input[type="radio"]');
+            const name = radio.name;
+            
+            // Clear all selections for this pick group
+            document.querySelectorAll(`input[name="${name}"]`).forEach(r => {
+                r.closest('.team-pick').classList.remove('selected');
+            });
+            
+            // Set the clicked one as selected
+            radio.checked = true;
+            this.classList.add('selected');
+            
+            // Update progress for this user
+            const username = name.split('_')[1];
+            updateUserProgress(username);
+        });
+    });
+});
+</script>
+
+{% endblock %}
