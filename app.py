@@ -2210,7 +2210,36 @@ def admin_picks_table():
                 WHERE week = ? AND year = ? 
                 ORDER BY game_date
             ''', (current_week, current_year))
-            games = cursor.fetchall()
+            games_raw = cursor.fetchall()
+            
+            # Convert games to proper format with datetime objects
+            games = []
+            for game in games_raw:
+                game_dict = dict(game)
+                # Convert string date to datetime object if needed
+                if game_dict['game_date']:
+                    try:
+                        if isinstance(game_dict['game_date'], str):
+                            # Handle both formats: with T and with space
+                            date_str = game_dict['game_date']
+                            if 'T' in date_str:
+                                # ISO format with T
+                                dt = datetime.fromisoformat(date_str.replace('T', ' '))
+                            else:
+                                # Standard format with space
+                                dt = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
+                            game_dict['game_date'] = dt
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Could not parse game_date '{game_dict['game_date']}': {e}")
+                        game_dict['game_date'] = None
+                
+                # Create a simple object to access attributes in template
+                class GameObj:
+                    def __init__(self, data):
+                        for key, value in data.items():
+                            setattr(self, key, value)
+                
+                games.append(GameObj(game_dict))
             
             # Get all users
             cursor.execute('SELECT id, username FROM users ORDER BY username')
