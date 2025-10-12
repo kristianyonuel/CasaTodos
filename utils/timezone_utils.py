@@ -13,9 +13,11 @@ def convert_to_ast(dt: datetime) -> datetime:
     if dt is None:
         return None
     
-    # If datetime is naive, assume it's UTC
+    # If datetime is naive, assume it's Eastern Time (NFL games are scheduled in ET)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        import pytz
+        eastern = pytz.timezone('US/Eastern')
+        dt = eastern.localize(dt)
     
     # Convert to AST
     return dt.astimezone(AST)
