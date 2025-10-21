@@ -53,24 +53,19 @@ def get_current_nfl_week(year=2025):
             total_games = week_data['total_games']
             completed_games = week_data['completed_games']
             
-            # Additional check: if it's Tuesday/Wednesday and previous week exists and is mostly done
+            # Tuesday/Wednesday: only advance if current week is complete
             if current_time.weekday() in [1, 2]:  # Tuesday = 1, Wednesday = 2
-                # Check if previous week is complete or nearly complete
-                prev_week = calendar_week - 1
-                if prev_week >= 1:
-                    cursor.execute('''
-                        SELECT COUNT(*) as total_games,
-                               COUNT(CASE WHEN is_final = 1 THEN 1 END) as completed_games
-                        FROM nfl_games 
-                        WHERE week = ? AND year = ?
-                    ''', (prev_week, year))
-                    
-                    prev_week_data = cursor.fetchone()
-                    if (prev_week_data and prev_week_data['total_games'] > 0 and 
-                        prev_week_data['completed_games'] >= prev_week_data['total_games'] - 1):
-                        # Previous week is done/nearly done, advance to current calendar week
+                # Check if current week is complete before advancing
+                if completed_games >= total_games - 1:  # Allow 1 pending game
+                    # Current week done, advance to next calendar week
+                    next_week = calendar_week + 1
+                    if next_week <= 18:
                         conn.close()
-                        return calendar_week
+                        return next_week
+                
+                # Current week has games remaining, stay on current week
+                conn.close()
+                return calendar_week
             
             conn.close()
             return calendar_week
