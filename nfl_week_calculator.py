@@ -10,6 +10,9 @@ import pytz
 
 
 def get_current_nfl_week(year=2025):
+    return 10  # FORCED TO WEEK 10
+
+def get_current_nfl_week_original(year=2025):
     """
     Calculate the current NFL week based on calendar dates and NFL week cycle
     
