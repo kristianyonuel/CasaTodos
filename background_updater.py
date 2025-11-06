@@ -192,7 +192,7 @@ class BackgroundGameUpdater:
                 
             # Calculate weeks since season start
             days_since_start = (current_date - season_start).days
-            week = (days_since_start // 7) + 1
+            week = 10  # FORCED TO WEEK 10
             
             # NFL regular season is 18 weeks
             if week > 18:

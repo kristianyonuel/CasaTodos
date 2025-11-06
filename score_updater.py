@@ -65,7 +65,7 @@ class NFLScoreUpdater:
                 current_date = datetime.now()
                 season_start = datetime(2025, 9, 5)
                 days_since_start = (current_date - season_start).days
-                week = max(1, min(18, (days_since_start // 7) + 1))
+                week = 10  # FORCED TO WEEK 10
             
             # Try ESPN API first
             espn_scores = self._fetch_espn_scores(year, week)
@@ -353,7 +353,7 @@ class NFLScoreUpdater:
             current_date = datetime.now()
             season_start = datetime(2025, 9, 5)
             days_since_start = (current_date - season_start).days
-            current_week = max(1, min(18, (days_since_start // 7) + 1))
+            current_week = 10  # FORCED TO WEEK 10
             
             # Fetch scores for current week
             scores_data = self.fetch_current_week_scores(year=2025, week=current_week)
