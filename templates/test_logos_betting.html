@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFL Logos and Betting Test</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .logo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .team-card {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #f9f9f9;
+        }
+        
+        .sample-game {
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 12px 0;
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .team-matchup {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .team-info {
+            display: flex;
+            align-items: center;
+            flex: 1;
+        }
+        
+        .vs-indicator {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #6c757d;
+            margin: 0 16px;
+        }
+        
+        .team-logo {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            margin-right: 8px;
+            vertical-align: middle;
+            object-fit: contain;
+        }
+        
+        .betting-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 8px 0;
+            font-size: 0.9em;
+        }
+        
+        .betting-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+        }
+        
+        .spread {
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .over-under {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .moneyline {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🏈 NFL Logos and Betting Odds Test Page</h1>
+    
+    <div class="test-section">
+        <h2>📋 System Status</h2>
+        <ul>
+            <li>✅ 32 NFL team SVG logos created</li>
+            <li>✅ Team information added to database</li>
+            <li>✅ Betting odds added to Week 10 games</li>
+            <li>✅ CSS styles updated</li>
+            <li>✅ Flask templates enhanced</li>
+        </ul>
+    </div>
+    
+    <div class="test-section">
+        <h2>🎨 Team Logo Gallery</h2>
+        <p>All 32 NFL team logos (SVG format):</p>
+        
+        <div class="logo-grid">
+            <!-- AFC East -->
+            <div class="team-card">
+                <img src="/static/images/buf.svg" alt="Buffalo Bills" class="team-logo">
+                <span>Buffalo Bills</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/mia.svg" alt="Miami Dolphins" class="team-logo">
+                <span>Miami Dolphins</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/ne.svg" alt="New England Patriots" class="team-logo">
+                <span>New England Patriots</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/nyj.svg" alt="New York Jets" class="team-logo">
+                <span>New York Jets</span>
+            </div>
+            
+            <!-- AFC North -->
+            <div class="team-card">
+                <img src="/static/images/bal.svg" alt="Baltimore Ravens" class="team-logo">
+                <span>Baltimore Ravens</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/cin.svg" alt="Cincinnati Bengals" class="team-logo">
+                <span>Cincinnati Bengals</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/cle.svg" alt="Cleveland Browns" class="team-logo">
+                <span>Cleveland Browns</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/pit.svg" alt="Pittsburgh Steelers" class="team-logo">
+                <span>Pittsburgh Steelers</span>
+            </div>
+            
+            <!-- AFC South -->
+            <div class="team-card">
+                <img src="/static/images/hou.svg" alt="Houston Texans" class="team-logo">
+                <span>Houston Texans</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/ind.svg" alt="Indianapolis Colts" class="team-logo">
+                <span>Indianapolis Colts</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/jax.svg" alt="Jacksonville Jaguars" class="team-logo">
+                <span>Jacksonville Jaguars</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/ten.svg" alt="Tennessee Titans" class="team-logo">
+                <span>Tennessee Titans</span>
+            </div>
+            
+            <!-- AFC West -->
+            <div class="team-card">
+                <img src="/static/images/den.svg" alt="Denver Broncos" class="team-logo">
+                <span>Denver Broncos</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/kc.svg" alt="Kansas City Chiefs" class="team-logo">
+                <span>Kansas City Chiefs</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/lac.svg" alt="Los Angeles Chargers" class="team-logo">
+                <span>Los Angeles Chargers</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/lv.svg" alt="Las Vegas Raiders" class="team-logo">
+                <span>Las Vegas Raiders</span>
+            </div>
+            
+            <!-- NFC East -->
+            <div class="team-card">
+                <img src="/static/images/dal.svg" alt="Dallas Cowboys" class="team-logo">
+                <span>Dallas Cowboys</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/nyg.svg" alt="New York Giants" class="team-logo">
+                <span>New York Giants</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/phi.svg" alt="Philadelphia Eagles" class="team-logo">
+                <span>Philadelphia Eagles</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/was.svg" alt="Washington Commanders" class="team-logo">
+                <span>Washington Commanders</span>
+            </div>
+            
+            <!-- NFC North -->
+            <div class="team-card">
+                <img src="/static/images/chi.svg" alt="Chicago Bears" class="team-logo">
+                <span>Chicago Bears</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/det.svg" alt="Detroit Lions" class="team-logo">
+                <span>Detroit Lions</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/gb.svg" alt="Green Bay Packers" class="team-logo">
+                <span>Green Bay Packers</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/min.svg" alt="Minnesota Vikings" class="team-logo">
+                <span>Minnesota Vikings</span>
+            </div>
+            
+            <!-- NFC South -->
+            <div class="team-card">
+                <img src="/static/images/atl.svg" alt="Atlanta Falcons" class="team-logo">
+                <span>Atlanta Falcons</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/car.svg" alt="Carolina Panthers" class="team-logo">
+                <span>Carolina Panthers</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/no.svg" alt="New Orleans Saints" class="team-logo">
+                <span>New Orleans Saints</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/tb.svg" alt="Tampa Bay Buccaneers" class="team-logo">
+                <span>Tampa Bay Buccaneers</span>
+            </div>
+            
+            <!-- NFC West -->
+            <div class="team-card">
+                <img src="/static/images/ari.svg" alt="Arizona Cardinals" class="team-logo">
+                <span>Arizona Cardinals</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/lar.svg" alt="Los Angeles Rams" class="team-logo">
+                <span>Los Angeles Rams</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/sf.svg" alt="San Francisco 49ers" class="team-logo">
+                <span>San Francisco 49ers</span>
+            </div>
+            <div class="team-card">
+                <img src="/static/images/sea.svg" alt="Seattle Seahawks" class="team-logo">
+                <span>Seattle Seahawks</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>🎰 Sample Game with Betting Odds</h2>
+        <p>Example of how games will appear with logos and betting information:</p>
+        
+        <div class="sample-game">
+            <div class="team-matchup">
+                <div class="team-info">
+                    <img src="/static/images/kc.svg" alt="Kansas City Chiefs" class="team-logo">
+                    <strong>Kansas City Chiefs</strong>
+                </div>
+                
+                <div class="vs-indicator">@</div>
+                
+                <div class="team-info">
+                    <img src="/static/images/buf.svg" alt="Buffalo Bills" class="team-logo">
+                    <strong>Buffalo Bills</strong>
+                </div>
+            </div>
+            
+            <div class="game-details">
+                <div><strong>Sunday, November 17</strong></div>
+                <div>4:25 PM ET</div>
+                <div class="tv-network">📺 CBS</div>
+            </div>
+            
+            <div class="betting-info">
+                <div class="betting-header">🎰 Vegas Odds</div>
+                
+                <div class="betting-line">
+                    <span>Spread:</span>
+                    <span class="spread">Buffalo Bills -2.5</span>
+                </div>
+                
+                <div class="betting-line">
+                    <span>Over/Under:</span>
+                    <span class="over-under">54.5</span>
+                </div>
+                
+                <div class="betting-line">
+                    <span>Moneyline:</span>
+                    <span class="moneyline">Kansas City Chiefs +120 | Buffalo Bills -140</span>
+                </div>
+                
+                <div class="betting-updated">
+                    Updated: 11/17 2:15 PM
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>📋 Integration Instructions</h2>
+        <ol>
+            <li><strong>Templates Updated:</strong> games.html enhanced with logo and betting display</li>
+            <li><strong>Database Ready:</strong> team_info table with logo paths, betting columns added to nfl_games</li>
+            <li><strong>Flask Helper:</strong> Use code from flask_logo_betting_helper.py in your app.py</li>
+            <li><strong>Static Assets:</strong> 32 SVG logos available at /static/images/[team_code].svg</li>
+            <li><strong>CSS Styles:</strong> Logo and betting styles added to style.css</li>
+        </ol>
+        
+        <h3>🔄 Next Steps:</h3>
+        <ul>
+            <li>Copy Flask helper functions to app.py</li>
+            <li>Update routes to use get_team_logos_and_betting()</li>
+            <li>Restart Flask server</li>
+            <li>Navigate to /games to see enhanced display</li>
+        </ul>
+    </div>
+    
+    <div class="test-section">
+        <h2>🧪 Test this Page</h2>
+        <p>To test this page with your Flask server:</p>
+        <ol>
+            <li>Save this file as <code>templates/test_logos_betting.html</code></li>
+            <li>Add a Flask route: <code>@app.route('/test-logos')</code></li>
+            <li>Visit <code>http://your-server/test-logos</code></li>
+        </ol>
+    </div>
+    
+    <script>
+        // JavaScript to test logo loading
+        document.addEventListener('DOMContentLoaded', function() {
+            const logos = document.querySelectorAll('.team-logo');
+            let loadedCount = 0;
+            let failedCount = 0;
+            
+            logos.forEach(logo => {
+                logo.onload = () => {
+                    loadedCount++;
+                    updateStatus();
+                };
+                
+                logo.onerror = () => {
+                    failedCount++;
+                    logo.style.display = 'none';
+                    updateStatus();
+                };
+            });
+            
+            function updateStatus() {
+                if (loadedCount + failedCount === logos.length) {
+                    console.log(`Logo loading complete: ${loadedCount} loaded, ${failedCount} failed`);
+                    
+                    if (failedCount > 0) {
+                        const status = document.createElement('div');
+                        status.innerHTML = `<p>⚠️ ${failedCount} logos failed to load. Check static file serving.</p>`;
+                        status.style.cssText = 'background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin: 10px 0; border-radius: 4px;';
+                        document.body.insertBefore(status, document.body.firstChild);
+                    } else {
+                        const status = document.createElement('div');
+                        status.innerHTML = `<p>✅ All ${loadedCount} team logos loaded successfully!</p>`;
+                        status.style.cssText = 'background: #d4edda; border: 1px solid #c3e6cb; padding: 10px; margin: 10px 0; border-radius: 4px;';
+                        document.body.insertBefore(status, document.body.firstChild);
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

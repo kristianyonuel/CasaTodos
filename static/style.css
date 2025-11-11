@@ -1521,3 +1521,106 @@ body {
     color: #495057;
     font-size: 14px;
 }
+
+
+/* NFL TEAM LOGOS AND BETTING ODDS STYLES */
+
+/* NFL Team Logo Styles */
+.team-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    margin-right: 8px;
+    vertical-align: middle;
+    object-fit: contain;
+}
+
+.team-logo-large {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    margin-right: 12px;
+    vertical-align: middle;
+    object-fit: contain;
+}
+
+.team-with-logo {
+    display: flex;
+    align-items: center;
+    font-weight: bold;
+}
+
+/* Betting Odds Styles */
+.betting-info {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
+    font-size: 0.9em;
+}
+
+.betting-line {
+    display: flex;
+    justify-content: space-between;
+    margin: 4px 0;
+}
+
+.spread {
+    font-weight: bold;
+    color: #007bff;
+}
+
+.over-under {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.moneyline {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.favorite {
+    background: #fff3cd;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+.betting-updated {
+    font-size: 0.8em;
+    color: #6c757d;
+    text-align: right;
+    margin-top: 8px;
+}
+
+/* Game Card Enhancements */
+.game-card-enhanced {
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    padding: 16px;
+    margin: 12px 0;
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.team-matchup {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.team-info {
+    display: flex;
+    align-items: center;
+    flex: 1;
+}
+
+.vs-indicator {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #6c757d;
+    margin: 0 16px;
+}

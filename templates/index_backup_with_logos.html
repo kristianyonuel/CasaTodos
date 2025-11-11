@@ -1,0 +1,484 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="welcome-card">
+        <h2>Welcome back, {{ username }}! 🏈</h2>
+        <p>Ready to make your picks for Week {{ current_week }}?</p>
+        {% if user_picks_count is defined and total_games is defined and total_games > 0 %}
+            <div class="progress-info">
+                <p>Your progress: {{ user_picks_count }}/{{ total_games }} games picked</p>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ (user_picks_count / total_games * 100) if total_games > 0 else 0 }}%"></div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>Current Week</h3>
+            <div class="stat-value">{{ current_week or 1 }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Your Picks</h3>
+            <div class="stat-value">{{ user_picks_count or 0 }}/{{ total_games or 0 }}</div>
+            <div class="stat-subtitle">
+                {% if total_games and user_picks_count %}
+                    {{ "%.1f"|format((user_picks_count / total_games * 100)) }}% Complete
+                {% else %}
+                    Ready to pick
+                {% endif %}
+            </div>
+        </div>
+        <div class="stat-card">
+            <h3>Your Wins</h3>
+            <div class="stat-value">{{ user_wins or 0 }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Total Players</h3>
+            <div class="stat-value">{{ total_players or 0 }}</div>
+        </div>
+    </div>
+
+    <!-- Regular User Actions - NO ADMIN-ONLY BUTTONS -->
+    <div class="quick-actions">
+        <h3>Quick Actions</h3>
+        <div class="action-buttons">
+            <a href="{{ url_for('games', week=current_week, year=current_year) }}" class="action-btn primary">
+                🎯 Make Your Picks
+            </a>
+            <a href="{{ url_for('leaderboard') }}" class="action-btn secondary">
+                🏆 View Leaderboard
+            </a>
+            <a href="{{ url_for('rules') }}" class="action-btn secondary">
+                📋 Read Rules
+            </a>
+            <a href="{{ url_for('my_picks_export') }}" class="action-btn secondary">
+                📤 Export My Picks (Download or Copy)
+            </a>
+            <!-- ADMIN PANEL LINK - ONLY FOR ACTUAL ADMINS -->
+            {% if is_admin %}
+            <a href="{{ url_for('admin') }}" class="action-btn admin">
+                ⚙️ Admin Panel
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Deadline Information -->
+    {% if deadline_summary %}
+    <div class="game-status">
+        <h3>This Week's Deadlines (AST)</h3>
+        <div class="status-cards">
+            {% if deadline_summary.thursday %}
+            <div class="status-card {% if deadline_summary.thursday.passed %}deadline-passed{% elif deadline_summary.thursday.urgency == 'critical' %}deadline-critical{% elif deadline_summary.thursday.urgency == 'warning' %}deadline-warning{% endif %}">
+                <h4>Thursday Night</h4>
+                <p>{{ deadline_summary.thursday.formatted_time }}</p>
+                {% if deadline_summary.thursday.passed %}
+                    <span class="status-indicator">Deadline Passed</span>
+                {% elif deadline_summary.thursday.hours_remaining <= 24 %}
+                    <span class="status-indicator {% if deadline_summary.thursday.urgency == 'critical' %}critical{% else %}warning{% endif %}">
+                        {{ deadline_summary.thursday.hours_remaining|round(1) }} hours left
+                    </span>
+                {% endif %}
+                {% if deadline_summary.thursday.matchup %}
+                    <p class="matchup">{{ deadline_summary.thursday.matchup }}</p>
+                {% endif %}
+                {% if deadline_summary.thursday.is_override %}
+                    <span class="override-indicator">⚠️ Modified by Admin</span>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% if deadline_summary.sunday %}
+            <div class="status-card {% if deadline_summary.sunday.passed %}deadline-passed{% elif deadline_summary.sunday.urgency == 'critical' %}deadline-critical{% elif deadline_summary.sunday.urgency == 'warning' %}deadline-warning{% endif %}">
+                <h4>Sunday Games</h4>
+                <p>{{ deadline_summary.sunday.formatted_time }}</p>
+                {% if deadline_summary.sunday.passed %}
+                    <span class="status-indicator">Deadline Passed</span>
+                {% elif deadline_summary.sunday.hours_remaining <= 24 %}
+                    <span class="status-indicator {% if deadline_summary.sunday.urgency == 'critical' %}critical{% else %}warning{% endif %}">
+                        {{ deadline_summary.sunday.hours_remaining|round(1) }} hours left
+                    </span>
+                {% endif %}
+                {% if deadline_summary.sunday.matchup %}
+                    <p class="matchup">{{ deadline_summary.sunday.matchup }}</p>
+                {% endif %}
+                {% if deadline_summary.sunday.is_override %}
+                    <span class="override-indicator">⚠️ Modified by Admin</span>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% if deadline_summary.monday %}
+            <div class="status-card {% if deadline_summary.monday.passed %}deadline-passed{% elif deadline_summary.monday.urgency == 'critical' %}deadline-critical{% elif deadline_summary.monday.urgency == 'warning' %}deadline-warning{% endif %}">
+                <h4>Monday Night</h4>
+                <p>{{ deadline_summary.monday.formatted_time }}</p>
+                <p>Score prediction required</p>
+                {% if deadline_summary.monday.passed %}
+                    <span class="status-indicator">Deadline Passed</span>
+                {% elif deadline_summary.monday.hours_remaining <= 24 %}
+                    <span class="status-indicator {% if deadline_summary.monday.urgency == 'critical' %}critical{% else %}warning{% endif %}">
+                        {{ deadline_summary.monday.hours_remaining|round(1) }} hours left
+                    </span>
+                {% endif %}
+                {% if deadline_summary.monday.matchup %}
+                    <p class="matchup">{{ deadline_summary.monday.matchup }}</p>
+                {% endif %}
+                {% if deadline_summary.monday.is_override %}
+                    <span class="override-indicator">⚠️ Modified by Admin</span>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% if not deadline_summary.thursday and not deadline_summary.sunday and not deadline_summary.monday %}
+            <div class="status-card">
+                <h4>No Games</h4>
+                <p>No games scheduled this week</p>
+            </div>
+            {% endif %}
+            
+            {% if deadline_summary.next_deadline %}
+            <div class="next-deadline-card">
+                <h4>⏰ Next Deadline</h4>
+                <p><strong>{{ deadline_summary.next_deadline.hours_remaining|round(1) }} hours</strong> until {{ deadline_summary.next_deadline.type.replace('_', ' ').title() }}</p>
+                <p>{{ deadline_summary.next_deadline.formatted_time }}</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- ADMIN-ONLY POST-DEADLINE ACTIONS -->
+        {% if deadline_summary.all_deadlines_passed and is_admin %}
+        <div class="post-deadline-actions">
+            <h4>📊 Post-Deadline Admin Actions</h4>
+            <div class="admin-action-buttons">
+                <button onclick="exportAllUsersPicks()" class="btn btn-primary">
+                    📊 Export All Users' Picks
+                </button>
+                <a href="{{ url_for('weekly_leaderboard', week=current_week, year=current_year) }}" 
+                   class="btn btn-success">
+                    🏆 View Final Results
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="recent-activity">
+        <h3>Week {{ current_week }} Information</h3>
+        <div class="info-grid">
+            <div class="info-item">
+                <strong>Total Games:</strong> {{ total_games }} games this week
+            </div>
+            <div class="info-item">
+                <strong>Your Progress:</strong> {{ user_picks_count }}/{{ total_games }} picks made
+            </div>
+            <div class="info-item">
+                <strong>Entry Fees:</strong> $20 Weekly / $20 Initial to Join
+            </div>
+            <div class="info-item">
+                <strong>Tiebreaker:</strong> Monday Night Score Prediction
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Export user picks function with options
+    function exportMyPicks() {
+        const week = '{{ current_week or 1 }}';
+        const year = '{{ current_year or 2025 }}';
+        
+        // Show options modal
+        const options = confirm("Choose your export option:\n\nOK = Download CSV file\nCancel = View & Copy to Clipboard");
+        
+        if (options) {
+            // Download CSV file
+            const link = document.createElement('a');
+            link.href = `{{ url_for('export_my_picks_csv') }}?week=${week}&year=${year}`;
+            link.download = `{{ username }}_picks_week_${week}_${year}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } else {
+            // Open display view for copy-paste
+            const displayUrl = `{{ url_for('export_my_picks_csv') }}?week=${week}&year=${year}&display_format=true`;
+            window.open(displayUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+        }
+    }
+
+    // Export all users' picks function (admin only)
+    function exportAllUsersPicks() {
+        const week = '{{ current_week or 1 }}';
+        const year = '{{ current_year or 2025 }}';
+        
+        const link = document.createElement('a');
+        link.href = `{{ url_for('export_all_users_picks_csv') }}?week=${week}&year=${year}`;
+        link.download = `all_users_picks_week_${week}_${year}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>
+
+<style>
+.dashboard {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.welcome-card {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.welcome-card h2 {
+    color: #1e3a8a;
+    margin-bottom: 10px;
+}
+
+.progress-info {
+    margin-top: 20px;
+}
+
+.progress-bar {
+    background: #e5e7eb;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+.progress-fill {
+    background: #3b82f6;
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.stat-card h3 {
+    margin: 0 0 10px 0;
+    color: #666;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #1e3a8a;
+    margin: 0;
+}
+
+.quick-actions {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.quick-actions h3 {
+    color: #1e3a8a;
+    margin-bottom: 20px;
+}
+
+.action-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.action-btn {
+    background: #1e3a8a;
+    color: white;
+    padding: 15px 20px;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.action-btn:hover {
+    background: #1e40af;
+    transform: translateY(-2px);
+}
+
+.action-btn.primary {
+    background: #059669;
+}
+
+.action-btn.primary:hover {
+    background: #047857;
+}
+
+.action-btn.secondary {
+    background: #6b7280;
+}
+
+.action-btn.secondary:hover {
+    background: #4b5563;
+}
+
+.action-btn.admin {
+    background: #dc2626;
+}
+
+.action-btn.admin:hover {
+    background: #b91c1c;
+}
+
+.game-status {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 30px;
+}
+
+.game-status h3 {
+    color: #1e3a8a;
+    margin-bottom: 15px;
+}
+
+.status-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.status-card {
+    background: #f8fafc;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #e5e7eb;
+}
+
+.status-card.deadline-warning {
+    border-left-color: #f59e0b;
+    background: #fffbeb;
+}
+
+.status-card.deadline-critical {
+    border-left-color: #ef4444;
+    background: #fef2f2;
+}
+
+.status-card.deadline-passed {
+    border-left-color: #6b7280;
+    background: #f9fafb;
+    opacity: 0.7;
+}
+
+.next-deadline-card {
+    background: #dbeafe;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #3b82f6;
+    grid-column: 1 / -1;
+    text-align: center;
+}
+
+.post-deadline-actions {
+    background: #e3f2fd;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 15px;
+    border-left: 4px solid #2196f3;
+}
+
+.post-deadline-actions h4 {
+    color: #1976d2;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+
+.admin-action-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.admin-action-buttons .btn {
+    font-size: 12px;
+    padding: 8px 12px;
+    text-decoration: none;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.admin-action-buttons .btn-primary {
+    background-color: #007bff;
+    color: white;
+}
+
+.admin-action-buttons .btn-primary:hover {
+    background-color: #0056b3;
+}
+
+.admin-action-buttons .btn-success {
+    background-color: #28a745;
+    color: white;
+}
+
+.admin-action-buttons .btn-success:hover {
+    background-color: #1e7e34;
+}
+
+.recent-activity {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.recent-activity h3 {
+    color: #1e3a8a;
+    margin-bottom: 15px;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.info-item {
+    padding: 10px;
+    background: #f8fafc;
+    border-radius: 5px;
+    border-left: 3px solid #3b82f6;
+}
+</style>
+{% endblock %}

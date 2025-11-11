@@ -810,9 +810,10 @@ def games():
         for key, value in deadline_data.items():
             if value and isinstance(value, dict) and 'deadline' in value:
                 deadlines[key] = value['deadline']
+                status = value.get('status', {})
                 deadline_status[key] = {
-                    'passed': value['status']['is_closed'],
-                    'hours_until': value['status']['hours_until_deadline']
+                    'passed': status.get('is_closed', False),
+                    'hours_until': status.get('hours_until_deadline', 0)
                 }
         
         # Simplify the key names for template
@@ -973,9 +974,10 @@ def debug_thursday():
         simple_status = {}
         for key, value in deadline_data.items():
             if value and isinstance(value, dict) and 'deadline' in value:
+                status = value.get('status', {})
                 simple_status[key.replace('_night', '').replace('_games', '')] = {
-                    'passed': value['status']['is_closed'],
-                    'hours_until': value['status']['hours_until_deadline']
+                    'passed': status.get('is_closed', False),
+                    'hours_until': status.get('hours_until_deadline', 0)
                 }
         
         thursday_deadline_passed = simple_status.get('thursday', {}).get('passed', False)
@@ -4431,10 +4433,49 @@ def get_team_name(abbreviation):
     """Get full team name from abbreviation"""
     return NFL_TEAM_NAMES.get(abbreviation, abbreviation)
 
-def get_team_logo_url(abbreviation):
-    """Get team logo URL from abbreviation"""
-    # ESPN logos are reliable and high quality
-    return f"https://a.espncdn.com/i/teamlogos/nfl/500/{abbreviation.lower()}.png"
+def get_team_logo_url(team_name_or_abbr):
+    """Get team logo URL from team name or abbreviation"""
+    # Create reverse mapping from team names to abbreviations
+    name_to_abbr = {
+        'Arizona Cardinals': 'ari',
+        'Atlanta Falcons': 'atl', 
+        'Baltimore Ravens': 'bal',
+        'Buffalo Bills': 'buf',
+        'Carolina Panthers': 'car',
+        'Chicago Bears': 'chi',
+        'Cincinnati Bengals': 'cin',
+        'Cleveland Browns': 'cle',
+        'Dallas Cowboys': 'dal',
+        'Denver Broncos': 'den',
+        'Detroit Lions': 'det',
+        'Green Bay Packers': 'gb',
+        'Houston Texans': 'hou',
+        'Indianapolis Colts': 'ind',
+        'Jacksonville Jaguars': 'jax',
+        'Kansas City Chiefs': 'kc',
+        'Los Angeles Chargers': 'lac',
+        'Los Angeles Rams': 'lar',
+        'Las Vegas Raiders': 'lv',
+        'Miami Dolphins': 'mia',
+        'Minnesota Vikings': 'min',
+        'New England Patriots': 'ne',
+        'New Orleans Saints': 'no',
+        'New York Giants': 'nyg',
+        'New York Jets': 'nyj',
+        'Philadelphia Eagles': 'phi',
+        'Pittsburgh Steelers': 'pit',
+        'Seattle Seahawks': 'sea',
+        'San Francisco 49ers': 'sf',
+        'Tampa Bay Buccaneers': 'tb',
+        'Tennessee Titans': 'ten',
+        'Washington Commanders': 'was'
+    }
+    
+    # Get abbreviation (either directly or from mapping)
+    abbr = name_to_abbr.get(team_name_or_abbr, team_name_or_abbr.lower())
+    
+    # Use local SVG files
+    return f"/static/images/{abbr}.svg"
 
 def get_team_display(abbreviation):
     """Get team display as 'ABB - Full Name'"""
